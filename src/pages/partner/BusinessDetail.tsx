@@ -26,16 +26,24 @@ export default function PartnerBusinessDetail() {
   const qrUrl = useQRCode(reviewUrl);
 
   const load = () => {
-    if (!id) return;
+    if (!id || !profile) return;
     Promise.all([
+      supabase.from("organization_members").select("organization_id").eq("user_id", profile.id).single(),
       supabase.from("businesses").select("*").eq("id", id).single(),
       supabase.from("questions").select("*").eq("business_id", id).order("sort_order"),
       supabase.from("review_sessions").select("*").eq("business_id", id).order("created_at", { ascending: false }).limit(20),
-    ]).then(([b, q, r]) => {
-      setBusiness(b.data as Business);
+    ]).then(([mem, b, q, r]) => {
+      const businessData = b.data as Business;
+      const memberOrg = mem.data?.organization_id;
+      if (!businessData || businessData.organization_id !== memberOrg) {
+        setBusiness(null);
+        setLoading(false);
+        return;
+      }
+      setBusiness(businessData);
       setQuestions((q.data || []) as Question[]);
       setReviews((r.data || []) as ReviewSession[]);
-      setEditForm({ name: (b.data as Business).name, welcome_message: (b.data as Business).welcome_message, google_review_url: (b.data as Business).google_review_url || "", public_review_enabled: (b.data as Business).public_review_enabled });
+      setEditForm({ name: businessData.name, welcome_message: businessData.welcome_message, google_review_url: businessData.google_review_url || "", public_review_enabled: businessData.public_review_enabled });
       setLoading(false);
     });
   };

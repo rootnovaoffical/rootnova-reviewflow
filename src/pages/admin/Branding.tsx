@@ -5,13 +5,14 @@ import type { PlatformAsset } from "../../lib/types";
 import { Loading } from "../../components/States";
 import { useToast } from "../../context/ToastContext";
 import { useAuth } from "../../context/AuthContext";
+import { useBranding } from "../../context/BrandingContext";
 import { insertAuditLog } from "../../lib/auth";
 import { uploadPlatformAsset, upsertPlatformAsset } from "../../lib/storage";
 
 export default function AdminBranding() {
   const { profile } = useAuth();
   const { showToast } = useToast();
-  const { refresh } = useBrandingHook();
+  const { refresh } = useBranding();
   const [assets, setAssets] = useState<PlatformAsset[] | null>(null);
   const [upiId, setUpiId] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
@@ -73,6 +74,3 @@ export default function AdminBranding() {
     </Layout>
   );
 }
-
-import { useBranding } from "../../context/BrandingContext";
-function useBrandingHook() { return useBranding(); }

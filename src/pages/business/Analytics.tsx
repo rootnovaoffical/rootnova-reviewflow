@@ -50,7 +50,7 @@ export default function BusinessAnalytics() {
           <div className="flex items-end gap-1 h-48">
             {dailyData.map((d) => (
               <div key={d.date} className="flex-1 flex flex-col items-center gap-1">
-                <div className="w-full bg-gradient-to-t from-primary-600 to-primary-400 rounded-t    transition-all" style={{ height: `${(d.count / maxCount) * 100}%`, minHeight: d.count > 0 ? "4px" : "0" }} />
+                <div className="w-full bg-gradient-to-t from-primary-600 to-primary-400 rounded-t transition-all" style={{ height: `${(d.count / maxCount) * 100}%`, minHeight: d.count > 0 ? "4px" : "0" }} />
                 <span className="text-xs text-slate-500">{d.date.slice(5)}</span>
               </div>
             ))}

@@ -1,4 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import OpenAI from "npm:openai@4";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -7,6 +8,7 @@ const corsHeaders = {
 };
 
 const AI_TIMEOUT_MS = 25000;
+const GROQ_MODEL = "llama-3.3-70b-versatile";
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -17,7 +19,7 @@ Deno.serve(async (req: Request) => {
     const { sessionId, rating, answers, businessId } = await req.json();
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const openaiKey = Deno.env.get("OPENAI_API_KEY");
+    const groqKey = Deno.env.get("GROQ_API_KEY");
 
     const businessRes = await fetch(
       `${supabaseUrl}/rest/v1/businesses?id=eq.${businessId}&select=name,welcome_message,google_maps_url,primary_color,category`,
@@ -37,10 +39,10 @@ Deno.serve(async (req: Request) => {
     let review: string;
     let provider = "fallback";
 
-    if (openaiKey) {
+    if (groqKey) {
       try {
-        const result = await generateWithOpenAI(
-          openaiKey,
+        const result = await generateWithGroq(
+          groqKey,
           business?.name || "this business",
           rating,
           answerText,
@@ -55,7 +57,7 @@ Deno.serve(async (req: Request) => {
         provider = "fallback_after_error";
       }
     } else {
-      console.error("OPENAI_API_KEY not set — using fallback");
+      console.error("GROQ_API_KEY not set — using fallback");
       review = fallbackReview(business?.name || "this business", rating, answerText);
     }
 
@@ -88,7 +90,7 @@ Deno.serve(async (req: Request) => {
   }
 });
 
-async function generateWithOpenAI(
+async function generateWithGroq(
   apiKey: string,
   businessName: string,
   rating: number,
@@ -121,41 +123,34 @@ Write a natural, first-person Google review for this customer. Rules:
 - Keep it 2-4 sentences
 - Vary your opening — don't always start with "I had a great experience"`;
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), AI_TIMEOUT_MS);
+  const client = new OpenAI({
+    apiKey,
+    baseURL: "https://api.groq.com/openai/v1",
+    timeout: AI_TIMEOUT_MS,
+    maxRetries: 0,
+  });
 
   try {
-    const res = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        temperature: 0.85,
-        max_tokens: 200,
-        presence_penalty: 0.6,
-        frequency_penalty: 0.4,
-      }),
-      signal: controller.signal,
+    const completion = await client.chat.completions.create({
+      model: GROQ_MODEL,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      temperature: 0.85,
+      max_tokens: 200,
+      presence_penalty: 0.6,
+      frequency_penalty: 0.4,
     });
 
-    if (!res.ok) {
-      const errText = await res.text();
-      console.error("OpenAI API error:", res.status, errText);
-      return { review: fallbackReview(businessName, rating, answerText), provider: "fallback_after_api_error" };
-    }
-
-    const data = await res.json();
-    const generated = data.choices?.[0]?.message?.content?.trim();
+    const generated = completion.choices[0]?.message?.content?.trim();
     if (!generated || generated.length < 10) {
       return { review: fallbackReview(businessName, rating, answerText), provider: "fallback_after_empty" };
     }
-    return { review: generated, provider: "openai" };
-  } finally {
-    clearTimeout(timeout);
+    return { review: generated, provider: "groq" };
+  } catch (err) {
+    console.error("Groq API error:", err.message);
+    return { review: fallbackReview(businessName, rating, answerText), provider: "fallback_after_api_error" };
   }
 }
 

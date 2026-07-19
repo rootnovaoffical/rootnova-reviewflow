@@ -61,17 +61,19 @@ export default function PublicReviewPage() {
 
   const handleRatingSubmit = async () => {
     if (!business || rating === 0) return;
-    const { data } = await supabase.from("review_sessions").insert({
-      business_id: business.id, rating, answers: [], ai_status: "pending",
-    }).select().single();
-    setSessionId(data.id);
-    supabase.from("analytics_events").insert({ business_id: business.id, session_id: data.id, event_type: "rating_submitted", metadata: { rating } }).then();
+    const sid = crypto.randomUUID();
+    const { error: insErr } = await supabase.from("review_sessions").insert({
+      id: sid, business_id: business.id, rating, answers: [], ai_status: "pending",
+    });
+    if (insErr) { setError("Failed to start review session"); return; }
+    setSessionId(sid);
+    supabase.from("analytics_events").insert({ business_id: business.id, session_id: sid, event_type: "rating_submitted", metadata: { rating } }).then();
     if (rating >= 4) { setConfettiTrigger(true); setShockwaveTrigger(true); setEmojisTrigger(true); }
     const qs = await loadQuestions(business.id);
     if (qs.length > 0) {
       setStage("questions");
     } else {
-      startGeneration(data.id, rating, []);
+      startGeneration(sid, rating, []);
     }
   };
 
@@ -115,13 +117,11 @@ export default function PublicReviewPage() {
       const review = json.review || "Thank you for your feedback! We're glad you had a great experience.";
       setAiReview(review);
       setEditText(review);
-      await supabase.from("review_sessions").update({ ai_generated_review: review, ai_status: "completed", completed_at: new Date().toISOString() }).eq("id", sid);
       supabase.from("analytics_events").insert({ business_id: business?.id, session_id: sid, event_type: "ai_completion", metadata: {} }).then();
     } catch {
       const fallback = "Thank you for your feedback! We appreciate you taking the time to share your experience.";
       setAiReview(fallback);
       setEditText(fallback);
-      await supabase.from("review_sessions").update({ ai_generated_review: fallback, ai_status: "completed", completed_at: new Date().toISOString() }).eq("id", sid);
     }
     if (genTimerRef.current) clearInterval(genTimerRef.current);
     setGenProgress(100);

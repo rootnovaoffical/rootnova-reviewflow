@@ -55,7 +55,20 @@ Deno.serve(async (req: Request) => {
         provider = "fallback_after_error";
       }
     } else {
+      console.error("OPENAI_API_KEY not set — using fallback");
       review = fallbackReview(business?.name || "this business", rating, answerText);
+    }
+
+    if (sessionId) {
+      try {
+        await fetch(`${supabaseUrl}/rest/v1/review_sessions?id=eq.${sessionId}`, {
+          method: "PATCH",
+          headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, "Content-Type": "application/json", Prefer: "return=minimal" },
+          body: JSON.stringify({ ai_generated_review: review, ai_status: "completed", completed_at: new Date().toISOString() }),
+        });
+      } catch (saveErr) {
+        console.error("Failed to save review session:", saveErr.message);
+      }
     }
 
     return new Response(

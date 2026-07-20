@@ -1,81 +1,225 @@
-import { useEffect, useState, useRef } from "react";
-import Layout from "../../components/Layout";
+import { useEffect, useState, useCallback } from "react";
 import { supabase } from "../../lib/supabase";
+import { useAuth, isRootNovaSuperAdmin } from "../../lib/auth";
+import { LoadingSpinner, ErrorState, EmptyState, PageHeader } from "../../components/ui";
 import type { PlatformAsset } from "../../lib/types";
-import { Loading, ErrorState } from "../../components/States";
-import { useToast } from "../../context/ToastContext";
-import { useAuth } from "../../context/AuthContext";
-import { useBranding } from "../../context/BrandingContext";
-import { insertAuditLog } from "../../lib/auth";
-import { uploadPlatformAsset, upsertPlatformAsset } from "../../lib/storage";
 
-export default function AdminBranding() {
+export default function Branding() {
   const { profile } = useAuth();
-  const { showToast } = useToast();
-  const { refresh } = useBranding();
-  const [assets, setAssets] = useState<PlatformAsset[] | null>(null);
-  const [upiId, setUpiId] = useState("");
-  const fileRef = useRef<HTMLInputElement>(null);
-  const [uploadKey, setUploadKey] = useState<string>("");
+  const canEdit = isRootNovaSuperAdmin(profile?.role);
+  const [assets, setAssets] = useState<PlatformAsset[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [editValues, setEditValues] = useState<Record<string, string>>({});
 
-  const load = () => supabase.from("platform_assets").select("*").order("key").then(({ data, error: err }) => {
-    if (err) setError(err.message);
-    setAssets(data as PlatformAsset[] || []);
-  });
-  useEffect(() => { load(); }, []);
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
 
-  const saveUpi = async () => {
-    await upsertPlatformAsset("upi_id", "UPI ID", "TEXT", null, null, { upi_id: upiId });
-    if (profile) await insertAuditLog({ actor_id: profile.id, actor_email: profile.email, action: "branding_upi_updated", target_type: "platform_asset" });
-    showToast("UPI ID saved", "success");
-    refresh(); load();
-  };
+    const { data, error: err } = await supabase
+      .from("platform_assets")
+      .select("*")
+      .order("asset_type", { ascending: true });
 
-  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (err) {
+      setError(err.message);
+      setLoading(false);
+      return;
+    }
+
+    setAssets((data ?? []) as PlatformAsset[]);
+
+    const initial: Record<string, string> = {};
+    (data ?? []).forEach((a) => {
+      const asset = a as PlatformAsset;
+      if (asset.asset_type === "COLOR") {
+        initial[asset.id] = (asset.metadata.value as string) ?? "";
+      } else if (asset.asset_type === "CONFIG") {
+        initial[asset.id] = (asset.metadata.upi_id as string) ?? "";
+        initial[`${asset.id}_instructions`] = (asset.metadata.instructions as string) ?? "";
+      }
+    });
+    setEditValues(initial);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>, asset: PlatformAsset) {
     const file = e.target.files?.[0];
-    if (!file || !uploadKey) return;
-    const { url, error } = await uploadPlatformAsset(uploadKey, file);
-    if (url && !error) {
-      await upsertPlatformAsset(uploadKey, uploadKey.replace(/_/g, " "), "IMAGE", url, `branding/${uploadKey}`);
-      if (profile) await insertAuditLog({ actor_id: profile.id, actor_email: profile.email, action: "branding_asset_uploaded", target_type: "platform_asset", metadata: { key: uploadKey } });
-      showToast("Asset uploaded", "success");
-      refresh(); load();
-    } else { showToast("Upload failed", "error"); }
-    if (fileRef.current) fileRef.current.value = "";
-  };
+    if (!file) return;
+    setUploading(true);
 
-  if (!assets) return <Layout title="Branding"><Loading /></Layout>;
-  if (error) return <Layout title="Branding"><ErrorState message={error} onRetry={load} /></Layout>;
+    const ext = file.name.split(".").pop();
+    const path = `${asset.key}.${ext}`;
+    const { error: upErr } = await supabase.storage.from("platform-assets").upload(path, file, { upsert: true });
+
+    if (upErr) {
+      setError(upErr.message);
+      setUploading(false);
+      return;
+    }
+
+    const { data: urlData } = supabase.storage.from("platform-assets").getPublicUrl(path);
+    const publicUrl = urlData.publicUrl;
+
+    const { error: updErr } = await supabase
+      .from("platform_assets")
+      .update({ storage_path: path, public_url: publicUrl })
+      .eq("id", asset.id);
+
+    setUploading(false);
+    if (updErr) {
+      setError(updErr.message);
+      return;
+    }
+    load();
+  }
+
+  async function handleSaveColor(asset: PlatformAsset) {
+    setSaving(asset.id);
+    const value = editValues[asset.id] ?? "";
+
+    const { error: err } = await supabase
+      .from("platform_assets")
+      .update({ metadata: { ...asset.metadata, value } })
+      .eq("id", asset.id);
+
+    setSaving(null);
+    if (err) {
+      setError(err.message);
+      return;
+    }
+    load();
+  }
+
+  async function handleSaveConfig(asset: PlatformAsset) {
+    setSaving(asset.id);
+    const upiId = editValues[asset.id] ?? "";
+    const instructions = editValues[`${asset.id}_instructions`] ?? "";
+
+    const { error: err } = await supabase
+      .from("platform_assets")
+      .update({ metadata: { ...asset.metadata, upi_id: upiId, instructions } })
+      .eq("id", asset.id);
+
+    setSaving(null);
+    if (err) {
+      setError(err.message);
+      return;
+    }
+    load();
+  }
+
+  if (loading) return <LoadingSpinner size={32} />;
+  if (error) return <ErrorState message={error} onRetry={load} />;
+
+  const images = assets.filter((a) => a.asset_type === "IMAGE");
+  const colors = assets.filter((a) => a.asset_type === "COLOR");
+  const configs = assets.filter((a) => a.asset_type === "CONFIG");
 
   return (
-    <Layout title="Platform Branding">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="glass rounded-2xl p-6">
-          <h3 className="text-sm font-medium text-slate-400 mb-4">UPI Configuration</h3>
-          <label className="block text-xs text-slate-400 mb-1">UPI ID</label>
-          <input value={upiId} onChange={(e) => setUpiId(e.target.value)} placeholder="partner@upi" className="w-full px-3 py-2 bg-slate-900/50 border border-white/10 rounded-lg text-white text-sm mb-3 focus:outline-none focus:border-primary-500" />
-          <button onClick={saveUpi} className="px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white text-sm font-medium rounded-lg transition-colors">Save UPI ID</button>
-        </div>
-        <div className="glass rounded-2xl p-6">
-          <h3 className="text-sm font-medium text-slate-400 mb-4">Upload Branding Asset</h3>
-          <label className="block text-xs text-slate-400 mb-1">Asset Key</label>
-          <input value={uploadKey} onChange={(e) => setUploadKey(e.target.value)} placeholder="upi_qr, logo, etc." className="w-full px-3 py-2 bg-slate-900/50 border border-white/10 rounded-lg text-white text-sm mb-3 focus:outline-none focus:border-primary-500" />
-          <input ref={fileRef} type="file" accept="image/*" onChange={handleUpload} disabled={!uploadKey} className="block w-full text-sm text-slate-400 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-primary-600 file:text-white file:cursor-pointer disabled:opacity-50" />
-        </div>
-      </div>
-      <div className="glass rounded-2xl p-6 mt-6">
-        <h3 className="text-sm font-medium text-slate-400 mb-4">Platform Assets</h3>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-          {assets.map((a) => (
-            <div key={a.id} className="glass rounded-xl p-4">
-              <p className="text-sm font-medium text-white mb-2">{a.label}</p>
-              {a.asset_type === "IMAGE" && a.public_url ? <img src={a.public_url} alt={a.label} className="w-full h-24 object-cover rounded-lg" /> : <p className="text-xs text-slate-500">{String(a.metadata?.upi_id || a.public_url || "—")}</p>}
-              <p className="text-xs text-slate-500 mt-2">{a.key}</p>
+    <div>
+      <PageHeader title="Branding" subtitle="Manage platform logos, colors, and configuration" />
+
+      {assets.length === 0 ? (
+        <EmptyState message="No platform assets configured" />
+      ) : (
+        <div className="space-y-6">
+          {images.length > 0 && (
+            <div className="card p-6">
+              <h2 className="mb-4 text-lg font-semibold text-slate-900">Logos & Images</h2>
+              <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
+                {images.map((a) => (
+                  <div key={a.id} className="rounded-lg border border-slate-200 p-4">
+                    <p className="mb-2 text-sm font-medium text-slate-700">{a.label}</p>
+                    {a.public_url && (
+                      <img src={a.public_url} alt={a.label} className="mb-3 h-24 w-full rounded border border-slate-100 object-contain" />
+                    )}
+                    {canEdit && (
+                      <label className="btn-secondary cursor-pointer text-xs">
+                        {uploading ? "Uploading..." : "Upload"}
+                        <input type="file" accept="image/*" className="hidden" onChange={(e) => handleUpload(e, a)} />
+                      </label>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
-          ))}
+          )}
+
+          {colors.length > 0 && (
+            <div className="card p-6">
+              <h2 className="mb-4 text-lg font-semibold text-slate-900">Colors</h2>
+              <div className="grid grid-cols-2 gap-4">
+                {colors.map((a) => (
+                  <div key={a.id}>
+                    <label className="mb-1 block text-sm font-medium text-slate-700">{a.label}</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="color"
+                        className="input h-10 w-16 p-1"
+                        value={editValues[a.id] ?? (a.metadata.value as string) ?? "#000000"}
+                        onChange={(e) => setEditValues({ ...editValues, [a.id]: e.target.value })}
+                        disabled={!canEdit}
+                      />
+                      <input
+                        className="input flex-1"
+                        value={editValues[a.id] ?? (a.metadata.value as string) ?? ""}
+                        onChange={(e) => setEditValues({ ...editValues, [a.id]: e.target.value })}
+                        disabled={!canEdit}
+                      />
+                      {canEdit && (
+                        <button className="btn-primary" disabled={saving === a.id} onClick={() => handleSaveColor(a)}>
+                          {saving === a.id ? "..." : "Save"}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {configs.length > 0 && (
+            <div className="card p-6">
+              <h2 className="mb-4 text-lg font-semibold text-slate-900">UPI Configuration</h2>
+              {configs.map((a) => (
+                <div key={a.id} className="space-y-3">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-slate-700">UPI ID</label>
+                    <input
+                      className="input"
+                      value={editValues[a.id] ?? (a.metadata.upi_id as string) ?? ""}
+                      onChange={(e) => setEditValues({ ...editValues, [a.id]: e.target.value })}
+                      disabled={!canEdit}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-slate-700">Instructions</label>
+                    <textarea
+                      className="input"
+                      rows={3}
+                      value={editValues[`${a.id}_instructions`] ?? (a.metadata.instructions as string) ?? ""}
+                      onChange={(e) => setEditValues({ ...editValues, [`${a.id}_instructions`]: e.target.value })}
+                      disabled={!canEdit}
+                    />
+                  </div>
+                  {canEdit && (
+                    <button className="btn-primary" disabled={saving === a.id} onClick={() => handleSaveConfig(a)}>
+                      {saving === a.id ? "Saving..." : "Save Config"}
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
-      </div>
-    </Layout>
+      )}
+    </div>
   );
 }

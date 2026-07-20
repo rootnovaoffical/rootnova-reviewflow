@@ -1,91 +1,205 @@
-import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
-import Layout from "../../components/Layout";
+import { useEffect, useState, useCallback } from "react";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
-import type { Payment } from "../../lib/types";
-import { Loading, ErrorState } from "../../components/States";
-import { formatCurrency, formatDateTime } from "../../lib/utils";
-import { useToast } from "../../context/ToastContext";
-import { insertAuditLog } from "../../lib/auth";
-import { useAuth } from "../../context/AuthContext";
-import { getSignedUrl } from "../../lib/storage";
+import { useAuth } from "../../lib/auth";
+import { LoadingSpinner, ErrorState, Badge } from "../../components/ui";
+import type { Payment, Organization } from "../../lib/types";
 
-export default function AdminPaymentDetail() {
+interface PaymentWithOrg extends Payment {
+  organizations: Pick<Organization, "name"> | null;
+}
+
+export default function PaymentDetail() {
   const { id } = useParams<{ id: string }>();
-  const { profile } = useAuth();
-  const { showToast } = useToast();
-  const [payment, setPayment] = useState<Payment | null>(null);
+  const navigate = useNavigate();
+  const { session } = useAuth();
+  const [payment, setPayment] = useState<PaymentWithOrg | null>(null);
   const [loading, setLoading] = useState(true);
-  const [rejectReason, setRejectReason] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState("");
   const [showReject, setShowReject] = useState(false);
-  const [proofUrl, setProofUrl] = useState<string | null>(null);
+  const [signedUrl, setSignedUrl] = useState<string | null>(null);
 
-  const load = () => {
+  const load = useCallback(async () => {
     if (!id) return;
-    supabase.from("payments").select("*").eq("id", id).maybeSingle().then(({ data, error: err }) => {
-      if (err) { setPayment(null); setLoading(false); return; }
-      setPayment(data as Payment);
+    setLoading(true);
+    setError(null);
+
+    const { data, error: err } = await supabase
+      .from("payments")
+      .select("*, organizations(name)")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (err) {
+      setError(err.message);
       setLoading(false);
-      if (data?.screenshot_path) getSignedUrl(data.screenshot_path).then(setProofUrl);
-    });
-  };
+      return;
+    }
 
-  useEffect(() => { load(); }, [id]);
+    if (!data) {
+      setError("Payment not found");
+      setLoading(false);
+      return;
+    }
 
-  const updateStatus = async (status: "UNDER_REVIEW" | "APPROVED" | "REJECTED", reason?: string) => {
-    if (!payment || !profile) return;
-    const updates: Record<string, unknown> = { status, reviewed_by: profile.id, reviewed_at: new Date().toISOString() };
-    if (status === "APPROVED") { updates.approved_by = profile.id; updates.approved_at = new Date().toISOString(); }
-    if (status === "REJECTED" && reason) updates.rejection_reason = reason;
-    const { error } = await supabase.from("payments").update(updates).eq("id", payment.id);
-    if (error) { showToast("Failed to update payment", "error"); return; }
-    await insertAuditLog({ actor_id: profile.id, actor_email: profile.email, action: `payment_${status.toLowerCase()}`, target_type: "payment", target_id: payment.id, organization_id: payment.organization_id, metadata: { amount: payment.amount, reason } });
-    showToast(`Payment ${status.toLowerCase()}`, "success");
+    const p = data as PaymentWithOrg;
+    setPayment(p);
+
+    if (p.screenshot_path) {
+      const { data: urlData } = await supabase.storage
+        .from("payment-proofs")
+        .createSignedUrl(p.screenshot_path, 3600);
+      setSignedUrl(urlData?.signedUrl ?? null);
+    }
+
+    setLoading(false);
+  }, [id]);
+
+  useEffect(() => {
     load();
-  };
+  }, [load]);
 
-  if (loading) return <Layout title="Payment"><Loading /></Layout>;
-  if (!payment) return <Layout title="Payment"><ErrorState message="Payment not found" /></Layout>;
+  async function handleApprove() {
+    if (!id || !session?.user) return;
+    setActionLoading(true);
+    const { error: err } = await supabase
+      .from("payments")
+      .update({
+        status: "APPROVED",
+        approved_by: session.user.id,
+        approved_at: new Date().toISOString(),
+      })
+      .eq("id", id);
+
+    setActionLoading(false);
+    if (err) {
+      setError(err.message);
+      return;
+    }
+    navigate("/payments");
+  }
+
+  async function handleReject() {
+    if (!id || !session?.user || !rejectionReason.trim()) return;
+    setActionLoading(true);
+    const { error: err } = await supabase
+      .from("payments")
+      .update({
+        status: "REJECTED",
+        rejection_reason: rejectionReason.trim(),
+        reviewed_by: session.user.id,
+        reviewed_at: new Date().toISOString(),
+      })
+      .eq("id", id);
+
+    setActionLoading(false);
+    if (err) {
+      setError(err.message);
+      return;
+    }
+    navigate("/payments");
+  }
+
+  if (loading) return <LoadingSpinner size={32} />;
+  if (error) return <ErrorState message={error} onRetry={load} />;
+  if (!payment) return <ErrorState message="Payment not found" />;
+
+  const canAct = payment.status === "PENDING";
 
   return (
-    <Layout title={`Payment ${formatCurrency(payment.amount)}`}>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="glass rounded-2xl p-6">
-          <h3 className="text-sm font-medium text-slate-400 mb-4">Payment Details</h3>
-          <dl className="space-y-3 text-sm">
-            <div className="flex justify-between"><dt className="text-slate-500">Amount</dt><dd className="text-white font-medium">{formatCurrency(payment.amount)}</dd></div>
-            <div className="flex justify-between"><dt className="text-slate-500">Purpose</dt><dd className="text-white">{payment.payment_purpose}</dd></div>
-            <div className="flex justify-between"><dt className="text-slate-500">Method</dt><dd className="text-white">{payment.payment_method}</dd></div>
-            <div className="flex justify-between"><dt className="text-slate-500">UPI ID</dt><dd className="text-white">{payment.upi_id || "—"}</dd></div>
-            <div className="flex justify-between"><dt className="text-slate-500">UTR Reference</dt><dd className="text-white">{payment.utr_reference || "—"}</dd></div>
-            <div className="flex justify-between"><dt className="text-slate-500">Status</dt><dd><span className={`px-2 py-1 rounded-full text-xs ${payment.status === "APPROVED" ? "bg-success-500/20 text-success-400" : payment.status === "REJECTED" ? "bg-error-500/20 text-error-400" : payment.status === "UNDER_REVIEW" ? "bg-warning-500/20 text-warning-400" : "bg-slate-500/20 text-slate-400"}`}>{payment.status}</span></dd></div>
-            <div className="flex justify-between"><dt className="text-slate-500">Created</dt><dd className="text-white">{formatDateTime(payment.created_at)}</dd></div>
-            {payment.rejection_reason && <div className="flex justify-between"><dt className="text-slate-500">Rejection Reason</dt><dd className="text-error-400">{payment.rejection_reason}</dd></div>}
-          </dl>
+    <div className="max-w-2xl">
+      <div className="mb-4">
+        <Link to="/payments" className="text-sm text-primary-600 hover:underline">← Back to Payments</Link>
+      </div>
+
+      <div className="card p-6">
+        <div className="mb-6 flex items-center justify-between">
+          <h1 className="text-xl font-bold text-slate-900">Payment Details</h1>
+          <Badge status={payment.status} />
         </div>
-        <div className="glass rounded-2xl p-6">
-          <h3 className="text-sm font-medium text-slate-400 mb-4">Proof Screenshot</h3>
-          {proofUrl ? <img src={proofUrl} alt="Payment proof" className="w-full rounded-xl mb-4" /> : <p className="text-slate-500 text-sm">No proof uploaded</p>}
-          {payment.status === "PENDING" && (
-            <button onClick={() => updateStatus("UNDER_REVIEW")} className="w-full py-2 bg-warning-600 hover:bg-warning-500 text-white text-sm font-medium rounded-lg mb-2 transition-colors">Mark Under Review</button>
-          )}
-          {payment.status !== "APPROVED" && (
-            <button onClick={() => updateStatus("APPROVED")} className="w-full py-2 bg-success-600 hover:bg-success-500 text-white text-sm font-medium rounded-lg mb-2 transition-colors">Approve Payment</button>
-          )}
-          {payment.status !== "REJECTED" && (
-            <div>
-              {showReject ? (
-                <div>
-                  <input value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} placeholder="Rejection reason" className="w-full px-3 py-2 bg-slate-900/50 border border-white/10 rounded-lg text-white text-sm mb-2" />
-                  <button onClick={() => { updateStatus("REJECTED", rejectReason); setShowReject(false); setRejectReason(""); }} className="w-full py-2 bg-error-600 hover:bg-error-500 text-white text-sm font-medium rounded-lg transition-colors">Confirm Reject</button>
-                </div>
-              ) : (
-                <button onClick={() => setShowReject(true)} className="w-full py-2 bg-error-600/80 hover:bg-error-500 text-white text-sm font-medium rounded-lg transition-colors">Reject Payment</button>
-              )}
+
+        <dl className="space-y-3 text-sm">
+          <div className="flex justify-between">
+            <dt className="text-slate-500">Organization</dt>
+            <dd className="font-medium text-slate-900">{payment.organizations?.name ?? "—"}</dd>
+          </div>
+          <div className="flex justify-between">
+            <dt className="text-slate-500">Amount</dt>
+            <dd className="font-medium text-slate-900">₹{payment.amount.toLocaleString()}</dd>
+          </div>
+          <div className="flex justify-between">
+            <dt className="text-slate-500">Purpose</dt>
+            <dd className="font-medium text-slate-900">{payment.payment_purpose}</dd>
+          </div>
+          <div className="flex justify-between">
+            <dt className="text-slate-500">Method</dt>
+            <dd className="font-medium text-slate-900">{payment.payment_method}</dd>
+          </div>
+          <div className="flex justify-between">
+            <dt className="text-slate-500">UPI ID</dt>
+            <dd className="font-medium text-slate-900">{payment.upi_id ?? "—"}</dd>
+          </div>
+          <div className="flex justify-between">
+            <dt className="text-slate-500">UTR Reference</dt>
+            <dd className="font-medium text-slate-900">{payment.utr_reference ?? "—"}</dd>
+          </div>
+          <div className="flex justify-between">
+            <dt className="text-slate-500">Payment Date</dt>
+            <dd className="font-medium text-slate-900">
+              {payment.payment_date ? new Date(payment.payment_date).toLocaleString() : "—"}
+            </dd>
+          </div>
+          {payment.rejection_reason && (
+            <div className="flex justify-between">
+              <dt className="text-slate-500">Rejection Reason</dt>
+              <dd className="font-medium text-red-600">{payment.rejection_reason}</dd>
             </div>
           )}
-        </div>
+        </dl>
+
+        {signedUrl && (
+          <div className="mt-6">
+            <p className="mb-2 text-sm font-medium text-slate-700">Payment Screenshot</p>
+            <img src={signedUrl} alt="Payment proof" className="max-w-full rounded-lg border border-slate-200" />
+          </div>
+        )}
+
+        {canAct && (
+          <div className="mt-6">
+            {!showReject ? (
+              <div className="flex gap-3">
+                <button className="btn-primary" disabled={actionLoading} onClick={handleApprove}>
+                  {actionLoading ? "Processing..." : "Approve"}
+                </button>
+                <button className="btn-danger" disabled={actionLoading} onClick={() => setShowReject(true)}>
+                  Reject
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Rejection Reason</label>
+                  <textarea
+                    className="input"
+                    rows={3}
+                    value={rejectionReason}
+                    onChange={(e) => setRejectionReason(e.target.value)}
+                    placeholder="Enter reason for rejection..."
+                  />
+                </div>
+                <div className="flex gap-3">
+                  <button className="btn-danger" disabled={actionLoading || !rejectionReason.trim()} onClick={handleReject}>
+                    {actionLoading ? "Processing..." : "Confirm Reject"}
+                  </button>
+                  <button className="btn-secondary" onClick={() => setShowReject(false)}>Cancel</button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
-    </Layout>
+    </div>
   );
 }

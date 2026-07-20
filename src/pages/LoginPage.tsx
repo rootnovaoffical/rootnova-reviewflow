@@ -1,48 +1,98 @@
 import { useState } from "react";
-import { useNavigate, useLocation, Link } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
-import { useBranding } from "../context/BrandingContext";
-import { useToast } from "../context/ToastContext";
+import { useAuth } from "../lib/auth";
 
 export default function LoginPage() {
-  const { signIn } = useAuth();
-  const { logoPrimary } = useBranding();
-  const { show } = useToast();
-  const navigate = useNavigate();
-  const location = useLocation();
+  const { signIn, signUp } = useAuth();
+  const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [fullName, setFullName] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  const submit = async (e: React.FormEvent) => {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setBusy(true);
-    const { error } = await signIn(email, password);
-    setBusy(false);
-    if (error) { show(error, "error"); return; }
-    show("Signed in", "success");
-    const from = (location.state as { from?: string } | null)?.from;
-    navigate(from || "/admin/dashboard");
-  };
+    setError(null);
+    setLoading(true);
+    if (mode === "signin") {
+      const { error } = await signIn(email, password);
+      if (error) setError(error);
+    } else {
+      const { error } = await signUp(email, password, fullName);
+      if (error) setError(error);
+    }
+    setLoading(false);
+  }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-6">
-      <div className="w-full max-w-sm bg-slate-900/70 backdrop-blur border border-slate-700 rounded-2xl p-8 shadow-2xl">
-        <div className="flex items-center justify-center mb-6">
-          {logoPrimary ? (
-            <img src={logoPrimary} alt="RootNova" className="h-12" />
-          ) : (
-            <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center text-white font-bold text-xl">R</div>
-          )}
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-50 to-primary-50">
+      <div className="card w-full max-w-md p-8">
+        <div className="mb-8 text-center">
+          <div className="mb-3 text-3xl font-bold text-primary-600">RootNova</div>
+          <p className="text-sm text-slate-500">Review Intelligence Platform</p>
         </div>
-        <h1 className="text-xl font-bold text-white text-center mb-1">Welcome back</h1>
-        <p className="text-slate-400 text-sm text-center mb-6">Sign in to RootNova ReviewFlow</p>
-        <form onSubmit={submit} className="space-y-4">
-          <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" className="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
-          <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" className="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
-          <button type="submit" disabled={busy} className="w-full py-2.5 rounded-lg bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white font-medium text-sm transition-colors">{busy ? "Signing in…" : "Sign in"}</button>
+
+        <div className="mb-6 flex rounded-lg bg-slate-100 p-1">
+          <button
+            className={`flex-1 rounded-md py-2 text-sm font-medium transition-colors ${
+              mode === "signin" ? "bg-white text-primary-600 shadow-sm" : "text-slate-500"
+            }`}
+            onClick={() => setMode("signin")}
+          >
+            Sign In
+          </button>
+          <button
+            className={`flex-1 rounded-md py-2 text-sm font-medium transition-colors ${
+              mode === "signup" ? "bg-white text-primary-600 shadow-sm" : "text-slate-500"
+            }`}
+            onClick={() => setMode("signup")}
+          >
+            Sign Up
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {mode === "signup" && (
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Full Name</label>
+              <input
+                className="input"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                required
+              />
+            </div>
+          )}
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Email</label>
+            <input
+              className="input"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Password</label>
+            <input
+              className="input"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              minLength={6}
+            />
+          </div>
+
+          {error && (
+            <div className="rounded-lg bg-red-50 px-4 py-2 text-sm text-red-600">{error}</div>
+          )}
+
+          <button type="submit" className="btn-primary w-full" disabled={loading}>
+            {loading ? "Please wait..." : mode === "signin" ? "Sign In" : "Create Account"}
+          </button>
         </form>
-        <p className="text-slate-400 text-xs text-center mt-6">New partner? <Link to="/signup" className="text-brand-400 hover:underline">Create account</Link></p>
       </div>
     </div>
   );

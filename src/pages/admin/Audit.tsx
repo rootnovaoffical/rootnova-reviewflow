@@ -1,49 +1,112 @@
-import { useEffect, useState } from "react";
-import Layout from "../../components/Layout";
+import { useEffect, useState, useCallback } from "react";
 import { supabase } from "../../lib/supabase";
+import { LoadingSpinner, ErrorState, EmptyState, PageHeader, Pagination } from "../../components/ui";
 import type { AuditLog } from "../../lib/types";
-import { Loading, EmptyState, ErrorState } from "../../components/States";
-import { formatDateTime } from "../../lib/utils";
 
-export default function AdminAudit() {
-  const [logs, setLogs] = useState<AuditLog[] | null>(null);
+const PAGE_SIZE = 50;
+
+export default function Audit() {
+  const [logs, setLogs] = useState<AuditLog[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [actionFilter, setActionFilter] = useState("ALL");
 
-  const load = () => supabase.from("audit_logs").select("*").order("created_at", { ascending: false }).limit(100).then(({ data, error: err }) => {
-    if (err) setError(err.message);
-    setLogs(data as AuditLog[] || []);
-  });
-  useEffect(() => { load(); }, []);
+  const totalPages = Math.ceil(total / PAGE_SIZE);
 
-  if (!logs) return <Layout title="Audit Log"><Loading /></Layout>;
-  if (error) return <Layout title="Audit Log"><ErrorState message={error} onRetry={load} /></Layout>;
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    const start = (page - 1) * PAGE_SIZE;
+    const end = start + PAGE_SIZE - 1;
+
+    let query = supabase
+      .from("audit_logs")
+      .select("*", { count: "exact" })
+      .order("created_at", { ascending: false })
+      .range(start, end);
+
+    if (actionFilter !== "ALL") {
+      query = query.eq("action", actionFilter);
+    }
+
+    const { data, error: err, count } = await query;
+
+    if (err) {
+      setError(err.message);
+      setLoading(false);
+      return;
+    }
+
+    setLogs((data ?? []) as AuditLog[]);
+    setTotal(count ?? 0);
+    setLoading(false);
+  }, [page, actionFilter]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [actionFilter]);
 
   return (
-    <Layout title="Audit Log">
-      {logs.length === 0 ? <EmptyState title="No audit logs" /> : (
-        <div className="glass rounded-2xl overflow-hidden">
-          <table className="w-full">
-            <thead className="bg-white/5">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">Actor</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">Action</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">Target</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">Date</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/5">
-              {logs.map((l) => (
-                <tr key={l.id} className="hover:bg-white/5 transition-colors">
-                  <td className="px-6 py-4 text-sm text-white">{l.actor_email || "—"}</td>
-                  <td className="px-6 py-4 text-sm text-primary-300">{l.action}</td>
-                  <td className="px-6 py-4 text-sm text-slate-400">{l.target_type || "—"}{l.target_id ? ` (${l.target_id.slice(0, 8)})` : ""}</td>
-                  <td className="px-6 py-4 text-sm text-slate-400">{formatDateTime(l.created_at)}</td>
+    <div>
+      <PageHeader title="Audit Logs" subtitle="Track all administrative actions" />
+
+      <div className="mb-4 flex items-center gap-3">
+        <label className="text-sm font-medium text-slate-700">Filter by action:</label>
+        <select className="input max-w-[240px]" value={actionFilter} onChange={(e) => setActionFilter(e.target.value)}>
+          <option value="ALL">All Actions</option>
+          <option value="payment.approve">payment.approve</option>
+          <option value="payment.reject">payment.reject</option>
+          <option value="business.update">business.update</option>
+          <option value="organization.create">organization.create</option>
+          <option value="organization.update">organization.update</option>
+          <option value="subscription.create">subscription.create</option>
+          <option value="plan.create">plan.create</option>
+          <option value="plan.update">plan.update</option>
+          <option value="admin.invite">admin.invite</option>
+          <option value="admin.revoke">admin.revoke</option>
+        </select>
+      </div>
+
+      {loading ? (
+        <LoadingSpinner size={32} />
+      ) : error ? (
+        <ErrorState message={error} onRetry={load} />
+      ) : logs.length === 0 ? (
+        <EmptyState message="No audit logs found" />
+      ) : (
+        <>
+          <div className="card overflow-hidden">
+            <table className="w-full text-left text-sm">
+              <thead className="border-b border-slate-200 bg-slate-50">
+                <tr>
+                  <th className="px-4 py-3 font-medium text-slate-600">Actor</th>
+                  <th className="px-4 py-3 font-medium text-slate-600">Action</th>
+                  <th className="px-4 py-3 font-medium text-slate-600">Target Type</th>
+                  <th className="px-4 py-3 font-medium text-slate-600">Date</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {logs.map((l) => (
+                  <tr key={l.id} className="hover:bg-slate-50">
+                    <td className="px-4 py-3 text-slate-700">{l.actor_email ?? "—"}</td>
+                    <td className="px-4 py-3 font-medium text-slate-900">{l.action}</td>
+                    <td className="px-4 py-3 text-slate-500">{l.target_type ?? "—"}</td>
+                    <td className="px-4 py-3 text-slate-500">{new Date(l.created_at).toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+        </>
       )}
-    </Layout>
+    </div>
   );
 }

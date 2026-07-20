@@ -1,16 +1,20 @@
-export type Role = "ROOTNOVA_SUPER_ADMIN" | "ROOTNOVA_ADMIN" | "PARTNER_OWNER" | "PARTNER_ADMIN" | "PARTNER_TEAM_MEMBER" | "BUSINESS_ADMIN";
-
-export type AccountStatus = "ACTIVE" | "SUSPENDED" | "INACTIVE";
+export type UserRole =
+  | "ROOTNOVA_SUPER_ADMIN"
+  | "ROOTNOVA_ADMIN"
+  | "PARTNER_OWNER"
+  | "PARTNER_ADMIN"
+  | "PARTNER_TEAM_MEMBER"
+  | "BUSINESS_ADMIN";
 
 export interface Profile {
   id: string;
   full_name: string;
   email: string;
-  role: Role;
-  account_status: AccountStatus;
-  avatar_url: string | null;
+  role: UserRole;
   created_at: string;
   updated_at: string;
+  account_status: string;
+  avatar_url: string | null;
 }
 
 export interface Organization {
@@ -35,7 +39,6 @@ export interface OrganizationMember {
   status: string;
   created_at: string;
   updated_at: string;
-  profile?: Profile;
 }
 
 export interface Business {
@@ -49,10 +52,9 @@ export interface Business {
   google_place_id: string | null;
   google_maps_url: string | null;
   google_review_url: string | null;
-  google_review_url_derived: string | null;
   public_review_enabled: boolean;
   status: string;
-  organization_id: string | null;
+  organization_id: string;
   created_at: string;
   updated_at: string;
 }
@@ -62,33 +64,6 @@ export interface BusinessAdmin {
   business_id: string;
   user_id: string;
   created_at: string;
-  profile?: Profile;
-}
-
-export interface Question {
-  id: string;
-  business_id: string;
-  question_text: string;
-  question_type: string;
-  flow_type: string;
-  options: string[];
-  is_required: boolean;
-  is_active: boolean;
-  sort_order: number;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface ReviewSession {
-  id: string;
-  business_id: string;
-  rating: number;
-  answers: Record<string, unknown>[];
-  ai_generated_review: string | null;
-  ai_status: string;
-  google_place_id_snapshot: string | null;
-  created_at: string;
-  completed_at: string | null;
 }
 
 export interface Plan {
@@ -107,6 +82,8 @@ export interface Plan {
   features: Record<string, unknown>;
   is_active: boolean;
   sort_order: number;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Subscription {
@@ -155,24 +132,30 @@ export interface Payment {
   updated_at: string;
 }
 
-export interface PlatformAsset {
+export interface Question {
   id: string;
-  key: string;
-  label: string;
-  asset_type: string;
-  storage_path: string | null;
-  public_url: string | null;
-  metadata: Record<string, unknown>;
+  business_id: string;
+  question_text: string;
+  question_type: string;
+  flow_type: string;
+  options: string[];
+  is_required: boolean;
   is_active: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
 }
 
-export interface FeatureFlag {
+export interface ReviewSession {
   id: string;
-  key: string;
-  label: string;
-  description: string | null;
-  is_enabled: boolean;
-  category: string;
+  business_id: string;
+  rating: number;
+  answers: Record<string, unknown>;
+  ai_generated_review: string | null;
+  ai_status: string;
+  google_place_id_snapshot: string | null;
+  created_at: string;
+  completed_at: string | null;
 }
 
 export interface AuditLog {
@@ -187,13 +170,28 @@ export interface AuditLog {
   created_at: string;
 }
 
-export interface AnalyticsEvent {
+export interface FeatureFlag {
   id: string;
-  business_id: string | null;
-  session_id: string | null;
-  event_type: string;
-  metadata: Record<string, unknown>;
+  key: string;
+  label: string;
+  description: string | null;
+  is_enabled: boolean;
+  category: string;
   created_at: string;
+  updated_at: string;
+}
+
+export interface PlatformAsset {
+  id: string;
+  key: string;
+  label: string;
+  asset_type: string;
+  storage_path: string | null;
+  public_url: string | null;
+  metadata: Record<string, unknown>;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface AdminInvitation {
@@ -207,6 +205,11 @@ export interface AdminInvitation {
   updated_at: string;
 }
 
-export type UserRole = Role;
-export type OrgMemberRole = "OWNER" | "ADMIN" | "TEAM_MEMBER";
-export type FlowType = "ALWAYS" | "POSITIVE" | "NEGATIVE";
+export interface AnalyticsEvent {
+  id: string;
+  business_id: string | null;
+  session_id: string | null;
+  event_type: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}

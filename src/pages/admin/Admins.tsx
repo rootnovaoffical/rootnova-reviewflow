@@ -1,104 +1,190 @@
-import { useEffect, useState } from "react";
-import Layout from "../../components/Layout";
+import { useEffect, useState, useCallback } from "react";
 import { supabase } from "../../lib/supabase";
-import type { Profile } from "../../lib/types";
-import { Loading, EmptyState, ErrorState } from "../../components/States";
-import Avatar from "../../components/Avatar";
-import { useToast } from "../../context/ToastContext";
-import { useAuth } from "../../context/AuthContext";
-import { callManageAdmin, insertAuditLog } from "../../lib/auth";
+import { useAuth, isRootNovaSuperAdmin } from "../../lib/auth";
+import { LoadingSpinner, ErrorState, EmptyState, Badge, PageHeader } from "../../components/ui";
+import type { AdminInvitation, Profile } from "../../lib/types";
 
-export default function AdminAdmins() {
-  const { profile: me } = useAuth();
-  const { showToast } = useToast();
-  const [admins, setAdmins] = useState<Profile[] | null>(null);
-  const [inviting, setInviting] = useState(false);
+export default function Admins() {
+  const { profile, session } = useAuth();
+  const isSuperAdmin = isRootNovaSuperAdmin(profile?.role);
+  const [invitations, setInvitations] = useState<AdminInvitation[]>([]);
+  const [admins, setAdmins] = useState<Profile[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showInvite, setShowInvite] = useState(false);
+  const [inviting, setInviting] = useState(false);
+  const [revoking, setRevoking] = useState<string | null>(null);
+  const [form, setForm] = useState({ email: "", role: "ROOTNOVA_ADMIN" });
 
-  const load = () => supabase.from("profiles").select("*").in("role", ["ROOTNOVA_SUPER_ADMIN", "ROOTNOVA_ADMIN"]).order("created_at", { ascending: false }).then(({ data, error: err }) => {
-    if (err) setError(err.message);
-    setAdmins(data as Profile[] || []);
-  });
-  useEffect(() => { load(); }, []);
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
 
-  const toggleStatus = async (admin: Profile) => {
-    if (me?.role !== "ROOTNOVA_SUPER_ADMIN" && admin.role === "ROOTNOVA_SUPER_ADMIN") {
-      showToast("Only Super Admin can manage other Super Admins", "error"); return;
+    const [inv, profs] = await Promise.all([
+      supabase.from("admin_invitations").select("*").order("created_at", { ascending: false }),
+      supabase.from("profiles").select("*").in("role", ["ROOTNOVA_SUPER_ADMIN", "ROOTNOVA_ADMIN"]).order("created_at", { ascending: false }),
+    ]);
+
+    if (inv.error || profs.error) {
+      setError(inv.error?.message ?? profs.error?.message ?? "Failed to load");
+      setLoading(false);
+      return;
     }
-    const newStatus = admin.account_status === "ACTIVE" ? "SUSPENDED" : "ACTIVE";
-    const { error } = await supabase.from("profiles").update({ account_status: newStatus }).eq("id", admin.id);
-    if (error) { showToast("Failed to update status", "error"); return; }
-    if (me) await insertAuditLog({ actor_id: me.id, actor_email: me.email, action: `admin_${newStatus.toLowerCase()}`, target_type: "profile", target_id: admin.id });
-    showToast(`Admin ${newStatus === "ACTIVE" ? "activated" : "suspended"}`, "success");
+
+    setInvitations((inv.data ?? []) as AdminInvitation[]);
+    setAdmins((profs.data ?? []) as Profile[]);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
     load();
-  };
+  }, [load]);
 
-  const invite = async (email: string, role: string) => {
-    if (me?.role !== "ROOTNOVA_SUPER_ADMIN" && role === "ROOTNOVA_SUPER_ADMIN") {
-      showToast("Only Super Admin can invite Super Admins", "error"); return;
+  async function handleInvite(e: React.FormEvent) {
+    e.preventDefault();
+    if (!session?.access_token) return;
+    setInviting(true);
+    setError(null);
+
+    try {
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/manage-admin`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ action: "invite", email: form.email, role: form.role }),
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? `Failed to invite (${res.status})`);
+      }
+
+      setShowInvite(false);
+      setForm({ email: "", role: "ROOTNOVA_ADMIN" });
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to invite admin");
     }
-    const result = await callManageAdmin("invite", { email, role });
-    if (!result.ok) { showToast(result.error || "Failed to invite", "error"); return; }
-    if (me) await insertAuditLog({ actor_id: me.id, actor_email: me.email, action: "admin_invited", target_type: "admin_invitation", metadata: { email, role } });
-    showToast("Invitation sent", "success");
-    setInviting(false); load();
-  };
 
-  if (!admins) return <Layout title="Admins"><Loading /></Layout>;
-  if (error) return <Layout title="Admins"><ErrorState message={error} onRetry={load} /></Layout>;
+    setInviting(false);
+  }
+
+  async function handleRevoke(invitationId: string) {
+    setRevoking(invitationId);
+
+    const { error: err } = await supabase
+      .from("admin_invitations")
+      .update({ status: "REVOKED" })
+      .eq("id", invitationId);
+
+    setRevoking(null);
+    if (err) {
+      setError(err.message);
+      return;
+    }
+    load();
+  }
+
+  if (loading) return <LoadingSpinner size={32} />;
+  if (error) return <ErrorState message={error} onRetry={load} />;
 
   return (
-    <Layout title="Admin Management">
-      <div className="flex justify-end mb-4">
-        <button onClick={() => setInviting(true)} className="px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white text-sm font-medium rounded-lg transition-colors">Invite Admin</button>
-      </div>
-      {admins.length === 0 ? <EmptyState title="No admins" /> : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {admins.map((a) => (
-            <div key={a.id} className="glass rounded-2xl p-6 flex items-center gap-4">
-              <Avatar url={a.avatar_url} name={a.full_name} size="lg" />
-              <div className="flex-1">
-                <h3 className="text-sm font-bold text-white">{a.full_name}</h3>
-                <p className="text-xs text-slate-400">{a.email}</p>
-                <div className="flex items-center gap-2 mt-2">
-                  <span className="px-2 py-1 rounded-full text-xs bg-primary-500/20 text-primary-300">{a.role.replace(/_/g, " ")}</span>
-                  <span className={`px-2 py-1 rounded-full text-xs ${a.account_status === "ACTIVE" ? "bg-success-500/20 text-success-400" : "bg-error-500/20 text-error-400"}`}>{a.account_status}</span>
-                </div>
-              </div>
-              {a.id !== me?.id && (
-                <button onClick={() => toggleStatus(a)} className="px-3 py-2 text-sm glass text-white rounded-lg hover:bg-white/10 transition-colors">{a.account_status === "ACTIVE" ? "Suspend" : "Activate"}</button>
-              )}
+    <div>
+      <PageHeader
+        title="Admins"
+        subtitle="Manage RootNova admin users and invitations"
+        action={isSuperAdmin && !showInvite ? <button className="btn-primary" onClick={() => setShowInvite(true)}>Invite Admin</button> : undefined}
+      />
+
+      {showInvite && isSuperAdmin && (
+        <form onSubmit={handleInvite} className="card mb-6 space-y-4 p-6">
+          <h2 className="text-lg font-semibold text-slate-900">Invite Admin</h2>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Email</label>
+              <input className="input" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
             </div>
-          ))}
-        </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Role</label>
+              <select className="input" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
+                <option value="ROOTNOVA_ADMIN">ROOTNOVA_ADMIN</option>
+                <option value="ROOTNOVA_SUPER_ADMIN">ROOTNOVA_SUPER_ADMIN</option>
+              </select>
+            </div>
+          </div>
+          <div className="flex gap-3">
+            <button type="submit" className="btn-primary" disabled={inviting}>{inviting ? "Inviting..." : "Send Invitation"}</button>
+            <button type="button" className="btn-secondary" onClick={() => setShowInvite(false)}>Cancel</button>
+          </div>
+        </form>
       )}
-      {inviting && <InviteModal onClose={() => setInviting(false)} onInvite={invite} canInviteSuperAdmin={me?.role === "ROOTNOVA_SUPER_ADMIN"} />}
-    </Layout>
-  );
-}
 
-function InviteModal({ onClose, onInvite, canInviteSuperAdmin }: { onClose: () => void; onInvite: (email: string, role: string) => void; canInviteSuperAdmin: boolean }) {
-  const [email, setEmail] = useState("");
-  const [role, setRole] = useState("ROOTNOVA_ADMIN");
-  return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="glass-strong rounded-2xl p-6 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
-        <h2 className="text-lg font-bold text-white mb-4">Invite Admin</h2>
-        <div className="mb-3">
-          <label className="block text-xs text-slate-400 mb-1">Email</label>
-          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full px-3 py-2 bg-slate-900/50 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-primary-500" />
-        </div>
-        <div className="mb-4">
-          <label className="block text-xs text-slate-400 mb-1">Role</label>
-          <select value={role} onChange={(e) => setRole(e.target.value)} className="w-full px-3 py-2 bg-slate-900/50 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-primary-500">
-            <option value="ROOTNOVA_ADMIN">RootNova Admin</option>
-            {canInviteSuperAdmin && <option value="ROOTNOVA_SUPER_ADMIN">RootNova Super Admin</option>}
-          </select>
-        </div>
-        <div className="flex gap-3">
-          <button onClick={() => onInvite(email, role)} className="flex-1 py-2 bg-primary-600 hover:bg-primary-500 text-white text-sm font-medium rounded-lg transition-colors">Send Invite</button>
-          <button onClick={onClose} className="flex-1 py-2 glass text-white text-sm font-medium rounded-lg hover:bg-white/10 transition-colors">Cancel</button>
-        </div>
+      <div className="card mb-6 p-6">
+        <h2 className="mb-4 text-lg font-semibold text-slate-900">Admin Users ({admins.length})</h2>
+        {admins.length === 0 ? (
+          <EmptyState message="No admin users found" />
+        ) : (
+          <table className="w-full text-left text-sm">
+            <thead className="border-b border-slate-200">
+              <tr>
+                <th className="pb-2 font-medium text-slate-600">Name</th>
+                <th className="pb-2 font-medium text-slate-600">Email</th>
+                <th className="pb-2 font-medium text-slate-600">Role</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {admins.map((a) => (
+                <tr key={a.id}>
+                  <td className="py-2 font-medium text-slate-900">{a.full_name}</td>
+                  <td className="py-2 text-slate-500">{a.email}</td>
+                  <td className="py-2"><Badge status={a.role} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <div className="card p-6">
+        <h2 className="mb-4 text-lg font-semibold text-slate-900">Invitations ({invitations.length})</h2>
+        {invitations.length === 0 ? (
+          <EmptyState message="No invitations found" />
+        ) : (
+          <table className="w-full text-left text-sm">
+            <thead className="border-b border-slate-200">
+              <tr>
+                <th className="pb-2 font-medium text-slate-600">Email</th>
+                <th className="pb-2 font-medium text-slate-600">Role</th>
+                <th className="pb-2 font-medium text-slate-600">Status</th>
+                {isSuperAdmin && <th className="pb-2 font-medium text-slate-600">Actions</th>}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {invitations.map((inv) => (
+                <tr key={inv.id}>
+                  <td className="py-2 font-medium text-slate-900">{inv.email}</td>
+                  <td className="py-2 text-slate-500">{inv.role}</td>
+                  <td className="py-2"><Badge status={inv.status} /></td>
+                  {isSuperAdmin && (
+                    <td className="py-2">
+                      {inv.status === "INVITED" && (
+                        <button
+                          className="btn-danger px-3 py-1 text-xs"
+                          disabled={revoking === inv.id}
+                          onClick={() => handleRevoke(inv.id)}
+                        >
+                          {revoking === inv.id ? "Revoking..." : "Revoke"}
+                        </button>
+                      )}
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   );

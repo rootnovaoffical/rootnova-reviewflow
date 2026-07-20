@@ -1,53 +1,116 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
-import Layout from "../../components/Layout";
 import { supabase } from "../../lib/supabase";
-import type { Business } from "../../lib/types";
-import { Loading, EmptyState, ErrorState } from "../../components/States";
-import { formatDate } from "../../lib/utils";
+import { LoadingSpinner, ErrorState, EmptyState, Badge, PageHeader, Pagination } from "../../components/ui";
+import type { Business, Organization } from "../../lib/types";
 
-export default function AdminBusinesses() {
-  const [businesses, setBusinesses] = useState<(Business & { organization: { name: string; type: string } | null })[] | null>(null);
+const PAGE_SIZE = 20;
+
+interface BusinessWithOrg extends Business {
+  organizations: Pick<Organization, "name"> | null;
+}
+
+export default function Businesses() {
+  const [businesses, setBusinesses] = useState<BusinessWithOrg[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  const totalPages = Math.ceil(total / PAGE_SIZE);
 
   useEffect(() => {
-    supabase.from("businesses").select("*, organization:organizations(name,type)").order("created_at", { ascending: false }).then(({ data, error: err }) => {
-      if (err) setError(err.message);
-      setBusinesses((data as (Business & { organization: { name: string; type: string } | null })[]) || []);
-    });
-  }, []);
+    const t = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [search]);
 
-  if (!businesses) return <Layout title="Businesses"><Loading /></Layout>;
-  if (error) return <Layout title="Businesses"><ErrorState message={error} /></Layout>;
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    const start = (page - 1) * PAGE_SIZE;
+    const end = start + PAGE_SIZE - 1;
+
+    let query = supabase
+      .from("businesses")
+      .select("*, organizations(name)", { count: "exact" })
+      .order("created_at", { ascending: false })
+      .range(start, end);
+
+    if (debouncedSearch) {
+      query = query.ilike("name", `%${debouncedSearch}%`);
+    }
+
+    const { data, error: err, count } = await query;
+
+    if (err) {
+      setError(err.message);
+      setLoading(false);
+      return;
+    }
+
+    setBusinesses((data ?? []) as BusinessWithOrg[]);
+    setTotal(count ?? 0);
+    setLoading(false);
+  }, [page, debouncedSearch]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   return (
-    <Layout title="Businesses">
-      {businesses.length === 0 ? <EmptyState title="No businesses" /> : (
-        <div className="glass rounded-2xl overflow-hidden">
-          <table className="w-full">
-            <thead className="bg-white/5">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">Name</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">Ownership</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">Reviews Enabled</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">Created</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/5">
-              {businesses.map((b) => (
-                <tr key={b.id} className="hover:bg-white/5 transition-colors">
-                  <td className="px-6 py-4"><Link to={`/admin/businesses/${b.id}`} className="text-white font-medium hover:text-primary-300">{b.name}</Link></td>
-                  <td className="px-6 py-4">{b.organization ? <span className={`px-2 py-1 rounded-full text-xs ${b.organization.type === "ROOTNOVA" ? "bg-primary-500/20 text-primary-300" : "bg-accent-500/20 text-accent-300"}`}>{b.organization.type === "ROOTNOVA" ? "RootNova" : b.organization.name}</span> : <span className="px-2 py-1 rounded-full text-xs bg-slate-500/20 text-slate-400">Unassigned</span>}</td>
-                  <td className="px-6 py-4"><span className={`px-2 py-1 rounded-full text-xs ${b.status === "active" ? "bg-success-500/20 text-success-400" : "bg-slate-500/20 text-slate-400"}`}>{b.status}</span></td>
-                  <td className="px-6 py-4 text-slate-400">{b.public_review_enabled ? "Yes" : "No"}</td>
-                  <td className="px-6 py-4 text-slate-400">{formatDate(b.created_at)}</td>
+    <div>
+      <PageHeader title="Businesses" subtitle="Manage all businesses on the platform" />
+
+      <div className="mb-4">
+        <input
+          className="input max-w-sm"
+          placeholder="Search by name..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+      </div>
+
+      {loading ? (
+        <LoadingSpinner size={32} />
+      ) : error ? (
+        <ErrorState message={error} onRetry={load} />
+      ) : businesses.length === 0 ? (
+        <EmptyState message="No businesses found" />
+      ) : (
+        <>
+          <div className="card overflow-hidden">
+            <table className="w-full text-left text-sm">
+              <thead className="border-b border-slate-200 bg-slate-50">
+                <tr>
+                  <th className="px-4 py-3 font-medium text-slate-600">Name</th>
+                  <th className="px-4 py-3 font-medium text-slate-600">Status</th>
+                  <th className="px-4 py-3 font-medium text-slate-600">Organization</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {businesses.map((b) => (
+                  <tr key={b.id} className="hover:bg-slate-50">
+                    <td className="px-4 py-3">
+                      <Link to={`/businesses/${b.id}`} className="text-primary-600 hover:underline">
+                        {b.name}
+                      </Link>
+                    </td>
+                    <td className="px-4 py-3"><Badge status={b.status} /></td>
+                    <td className="px-4 py-3 text-slate-500">{b.organizations?.name ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+        </>
       )}
-    </Layout>
+    </div>
   );
 }

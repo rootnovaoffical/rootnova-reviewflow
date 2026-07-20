@@ -1,119 +1,316 @@
-import { useEffect, useState, useRef } from "react";
-import Layout from "../../components/Layout";
+import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "../../lib/auth";
+import { LoadingSpinner, ErrorState, PageHeader } from "../../components/ui";
 import type { Business } from "../../lib/types";
-import { Loading, ErrorState } from "../../components/States";
-import { useToast } from "../../context/ToastContext";
-import { insertAuditLog } from "../../lib/auth";
-import { uploadBusinessLogo } from "../../lib/storage";
-import { useQRCode, downloadQR } from "../../lib/qr";
 
-export default function BusinessMyBusiness() {
+export default function MyBusiness() {
   const { profile } = useAuth();
-  const { showToast } = useToast();
-  const [business, setBusiness] = useState<Business | null>(null);
   const [loading, setLoading] = useState(true);
-  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({ name: "", welcome_message: "", google_review_url: "", primary_color: "#6366f1", secondary_color: "#a855f7", public_review_enabled: true });
-  const logoRef = useRef<HTMLInputElement>(null);
-  const reviewUrl = business ? `${window.location.origin}/r/${business.slug}` : null;
-  const qrUrl = useQRCode(reviewUrl);
+  const [success, setSuccess] = useState(false);
+  const [business, setBusiness] = useState<Business | null>(null);
+  const [uploading, setUploading] = useState(false);
+
+  const [form, setForm] = useState({
+    name: "",
+    welcome_message: "",
+    primary_color: "#4f46e5",
+    secondary_color: "#818cf8",
+    google_place_id: "",
+    google_maps_url: "",
+    google_review_url: "",
+    public_review_enabled: true,
+    status: "active",
+    logo_url: "",
+  });
 
   useEffect(() => {
     if (!profile) return;
-    supabase.from("business_admins").select("business_id").eq("user_id", profile.id).maybeSingle()
-      .then(({ data, error: baErr }) => {
-        if (baErr) { setError(baErr.message); setLoading(false); return; }
-        if (!data?.business_id) { setLoading(false); return; }
-        supabase.from("businesses").select("*").eq("id", data.business_id).maybeSingle().then(({ data: b, error: bErr }) => {
-          if (bErr) { setError(bErr.message); setLoading(false); return; }
-          setBusiness(b as Business);
-          setEditForm({ name: (b as Business).name, welcome_message: (b as Business).welcome_message, google_review_url: (b as Business).google_review_url || "", primary_color: (b as Business).primary_color, secondary_color: (b as Business).secondary_color, public_review_enabled: (b as Business).public_review_enabled });
-          setLoading(false);
-        });
-      });
+    loadBusiness();
   }, [profile]);
 
-  const saveEdit = async () => {
-    if (!business || !profile) return;
-    const { error } = await supabase.from("businesses").update({
-      name: editForm.name, welcome_message: editForm.welcome_message, google_review_url: editForm.google_review_url || null,
-      primary_color: editForm.primary_color, secondary_color: editForm.secondary_color, public_review_enabled: editForm.public_review_enabled,
-    }).eq("id", business.id);
-    if (error) { showToast("Failed to save", "error"); return; }
-    await insertAuditLog({ actor_id: profile.id, actor_email: profile.email, action: "business_updated", target_type: "business", target_id: business.id });
-    showToast("Business updated", "success");
-    setEditing(false);
-    supabase.from("businesses").select("*").eq("id", business.id).maybeSingle().then(({ data }) => setBusiness(data as Business));
-  };
+  async function loadBusiness() {
+    if (!profile) return;
+    setLoading(true);
+    setError(null);
 
-  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !business) return;
-    const { url, error: uploadError } = await uploadBusinessLogo(business.id, file);
-    if (url) {
-      await supabase.from("businesses").update({ logo_url: url }).eq("id", business.id);
-      if (profile) await insertAuditLog({ actor_id: profile.id, actor_email: profile.email, action: "business_logo_updated", target_type: "business", target_id: business.id });
-      showToast("Logo updated", "success");
-      supabase.from("businesses").select("*").eq("id", business.id).maybeSingle().then(({ data }) => setBusiness(data as Business));
-    } else { showToast(uploadError || "Upload failed", "error"); }
-    if (logoRef.current) logoRef.current.value = "";
-  };
+    const { data: baData } = await supabase
+      .from("business_admins")
+      .select("business_id")
+      .eq("user_id", profile.id)
+      .maybeSingle();
 
-  if (loading) return <Layout title="My Business"><Loading /></Layout>;
-  if (error) return <Layout title="My Business"><ErrorState message={error} /></Layout>;
-  if (!business) return <Layout title="My Business"><ErrorState message="No business assigned to your account." /></Layout>;
+    const businessId = baData?.business_id;
+    if (!businessId) {
+      setError("No business assigned to your account.");
+      setLoading(false);
+      return;
+    }
+
+    const { data: biz, error: bizError } = await supabase
+      .from("businesses")
+      .select("*")
+      .eq("id", businessId)
+      .maybeSingle();
+
+    if (bizError) {
+      setError(bizError.message);
+      setLoading(false);
+      return;
+    }
+
+    setBusiness(biz as Business);
+    setForm({
+      name: biz.name ?? "",
+      welcome_message: biz.welcome_message ?? "",
+      primary_color: biz.primary_color ?? "#4f46e5",
+      secondary_color: biz.secondary_color ?? "#818cf8",
+      google_place_id: biz.google_place_id ?? "",
+      google_maps_url: biz.google_maps_url ?? "",
+      google_review_url: biz.google_review_url ?? "",
+      public_review_enabled: biz.public_review_enabled ?? true,
+      status: biz.status ?? "active",
+      logo_url: biz.logo_url ?? "",
+    });
+    setLoading(false);
+  }
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    if (!business) return;
+    setSaving(true);
+    setError(null);
+    setSuccess(false);
+
+    const { error: updateError } = await supabase
+      .from("businesses")
+      .update({
+        name: form.name,
+        welcome_message: form.welcome_message,
+        primary_color: form.primary_color,
+        secondary_color: form.secondary_color,
+        google_place_id: form.google_place_id || null,
+        google_maps_url: form.google_maps_url || null,
+        google_review_url: form.google_review_url || null,
+        public_review_enabled: form.public_review_enabled,
+        status: form.status,
+        logo_url: form.logo_url || null,
+      })
+      .eq("id", business.id);
+
+    if (updateError) {
+      setError(updateError.message);
+    } else {
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 3000);
+    }
+    setSaving(false);
+  }
+
+  async function handleLogoUpload(file: File) {
+    if (!business) return;
+    setUploading(true);
+
+    const ext = file.name.split(".").pop();
+    const path = `business-logos/${business.id}.${ext}`;
+
+    const { error: upError } = await supabase.storage
+      .from("business-assets")
+      .upload(path, file, { upsert: true });
+
+    if (upError) {
+      setError(upError.message);
+      setUploading(false);
+      return;
+    }
+
+    const { data: urlData } = supabase.storage
+      .from("business-assets")
+      .getPublicUrl(path);
+
+    setForm((f) => ({ ...f, logo_url: urlData.publicUrl }));
+    setUploading(false);
+  }
+
+  if (loading) return <LoadingSpinner size={40} />;
+  if (error) return <ErrorState message={error} onRetry={loadBusiness} />;
+
+  const reviewLink = business ? `${window.location.origin}/review/${business.slug}` : "";
 
   return (
-    <Layout title={business.name}>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="glass rounded-2xl p-6">
-          <div className="flex items-center gap-4 mb-4">
-            {business.logo_url ? <img src={business.logo_url} alt={business.name} className="w-14 h-14 rounded-xl object-cover" /> : <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center text-white font-bold text-xl">{business.name[0]}</div>}
-            <div><h2 className="text-lg font-bold text-white">{business.name}</h2><p className="text-sm text-slate-400">{business.status}</p></div>
-          </div>
-          {editing ? (
-            <div className="space-y-3">
-              <input value={editForm.name} onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))} className="w-full px-3 py-2 bg-slate-900/50 border border-white/10 rounded-lg text-white text-sm" />
-              <textarea value={editForm.welcome_message} onChange={(e) => setEditForm((f) => ({ ...f, welcome_message: e.target.value }))} className="w-full px-3 py-2 bg-slate-900/50 border border-white/10 rounded-lg text-white text-sm" rows={2} />
-              <input value={editForm.google_review_url} onChange={(e) => setEditForm((f) => ({ ...f, google_review_url: e.target.value }))} placeholder="Google Review URL" className="w-full px-3 py-2 bg-slate-900/50 border border-white/10 rounded-lg text-white text-sm" />
-              <div className="flex gap-3">
-                <div><label className="block text-xs text-slate-400 mb-1">Primary Color</label><input type="color" value={editForm.primary_color} onChange={(e) => setEditForm((f) => ({ ...f, primary_color: e.target.value }))} className="w-12 h-8 rounded" /></div>
-                <div><label className="block text-xs text-slate-400 mb-1">Secondary Color</label><input type="color" value={editForm.secondary_color} onChange={(e) => setEditForm((f) => ({ ...f, secondary_color: e.target.value }))} className="w-12 h-8 rounded" /></div>
-              </div>
-              <label className="flex items-center gap-2 text-sm text-slate-300"><input type="checkbox" checked={editForm.public_review_enabled} onChange={(e) => setEditForm((f) => ({ ...f, public_review_enabled: e.target.checked }))} /> Public reviews enabled</label>
-              <div className="flex gap-2"><button onClick={saveEdit} className="flex-1 py-2 bg-primary-600 text-white text-sm rounded-lg">Save</button><button onClick={() => setEditing(false)} className="flex-1 py-2 glass text-white text-sm rounded-lg">Cancel</button></div>
+    <div>
+      <PageHeader title="My Business" subtitle="Edit your business details and branding" />
+
+      {business && (
+        <div className="card mb-6 p-4">
+          <div className="flex items-center gap-3">
+            <div className="flex-1">
+              <p className="text-sm font-medium text-slate-500">Public Review Link</p>
+              <a
+                href={reviewLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-1 block text-sm text-primary-600 hover:underline"
+              >
+                {reviewLink}
+              </a>
             </div>
+            <button
+              className="btn-secondary"
+              onClick={() => navigator.clipboard.writeText(reviewLink)}
+            >
+              Copy
+            </button>
+          </div>
+        </div>
+      )}
+
+      <form onSubmit={handleSave} className="card space-y-6 p-6">
+        <div className="flex items-center gap-4">
+          {form.logo_url ? (
+            <img src={form.logo_url} alt="Logo" className="h-16 w-16 rounded-lg object-cover" />
           ) : (
-            <div>
-              <dl className="space-y-2 text-sm">
-                <div><dt className="text-slate-500">Welcome Message</dt><dd className="text-white">{business.welcome_message}</dd></div>
-                <div><dt className="text-slate-500">Google Review URL</dt><dd className="text-white truncate">{business.google_review_url || "—"}</dd></div>
-                <div><dt className="text-slate-500">Public Reviews</dt><dd className="text-white">{business.public_review_enabled ? "Enabled" : "Disabled"}</dd></div>
-                <div className="flex gap-3"><div><dt className="text-slate-500">Primary</dt><dd><div className="w-6 h-6 rounded" style={{ background: business.primary_color }} /></dd></div><div><dt className="text-slate-500">Secondary</dt><dd><div className="w-6 h-6 rounded" style={{ background: business.secondary_color }} /></dd></div></div>
-              </dl>
-              <button onClick={() => setEditing(true)} className="mt-4 w-full py-2 glass text-white text-sm font-medium rounded-lg hover:bg-white/10 transition-colors">Edit</button>
+            <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-slate-100 text-xs text-slate-400">
+              No logo
             </div>
           )}
-          <div className="mt-4">
-            <input ref={logoRef} type="file" accept="image/*" onChange={handleLogoUpload} className="block w-full text-sm text-slate-400 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-primary-600 file:text-white file:cursor-pointer" />
+          <div>
+            <label className="btn-secondary cursor-pointer">
+              {uploading ? "Uploading..." : "Upload Logo"}
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleLogoUpload(file);
+                }}
+              />
+            </label>
           </div>
         </div>
-        <div className="glass rounded-2xl p-6">
-          <h3 className="text-sm font-medium text-slate-400 mb-4">ReviewFlow QR</h3>
-          {qrUrl && <img src={qrUrl} alt="QR" className="w-48 h-48 rounded-xl mb-4" />}
-          <p className="text-xs text-slate-500 mb-3 break-all">{reviewUrl}</p>
-          {qrUrl && <button onClick={() => downloadQR(qrUrl, `${business.slug}-qr.png`)} className="w-full py-2 bg-primary-600 hover:bg-primary-500 text-white text-sm font-medium rounded-lg transition-colors">Download QR</button>}
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">Business Name</label>
+          <input
+            className="input"
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            required
+          />
         </div>
-        <div className="glass rounded-2xl p-6">
-          <h3 className="text-sm font-medium text-slate-400 mb-4">Review Link</h3>
-          <p className="text-xs text-slate-500 mb-3 break-all">{reviewUrl}</p>
-          <button onClick={() => { if (reviewUrl) navigator.clipboard.writeText(reviewUrl); showToast("Link copied", "success"); }} className="w-full py-2 glass text-white text-sm font-medium rounded-lg hover:bg-white/10 transition-colors">Copy Link</button>
-          {business.google_review_url && <a href={business.google_review_url} target="_blank" rel="noreferrer" className="mt-2 block text-center py-2 bg-success-600 hover:bg-success-500 text-white text-sm font-medium rounded-lg transition-colors">Open Google Review</a>}
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">Welcome Message</label>
+          <textarea
+            className="input min-h-[80px]"
+            value={form.welcome_message}
+            onChange={(e) => setForm({ ...form, welcome_message: e.target.value })}
+          />
         </div>
-      </div>
-    </Layout>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Primary Color</label>
+            <div className="flex items-center gap-2">
+              <input
+                type="color"
+                className="h-10 w-16 cursor-pointer rounded border border-slate-300"
+                value={form.primary_color}
+                onChange={(e) => setForm({ ...form, primary_color: e.target.value })}
+              />
+              <input
+                className="input"
+                value={form.primary_color}
+                onChange={(e) => setForm({ ...form, primary_color: e.target.value })}
+              />
+            </div>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Secondary Color</label>
+            <div className="flex items-center gap-2">
+              <input
+                type="color"
+                className="h-10 w-16 cursor-pointer rounded border border-slate-300"
+                value={form.secondary_color}
+                onChange={(e) => setForm({ ...form, secondary_color: e.target.value })}
+              />
+              <input
+                className="input"
+                value={form.secondary_color}
+                onChange={(e) => setForm({ ...form, secondary_color: e.target.value })}
+              />
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">Google Place ID</label>
+          <input
+            className="input"
+            value={form.google_place_id}
+            onChange={(e) => setForm({ ...form, google_place_id: e.target.value })}
+          />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">Google Maps URL</label>
+          <input
+            className="input"
+            value={form.google_maps_url}
+            onChange={(e) => setForm({ ...form, google_maps_url: e.target.value })}
+          />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">Google Review URL</label>
+          <input
+            className="input"
+            value={form.google_review_url}
+            onChange={(e) => setForm({ ...form, google_review_url: e.target.value })}
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Status</label>
+            <select
+              className="input"
+              value={form.status}
+              onChange={(e) => setForm({ ...form, status: e.target.value })}
+            >
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </div>
+          <div className="flex items-end">
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-slate-300"
+                checked={form.public_review_enabled}
+                onChange={(e) => setForm({ ...form, public_review_enabled: e.target.checked })}
+              />
+              <span className="text-sm font-medium text-slate-700">Public Review Enabled</span>
+            </label>
+          </div>
+        </div>
+
+        {error && (
+          <div className="rounded-lg bg-red-50 px-4 py-2 text-sm text-red-600">{error}</div>
+        )}
+        {success && (
+          <div className="rounded-lg bg-green-50 px-4 py-2 text-sm text-green-600">
+            Business details saved successfully.
+          </div>
+        )}
+
+        <button type="submit" className="btn-primary" disabled={saving}>
+          {saving ? "Saving..." : "Save Changes"}
+        </button>
+      </form>
+    </div>
   );
 }

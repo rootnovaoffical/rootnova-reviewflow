@@ -1,109 +1,94 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { AuthProvider, useAuth } from "./context/AuthContext";
-import { BrandingProvider } from "./context/BrandingContext";
-import { ToastProvider } from "./context/ToastContext";
-import ProtectedRoute, { defaultPathForRole } from "./components/ProtectedRoute";
-import SpatialBackground from "./components/SpatialBackground";
-import { Loading } from "./components/States";
+import { Routes, Route, Navigate } from "react-router-dom";
+import { useAuth, isRootNovaStaff, isPartnerStaff } from "./lib/auth";
+import { FullPageLoader } from "./components/ui";
+import LoginPage from "./pages/LoginPage";
+import AdminLayout from "./layouts/AdminLayout";
+import PartnerLayout from "./layouts/PartnerLayout";
+import BusinessLayout from "./layouts/BusinessLayout";
+import ReviewPage from "./pages/ReviewPage";
 
-import Login from "./pages/Login";
-import Signup from "./pages/Signup";
-import Invite from "./pages/Invite";
-import PublicReviewPage from "./pages/PublicReviewPage";
-
+// Admin pages
 import AdminDashboard from "./pages/admin/Dashboard";
-import AdminOrganizations from "./pages/admin/Organizations";
-import AdminOrganizationDetail from "./pages/admin/OrganizationDetail";
-import AdminBusinesses from "./pages/admin/Businesses";
-import AdminBusinessDetail from "./pages/admin/BusinessDetail";
 import AdminPayments from "./pages/admin/Payments";
 import AdminPaymentDetail from "./pages/admin/PaymentDetail";
+import AdminBusinesses from "./pages/admin/Businesses";
+import AdminBusinessDetail from "./pages/admin/BusinessDetail";
+import AdminOrganizations from "./pages/admin/Organizations";
+import AdminOrganizationDetail from "./pages/admin/OrganizationDetail";
 import AdminPlans from "./pages/admin/Plans";
+import AdminAdmins from "./pages/admin/Admins";
+import AdminAudit from "./pages/admin/Audit";
 import AdminBranding from "./pages/admin/Branding";
 import AdminFeatureFlags from "./pages/admin/FeatureFlags";
-import AdminAudit from "./pages/admin/Audit";
-import AdminAdmins from "./pages/admin/Admins";
 
+// Partner pages
 import PartnerDashboard from "./pages/partner/Dashboard";
 import PartnerBusinesses from "./pages/partner/Businesses";
-import PartnerNewBusiness from "./pages/partner/NewBusiness";
 import PartnerBusinessDetail from "./pages/partner/BusinessDetail";
-import PartnerTeam from "./pages/partner/Team";
-import PartnerPayments from "./pages/partner/Payments";
 import PartnerBilling from "./pages/partner/Billing";
+import PartnerPayments from "./pages/partner/Payments";
 import PartnerSettings from "./pages/partner/Settings";
 
+// Business pages
 import BusinessDashboard from "./pages/business/Dashboard";
 import BusinessMyBusiness from "./pages/business/MyBusiness";
 import BusinessQuestions from "./pages/business/Questions";
 import BusinessReviews from "./pages/business/Reviews";
-import BusinessAnalytics from "./pages/business/Analytics";
 import BusinessSettings from "./pages/business/Settings";
-import BusinessAIChat from "./pages/business/AIChat";
-
-const ADMIN_ROLES = ["ROOTNOVA_SUPER_ADMIN", "ROOTNOVA_ADMIN"] as const;
-const PARTNER_ROLES = ["PARTNER_OWNER", "PARTNER_ADMIN", "PARTNER_TEAM_MEMBER"] as const;
-const PARTNER_MANAGE_ROLES = ["PARTNER_OWNER", "PARTNER_ADMIN"] as const;
-const BUSINESS_ROLES = ["BUSINESS_ADMIN"] as const;
-
-function RootRedirect() {
-  const { session, profile, loading } = useAuth();
-  if (loading) return <Loading />;
-  if (!session) return <Navigate to="/login" replace />;
-  return <Navigate to={defaultPathForRole(profile?.role)} replace />;
-}
 
 export default function App() {
+  const { profile, loading } = useAuth();
+
+  if (loading) return <FullPageLoader />;
+
   return (
-    <BrowserRouter>
-      <ToastProvider>
-        <BrandingProvider>
-          <AuthProvider>
-            <div className="relative min-h-screen">
-              <SpatialBackground />
-              <Routes>
-                <Route path="/" element={<RootRedirect />} />
-                <Route path="/login" element={<Login />} />
-                <Route path="/signup" element={<Signup />} />
-                <Route path="/invite" element={<Invite />} />
-                <Route path="/r/:slug" element={<PublicReviewPage />} />
+    <Routes>
+      <Route path="/login" element={profile ? <Navigate to="/dashboard" /> : <LoginPage />} />
+      <Route path="/review/:slug" element={<ReviewPage />} />
 
-                <Route path="/admin" element={<ProtectedRoute roles={[...ADMIN_ROLES]}><AdminDashboard /></ProtectedRoute>} />
-                <Route path="/admin/organizations" element={<ProtectedRoute roles={[...ADMIN_ROLES]}><AdminOrganizations /></ProtectedRoute>} />
-                <Route path="/admin/organizations/:id" element={<ProtectedRoute roles={[...ADMIN_ROLES]}><AdminOrganizationDetail /></ProtectedRoute>} />
-                <Route path="/admin/businesses" element={<ProtectedRoute roles={[...ADMIN_ROLES]}><AdminBusinesses /></ProtectedRoute>} />
-                <Route path="/admin/businesses/:id" element={<ProtectedRoute roles={[...ADMIN_ROLES]}><AdminBusinessDetail /></ProtectedRoute>} />
-                <Route path="/admin/payments" element={<ProtectedRoute roles={[...ADMIN_ROLES]}><AdminPayments /></ProtectedRoute>} />
-                <Route path="/admin/payments/:id" element={<ProtectedRoute roles={[...ADMIN_ROLES]}><AdminPaymentDetail /></ProtectedRoute>} />
-                <Route path="/admin/plans" element={<ProtectedRoute roles={[...ADMIN_ROLES]}><AdminPlans /></ProtectedRoute>} />
-                <Route path="/admin/branding" element={<ProtectedRoute roles={[...ADMIN_ROLES]}><AdminBranding /></ProtectedRoute>} />
-                <Route path="/admin/feature-flags" element={<ProtectedRoute roles={[...ADMIN_ROLES]}><AdminFeatureFlags /></ProtectedRoute>} />
-                <Route path="/admin/audit" element={<ProtectedRoute roles={[...ADMIN_ROLES]}><AdminAudit /></ProtectedRoute>} />
-                <Route path="/admin/admins" element={<ProtectedRoute roles={["ROOTNOVA_SUPER_ADMIN"]}><AdminAdmins /></ProtectedRoute>} />
+      {profile && isRootNovaStaff(profile.role) && (
+        <Route path="/" element={<AdminLayout />}>
+          <Route index element={<AdminDashboard />} />
+          <Route path="dashboard" element={<AdminDashboard />} />
+          <Route path="payments" element={<AdminPayments />} />
+          <Route path="payments/:id" element={<AdminPaymentDetail />} />
+          <Route path="businesses" element={<AdminBusinesses />} />
+          <Route path="businesses/:id" element={<AdminBusinessDetail />} />
+          <Route path="organizations" element={<AdminOrganizations />} />
+          <Route path="organizations/:id" element={<AdminOrganizationDetail />} />
+          <Route path="plans" element={<AdminPlans />} />
+          <Route path="admins" element={<AdminAdmins />} />
+          <Route path="audit" element={<AdminAudit />} />
+          <Route path="branding" element={<AdminBranding />} />
+          <Route path="feature-flags" element={<AdminFeatureFlags />} />
+        </Route>
+      )}
 
-                <Route path="/partner" element={<ProtectedRoute roles={[...PARTNER_ROLES]}><PartnerDashboard /></ProtectedRoute>} />
-                <Route path="/partner/businesses" element={<ProtectedRoute roles={[...PARTNER_ROLES]}><PartnerBusinesses /></ProtectedRoute>} />
-                <Route path="/partner/businesses/new" element={<ProtectedRoute roles={[...PARTNER_MANAGE_ROLES]}><PartnerNewBusiness /></ProtectedRoute>} />
-                <Route path="/partner/businesses/:id" element={<ProtectedRoute roles={[...PARTNER_ROLES]}><PartnerBusinessDetail /></ProtectedRoute>} />
-                <Route path="/partner/team" element={<ProtectedRoute roles={[...PARTNER_MANAGE_ROLES]}><PartnerTeam /></ProtectedRoute>} />
-                <Route path="/partner/payments" element={<ProtectedRoute roles={[...PARTNER_MANAGE_ROLES]}><PartnerPayments /></ProtectedRoute>} />
-                <Route path="/partner/billing" element={<ProtectedRoute roles={[...PARTNER_MANAGE_ROLES]}><PartnerBilling /></ProtectedRoute>} />
-                <Route path="/partner/settings" element={<ProtectedRoute roles={[...PARTNER_ROLES]}><PartnerSettings /></ProtectedRoute>} />
+      {profile && isPartnerStaff(profile.role) && (
+        <Route path="/" element={<PartnerLayout />}>
+          <Route index element={<PartnerDashboard />} />
+          <Route path="dashboard" element={<PartnerDashboard />} />
+          <Route path="businesses" element={<PartnerBusinesses />} />
+          <Route path="businesses/:id" element={<PartnerBusinessDetail />} />
+          <Route path="billing" element={<PartnerBilling />} />
+          <Route path="payments" element={<PartnerPayments />} />
+          <Route path="settings" element={<PartnerSettings />} />
+        </Route>
+      )}
 
-                <Route path="/business" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><BusinessDashboard /></ProtectedRoute>} />
-                <Route path="/business/my-business" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><BusinessMyBusiness /></ProtectedRoute>} />
-                <Route path="/business/questions" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><BusinessQuestions /></ProtectedRoute>} />
-                <Route path="/business/reviews" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><BusinessReviews /></ProtectedRoute>} />
-                <Route path="/business/analytics" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><BusinessAnalytics /></ProtectedRoute>} />
-                <Route path="/business/settings" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><BusinessSettings /></ProtectedRoute>} />
-                <Route path="/business/ai-chat" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><BusinessAIChat /></ProtectedRoute>} />
+      {profile && profile.role === "BUSINESS_ADMIN" && (
+        <Route path="/" element={<BusinessLayout />}>
+          <Route index element={<BusinessDashboard />} />
+          <Route path="dashboard" element={<BusinessDashboard />} />
+          <Route path="my-business" element={<BusinessMyBusiness />} />
+          <Route path="questions" element={<BusinessQuestions />} />
+          <Route path="reviews" element={<BusinessReviews />} />
+          <Route path="settings" element={<BusinessSettings />} />
+        </Route>
+      )}
 
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
-            </div>
-          </AuthProvider>
-        </BrandingProvider>
-      </ToastProvider>
-    </BrowserRouter>
+      {!profile && <Route path="*" element={<Navigate to="/login" />} />}
+      {profile && <Route path="*" element={<Navigate to="/dashboard" />} />}
+    </Routes>
   );
 }

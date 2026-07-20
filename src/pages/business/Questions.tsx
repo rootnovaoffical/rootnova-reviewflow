@@ -1,143 +1,332 @@
 import { useEffect, useState } from "react";
-import Layout from "../../components/Layout";
 import { supabase } from "../../lib/supabase";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "../../lib/auth";
+import { LoadingSpinner, ErrorState, EmptyState, PageHeader } from "../../components/ui";
 import type { Question } from "../../lib/types";
-import { Loading, EmptyState, ErrorState } from "../../components/States";
-import { useToast } from "../../context/ToastContext";
-import { insertAuditLog } from "../../lib/auth";
 
-export default function BusinessQuestions() {
+const FLOW_TYPES = ["ALWAYS", "POSITIVE", "NEGATIVE"] as const;
+
+export default function Questions() {
   const { profile } = useAuth();
-  const { showToast } = useToast();
-  const [questions, setQuestions] = useState<Question[] | null>(null);
-  const [businessId, setBusinessId] = useState<string | null>(null);
-  const [editing, setEditing] = useState<Question | null>(null);
-  const [creating, setCreating] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [businessId, setBusinessId] = useState<string | null>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
-  const load = () => {
+  const [form, setForm] = useState({
+    question_text: "",
+    flow_type: "ALWAYS" as string,
+    optionsText: "",
+    is_required: true,
+    is_active: true,
+    sort_order: 0,
+  });
+
+  useEffect(() => {
     if (!profile) return;
-    supabase.from("business_admins").select("business_id").eq("user_id", profile.id).maybeSingle()
-      .then(({ data, error: baErr }) => {
-        if (baErr) { setError(baErr.message); setQuestions([]); return; }
-        if (!data?.business_id) { setQuestions([]); return; }
-        setBusinessId(data.business_id);
-        supabase.from("questions").select("*").eq("business_id", data.business_id).order("sort_order").then(({ data: q, error: qErr }) => {
-          if (qErr) setError(qErr.message);
-          setQuestions(q as Question[] || []);
-        });
-      });
-  };
-  useEffect(() => { load(); }, [profile]);
+    loadQuestions();
+  }, [profile]);
 
-  const save = async (q: Partial<Question> & { id?: string }) => {
-    if (!businessId || !profile) return;
-    const { id, ...rest } = q;
-    if (id) {
-      const { error } = await supabase.from("questions").update(rest).eq("id", id);
-      if (error) { showToast("Failed to update question", "error"); return; }
-      await insertAuditLog({ actor_id: profile.id, actor_email: profile.email, action: "question_updated", target_type: "question", target_id: id });
-      showToast("Question updated", "success");
-    } else {
-      const { error } = await supabase.from("questions").insert({ ...rest, business_id: businessId });
-      if (error) { showToast("Failed to create question", "error"); return; }
-      await insertAuditLog({ actor_id: profile.id, actor_email: profile.email, action: "question_created", target_type: "question" });
-      showToast("Question created", "success");
-    }
-    setEditing(null); setCreating(false); load();
-  };
+  async function loadQuestions() {
+    if (!profile) return;
+    setLoading(true);
+    setError(null);
 
-  const remove = async (q: Question) => {
-    const activeRemaining = (questions ?? []).filter(x => x.is_active && x.id !== q.id).length;
-    if (activeRemaining < 4 && q.is_active) {
-      showToast("Cannot delete — minimum 4 active questions required. Disable instead.", "error");
+    const { data: baData } = await supabase
+      .from("business_admins")
+      .select("business_id")
+      .eq("user_id", profile.id)
+      .maybeSingle();
+
+    const bizId = baData?.business_id;
+    if (!bizId) {
+      setError("No business assigned to your account.");
+      setLoading(false);
       return;
     }
-    const { error } = await supabase.from("questions").delete().eq("id", q.id);
-    if (error) { showToast("Failed to delete question", "error"); return; }
-    if (profile) await insertAuditLog({ actor_id: profile.id, actor_email: profile.email, action: "question_deleted", target_type: "question", target_id: q.id });
-    showToast("Question deleted", "success"); load();
-  };
+    setBusinessId(bizId);
 
-  const reorder = async (q: Question, dir: -1 | 1) => {
-    if (!questions) return;
-    const idx = questions.findIndex((x) => x.id === q.id);
-    const newIdx = idx + dir;
-    if (newIdx < 0 || newIdx >= questions.length) return;
-    const swap = questions[newIdx];
-    await Promise.all([
-      supabase.from("questions").update({ sort_order: swap.sort_order }).eq("id", q.id),
-      supabase.from("questions").update({ sort_order: q.sort_order }).eq("id", swap.id),
-    ]);
-    load();
-  };
+    const { data, error: qError } = await supabase
+      .from("questions")
+      .select("*")
+      .eq("business_id", bizId)
+      .order("sort_order", { ascending: true });
 
-  const activeCount = (questions ?? []).filter(q => q.is_active).length;
-  const maxReached = activeCount >= 5;
-  const minNotMet = activeCount < 4;
+    if (qError) {
+      setError(qError.message);
+      setLoading(false);
+      return;
+    }
+    setQuestions((data ?? []) as Question[]);
+    setLoading(false);
+  }
 
-  if (!questions) return <Layout title="Questions"><Loading /></Layout>;
-  if (error) return <Layout title="Questions"><ErrorState message={error} onRetry={load} /></Layout>;
+  function resetForm() {
+    setForm({
+      question_text: "",
+      flow_type: "ALWAYS",
+      optionsText: "",
+      is_required: true,
+      is_active: true,
+      sort_order: questions.length,
+    });
+    setEditingId(null);
+  }
+
+  function startEdit(q: Question) {
+    setEditingId(q.id);
+    setForm({
+      question_text: q.question_text,
+      flow_type: q.flow_type,
+      optionsText: q.options?.join(", ") ?? "",
+      is_required: q.is_required,
+      is_active: q.is_active,
+      sort_order: q.sort_order,
+    });
+    setShowForm(true);
+  }
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    if (!businessId) return;
+    setSaving(true);
+    setError(null);
+
+    const options = form.optionsText
+      .split(",")
+      .map((o) => o.trim())
+      .filter(Boolean);
+
+    const payload = {
+      business_id: businessId,
+      question_text: form.question_text,
+      question_type: "multiple_choice",
+      flow_type: form.flow_type,
+      options,
+      is_required: form.is_required,
+      is_active: form.is_active,
+      sort_order: form.sort_order,
+    };
+
+    if (editingId) {
+      const { error: uError } = await supabase
+        .from("questions")
+        .update(payload)
+        .eq("id", editingId);
+      if (uError) setError(uError.message);
+    } else {
+      const { error: iError } = await supabase.from("questions").insert(payload);
+      if (iError) setError(iError.message);
+    }
+
+    setSaving(false);
+    if (!error) {
+      setShowForm(false);
+      resetForm();
+      loadQuestions();
+    }
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm("Delete this question?")) return;
+    const { error: dError } = await supabase.from("questions").delete().eq("id", id);
+    if (dError) {
+      setError(dError.message);
+      return;
+    }
+    loadQuestions();
+  }
+
+  async function moveQuestion(index: number, direction: -1 | 1) {
+    const newIndex = index + direction;
+    if (newIndex < 0 || newIndex >= questions.length) return;
+    const a = questions[index];
+    const b = questions[newIndex];
+    const aOrder = a.sort_order;
+    const bOrder = b.sort_order;
+
+    await supabase.from("questions").update({ sort_order: bOrder }).eq("id", a.id);
+    await supabase.from("questions").update({ sort_order: aOrder }).eq("id", b.id);
+    loadQuestions();
+  }
+
+  if (loading) return <LoadingSpinner size={40} />;
+  if (error && questions.length === 0) return <ErrorState message={error} onRetry={loadQuestions} />;
 
   return (
-    <Layout title="Questions">
-      <div className="flex items-center justify-between mb-4">
-        <div className="text-sm">
-          <span className={`font-medium ${minNotMet ? "text-warning-400" : "text-slate-300"}`}>{activeCount}/5 active questions</span>
-          {minNotMet && <span className="text-warning-400 ml-2">(minimum 4 required)</span>}
-          {maxReached && <span className="text-slate-500 ml-2">(maximum reached)</span>}
-        </div>
-        <button onClick={() => setCreating(true)} disabled={maxReached} className="px-4 py-2 bg-primary-600 hover:bg-primary-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors">New Question</button>
-      </div>
-      {questions.length === 0 ? <EmptyState title="No questions" subtitle="Create questions to collect feedback from customers." /> : (
+    <div>
+      <PageHeader
+        title="Questions"
+        subtitle="Manage review questions for your customers"
+        action={
+          !showForm && (
+            <button
+              className="btn-primary"
+              onClick={() => {
+                resetForm();
+                setShowForm(true);
+              }}
+            >
+              Add Question
+            </button>
+          )
+        }
+      />
+
+      {error && (
+        <div className="mb-4 rounded-lg bg-red-50 px-4 py-2 text-sm text-red-600">{error}</div>
+      )}
+
+      {showForm && (
+        <form onSubmit={handleSave} className="card mb-6 space-y-4 p-6">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Question Text</label>
+            <input
+              className="input"
+              value={form.question_text}
+              onChange={(e) => setForm({ ...form, question_text: e.target.value })}
+              required
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Flow Type</label>
+              <select
+                className="input"
+                value={form.flow_type}
+                onChange={(e) => setForm({ ...form, flow_type: e.target.value })}
+              >
+                {FLOW_TYPES.map((t) => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Sort Order</label>
+              <input
+                type="number"
+                className="input"
+                value={form.sort_order}
+                onChange={(e) => setForm({ ...form, sort_order: parseInt(e.target.value) || 0 })}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">
+              Options (comma-separated)
+            </label>
+            <input
+              className="input"
+              placeholder="Option 1, Option 2, Option 3, Option 4"
+              value={form.optionsText}
+              onChange={(e) => setForm({ ...form, optionsText: e.target.value })}
+            />
+          </div>
+
+          <div className="flex items-center gap-6">
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-slate-300"
+                checked={form.is_required}
+                onChange={(e) => setForm({ ...form, is_required: e.target.checked })}
+              />
+              <span className="text-sm font-medium text-slate-700">Required</span>
+            </label>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-slate-300"
+                checked={form.is_active}
+                onChange={(e) => setForm({ ...form, is_active: e.target.checked })}
+              />
+              <span className="text-sm font-medium text-slate-700">Active</span>
+            </label>
+          </div>
+
+          <div className="flex gap-2">
+            <button type="submit" className="btn-primary" disabled={saving}>
+              {saving ? "Saving..." : editingId ? "Update Question" : "Create Question"}
+            </button>
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => {
+                setShowForm(false);
+                resetForm();
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
+
+      {questions.length === 0 && !showForm ? (
+        <EmptyState message="No questions yet. Click 'Add Question' to create one." />
+      ) : (
         <div className="space-y-3">
-          {questions.map((q, i) => (
-            <div key={q.id} className="glass rounded-2xl p-5 flex items-center gap-4">
-              <div className="flex flex-col gap-1">
-                <button onClick={() => reorder(q, -1)} disabled={i === 0} className="text-slate-400 hover:text-white disabled:opacity-30 text-xs">{"\u25B2"}</button>
-                <button onClick={() => reorder(q, 1)} disabled={i === questions.length - 1} className="text-slate-400 hover:text-white disabled:opacity-30 text-xs">{"\u25BC"}</button>
+          {questions.map((q, index) => (
+            <div key={q.id} className="card p-4">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-medium text-slate-400">#{q.sort_order + 1}</span>
+                    <span className={`badge ${
+                      q.flow_type === "ALWAYS" ? "bg-slate-100 text-slate-600"
+                        : q.flow_type === "POSITIVE" ? "bg-green-100 text-green-700"
+                        : "bg-red-100 text-red-700"
+                    }`}>
+                      {q.flow_type}
+                    </span>
+                    {!q.is_active && (
+                      <span className="badge bg-slate-100 text-slate-500">inactive</span>
+                    )}
+                    {q.is_required && (
+                      <span className="badge bg-blue-50 text-blue-600">required</span>
+                    )}
+                  </div>
+                  <p className="mt-2 text-sm font-medium text-slate-900">{q.question_text}</p>
+                  {q.options && q.options.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {q.options.map((opt, i) => (
+                        <span key={i} className="badge bg-slate-50 text-slate-600">{opt}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    className="btn-ghost px-2 py-1 text-xs"
+                    disabled={index === 0}
+                    onClick={() => moveQuestion(index, -1)}
+                  >
+                    ↑
+                  </button>
+                  <button
+                    className="btn-ghost px-2 py-1 text-xs"
+                    disabled={index === questions.length - 1}
+                    onClick={() => moveQuestion(index, 1)}
+                  >
+                    ↓
+                  </button>
+                  <button className="btn-secondary px-3 py-1 text-xs" onClick={() => startEdit(q)}>
+                    Edit
+                  </button>
+                  <button className="btn-danger px-3 py-1 text-xs" onClick={() => handleDelete(q.id)}>
+                    Delete
+                  </button>
+                </div>
               </div>
-              <div className="flex-1">
-                <p className="text-white font-medium">{q.question_text}{q.is_required && <span className="text-error-400 ml-1">*</span>}</p>
-                <p className="text-xs text-slate-500">{q.flow_type} • {q.question_type} • {q.options.length} options • {q.is_active ? "Active" : "Inactive"}</p>
-              </div>
-              <button onClick={() => setEditing(q)} className="px-3 py-2 text-sm glass text-white rounded-lg hover:bg-white/10 transition-colors">Edit</button>
-              <button onClick={() => remove(q)} className="px-3 py-2 text-sm text-error-400 hover:bg-error-500/10 rounded-lg transition-colors">Delete</button>
             </div>
           ))}
         </div>
       )}
-      {(editing || creating) && <QuestionModal question={editing} onClose={() => { setEditing(null); setCreating(false); }} onSave={save} />}
-    </Layout>
-  );
-}
-
-function QuestionModal({ question, onClose, onSave }: { question: Question | null; onClose: () => void; onSave: (q: Partial<Question> & { id?: string }) => void }) {
-  const [form, setForm] = useState({
-    question_text: question?.question_text || "", flow_type: question?.flow_type || "POSITIVE", question_type: "multiple_choice",
-    options: (question?.options || []).join("\n"), is_required: question?.is_required ?? true, is_active: question?.is_active ?? true,
-    sort_order: question?.sort_order ?? 0,
-  });
-
-  return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="glass-strong rounded-2xl p-6 w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
-        <h2 className="text-lg font-bold text-white mb-4">{question ? "Edit Question" : "New Question"}</h2>
-        <div className="space-y-3">
-          <div><label className="block text-xs text-slate-400 mb-1">Question Text</label><input value={form.question_text} onChange={(e) => setForm((f) => ({ ...f, question_text: e.target.value }))} className="w-full px-3 py-2 bg-slate-900/50 border border-white/10 rounded-lg text-white text-sm" /></div>
-          <div><label className="block text-xs text-slate-400 mb-1">Flow Type</label><select value={form.flow_type} onChange={(e) => setForm((f) => ({ ...f, flow_type: e.target.value }))} className="w-full px-3 py-2 bg-slate-900/50 border border-white/10 rounded-lg text-white text-sm"><option value="ALWAYS">Always (show for all ratings)</option><option value="POSITIVE">Positive (show for 4-5 stars)</option><option value="NEGATIVE">Negative (show for 1-3 stars)</option></select></div>
-          <div><label className="block text-xs text-slate-400 mb-1">Options (one per line)</label><textarea value={form.options} onChange={(e) => setForm((f) => ({ ...f, options: e.target.value }))} className="w-full px-3 py-2 bg-slate-900/50 border border-white/10 rounded-lg text-white text-sm" rows={4} /></div>
-          <div className="flex gap-4">
-            <label className="flex items-center gap-2 text-sm text-slate-300"><input type="checkbox" checked={form.is_required} onChange={(e) => setForm((f) => ({ ...f, is_required: e.target.checked }))} /> Required</label>
-            <label className="flex items-center gap-2 text-sm text-slate-300"><input type="checkbox" checked={form.is_active} onChange={(e) => setForm((f) => ({ ...f, is_active: e.target.checked }))} /> Active</label>
-          </div>
-        </div>
-        <div className="flex gap-3 mt-4">
-          <button onClick={() => onSave({ ...form, options: form.options.split("\n").filter(Boolean), id: question?.id })} className="flex-1 py-2 bg-primary-600 hover:bg-primary-500 text-white text-sm font-medium rounded-lg">Save</button>
-          <button onClick={onClose} className="flex-1 py-2 glass text-white text-sm font-medium rounded-lg">Cancel</button>
-        </div>
-      </div>
     </div>
   );
 }

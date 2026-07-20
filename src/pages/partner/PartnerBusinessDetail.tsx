@@ -152,7 +152,10 @@ export function PartnerBusinessDetail() {
       )}
       {tab === "questions" && (
         <div className="space-y-3">
-          <div className="flex justify-end"><button className="btn-primary" onClick={openNewQ}>Add Question</button></div>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-ink-400">{questions.filter(q => q.is_active).length}/5 active questions {questions.filter(q => q.is_active).length < 4 && <span className="text-amber-400">(min 4 required)</span>}</span>
+            <button className="btn-primary" onClick={openNewQ} disabled={questions.filter(q => q.is_active).length >= 5}>Add Question</button>
+          </div>
           {questions.length === 0 ? <EmptyState title="No questions" message="Add questions to gather feedback from customers." /> : questions.map((q) => (
             <div key={q.id} className="card">
               <div className="flex items-start justify-between"><div><p className="font-medium text-ink-50">{q.question_text}</p><p className="text-xs text-ink-400">{q.flow_type} · {q.is_required ? "Required" : "Optional"}</p></div><div className="flex gap-2"><button className="btn-secondary text-xs" onClick={() => openEditQ(q)}>Edit</button><button className="btn-danger text-xs" onClick={() => setDeleteQOpen(q)}>Delete</button></div></div>

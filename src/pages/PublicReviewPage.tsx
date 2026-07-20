@@ -9,6 +9,7 @@ import { Confetti, Shockwave, FloatingEmojis, AuroraGlow } from "../components/E
 type Stage = "loading" | "welcome" | "rating" | "questions" | "generating" | "result" | "google" | "disabled" | "error";
 
 const STAGE_ORDER: Stage[] = ["welcome", "rating", "questions", "generating", "result", "google"];
+
 const GEN_MESSAGES = [
   "Reading your feedback",
   "Understanding your experience",

@@ -116,8 +116,8 @@ Rules:
 - If the customer selected "Exceptional" or "Worth Recommending", the review may express enthusiasm naturally.
 - If the customer selected "Good" (3-star range), keep it honest and measured — do not fake enthusiasm.`;
 
-  const signalList = structuredAnswers.length > 0
-    ? structuredAnswers.map((a, i) => `Signal ${i + 1}: ${a.answer}`).join("\n")
+  const signalList = answerText
+    ? answerText.split("; ").filter(Boolean).map((a, i) => `Signal ${i + 1}: ${a}`).join("\n")
     : "No specific details provided — write a brief review based on the rating alone.";
 
   const userPrompt = `Business: ${businessName}${category ? `\nCategory: ${category}` : ""}

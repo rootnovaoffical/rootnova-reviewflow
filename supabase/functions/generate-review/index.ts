@@ -32,10 +32,12 @@ Deno.serve(async (req: Request) => {
       ? answers.map((a: unknown) => {
           if (typeof a === "string") return { answer: a };
           const obj = a as Record<string, unknown>;
-          return { question_id: obj.question_id, answer: (obj.answer || obj.text || obj.value || JSON.stringify(a)) as string };
+          const question = (obj.question as string) || "";
+          const answer = (obj.answer || obj.text || obj.value || JSON.stringify(a)) as string;
+          return { question, answer };
         })
       : [];
-    const answerText = structuredAnswers.map((a) => a.answer).join("; ");
+    const answerText = structuredAnswers.map((a) => a.question ? `${a.question}: ${a.answer}` : a.answer).join("; ");
 
     let review: string;
     let provider = "fallback";

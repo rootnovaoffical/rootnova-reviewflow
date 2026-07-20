@@ -54,12 +54,12 @@ export default function PublicReviewPage() {
   }, [slug]);
 
   const loadQuestions = useCallback(async (businessId: string, currentRating: number): Promise<Question[]> => {
-    const { data } = await supabase.from("questions").select("*").eq("business_id", businessId).eq("is_active", true).order("sort_order");
+    const { data, error } = await supabase.from("questions").select("*").eq("business_id", businessId).eq("is_active", true).order("sort_order");
+    if (error) { console.error("Failed to load questions:", error.message); return []; }
     const all = (data || []) as Question[];
-    return all.filter(q => q.flow_type === "ALWAYS" || (q.flow_type === "POSITIVE" && currentRating >= 4) || (q.flow_type === "NEGATIVE" && currentRating <= 3));
-    const list = (data || []) as Question[];
-    setQuestions(list);
-    return list;
+    const filtered = all.filter(q => q.flow_type === "ALWAYS" || (q.flow_type === "POSITIVE" && currentRating >= 4) || (q.flow_type === "NEGATIVE" && currentRating <= 3));
+    setQuestions(filtered);
+    return filtered;
   }, []);
 
   const handleStart = async () => {
@@ -82,13 +82,20 @@ export default function PublicReviewPage() {
     if (qs.length > 0) {
       setStage("questions");
     } else {
-      startGeneration(sid, rating, []);
+      setGenError("No questions are configured for this business. Please ask the business to configure review questions.");
+      setStage("error");
     }
   };
 
   const handleQuestionsSubmit = async () => {
     if (!business || !sessionId) return;
-    const answerArray = Object.entries(answers).map(([qid, answer]) => ({ question_id: qid, answer }));
+    const requiredQuestions = questions.filter(q => q.is_required);
+    const unansweredRequired = requiredQuestions.filter(q => !answers[q.id]);
+    if (unansweredRequired.length > 0) return;
+    const answerArray = Object.entries(answers).map(([qid, answer]) => {
+      const q = questions.find(qq => qq.id === qid);
+      return { question_id: qid, question: q?.question_text || "", answer };
+    });
     await supabase.from("review_sessions").update({ answers: answerArray }).eq("id", sessionId);
     supabase.from("analytics_events").insert({ business_id: business.id, session_id: sessionId, event_type: "questions_submitted", metadata: { count: answerArray.length } }).then();
     startGeneration(sessionId, rating, answerArray);
@@ -157,13 +164,16 @@ export default function PublicReviewPage() {
   };
 
   const handleRetry = async () => {
-    if (!sessionId || !business) return;
-    const answerArray = Object.entries(answers).map(([qid, answer]) => ({ question_id: qid, answer }));
+    if (!sessionId || !business || generating) return;
+    const answerArray = Object.entries(answers).map(([qid, answer]) => {
+      const q = questions.find(qq => qq.id === qid);
+      return { question_id: qid, question: q?.question_text || "", answer };
+    });
     startGeneration(sessionId, rating, answerArray);
   };
 
   const handleRegenerate = async () => {
-    if (!sessionId || !business) return;
+    if (!sessionId || !business || generating) return;
     setStage("generating");
     setGenerating(true);
     setGenProgress(0);
@@ -181,7 +191,10 @@ export default function PublicReviewPage() {
       setGenMessageIdx((i) => (i + 1) % GEN_MESSAGES.length);
     }, 2200);
 
-    const answerArray = Object.entries(answers).map(([qid, answer]) => ({ question_id: qid, answer }));
+    const answerArray = Object.entries(answers).map(([qid, answer]) => {
+      const q = questions.find(qq => qq.id === qid);
+      return { question_id: qid, question: q?.question_text || "", answer };
+    });
     setTimeout(() => generateReview(sessionId, rating, answerArray), 800);
   };
 
@@ -199,9 +212,17 @@ export default function PublicReviewPage() {
     supabase.from("analytics_events").insert({ business_id: business?.id, session_id: sessionId, event_type: "copy_event", metadata: {} }).then();
   };
 
+  const googleDestination = (() => {
+    if (!business) return null;
+    if (business.google_review_url) return business.google_review_url;
+    if (business.google_maps_url) return business.google_maps_url;
+    return null;
+  })();
+
   const handleGoogleClick = () => {
-    supabase.from("analytics_events").insert({ business_id: business?.id, session_id: sessionId, event_type: "google_click", metadata: {} }).then();
-    if (business?.google_review_url) window.open(business.google_review_url, "_blank");
+    if (!googleDestination) return;
+    supabase.from("analytics_events").insert({ business_id: business?.id, session_id: sessionId, event_type: "google_click", metadata: { destination: googleDestination } }).then();
+    window.open(googleDestination, "_blank");
     setStage("google");
   };
 
@@ -294,7 +315,7 @@ export default function PublicReviewPage() {
                   </div>
                 ))}
               </div>
-              <button onClick={handleQuestionsSubmit} className="choice3d mt-8 w-full py-3 bg-gradient-to-r from-primary-600 to-primary-500 text-white font-semibold rounded-xl transition-all hover:scale-102">
+              <button onClick={handleQuestionsSubmit} disabled={questions.filter(q => q.is_required).some(q => !answers[q.id])} className="choice3d mt-8 w-full py-3 bg-gradient-to-r from-primary-600 to-primary-500 disabled:opacity-40 disabled:hover:scale-100 text-white font-semibold rounded-xl transition-all hover:scale-102">
                 Generate My Review
               </button>
             </div>
@@ -380,10 +401,12 @@ export default function PublicReviewPage() {
                   <button onClick={handleCopyReview} className="choice3d flex-1 py-3 glass text-white font-medium rounded-xl hover:bg-white/10 transition-all">
                     {copied ? "Copied!" : "Copy"}
                   </button>
-                  {rating >= 4 && business?.google_review_url && (
+                  {googleDestination ? (
                     <button onClick={handleGoogleClick} className="choice3d flex-1 py-3 bg-gradient-to-r from-success-600 to-success-500 text-white font-semibold rounded-xl shadow-lg shadow-success-500/30 transition-all hover:scale-105">
-                      Post on Google
+                      Continue to Google Review
                     </button>
+                  ) : (
+                    <p className="flex-1 text-center text-xs text-amber-400 py-3">Google review destination not configured for this business.</p>
                   )}
                 </div>
               )}
@@ -404,7 +427,7 @@ export default function PublicReviewPage() {
                 <p className="text-sm text-slate-200 leading-relaxed cursor-pointer" onClick={handleCopyReview}>{aiReview}</p>
               </div>
               <button onClick={() => setStage("welcome")} className="choice3d px-6 py-3 glass text-white font-medium rounded-xl hover:bg-white/10 transition-all">
-                Done
+                Start New Review
               </button>
             </div>
           )}

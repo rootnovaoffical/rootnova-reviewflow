@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import Layout from "../../components/Layout";
 import { supabase } from "../../lib/supabase";
-import { Loading } from "../../components/States";
+import { Loading, ErrorState } from "../../components/States";
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState<{ orgs: number; businesses: number; payments: number; reviews: number; } | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -13,11 +14,15 @@ export default function AdminDashboard() {
       supabase.from("payments").select("id", { count: "exact", head: true }),
       supabase.from("review_sessions").select("id", { count: "exact", head: true }),
     ]).then(([o, b, p, r]) => {
+      if (o.error || b.error || p.error || r.error) {
+        setError(o.error?.message || b.error?.message || p.error?.message || r.error?.message || "Failed to load stats");
+      }
       setStats({ orgs: o.count || 0, businesses: b.count || 0, payments: p.count || 0, reviews: r.count || 0 });
     });
   }, []);
 
   if (!stats) return <Layout title="Dashboard"><Loading /></Layout>;
+  if (error) return <Layout title="Dashboard"><ErrorState message={error} /></Layout>;
 
   const cards = [
     { label: "Organizations", value: stats.orgs, color: "from-primary-500 to-primary-600" },

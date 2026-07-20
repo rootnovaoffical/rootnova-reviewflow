@@ -2,23 +2,26 @@ import { useEffect, useState } from "react";
 import Layout from "../../components/Layout";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../context/AuthContext";
-import { Loading } from "../../components/States";
+import { Loading, ErrorState } from "../../components/States";
 
 export default function BusinessDashboard() {
   const { profile } = useAuth();
   const [stats, setStats] = useState<{ reviews: number; avgRating: number; questions: number } | null>(null);
   const [businessName, setBusinessName] = useState<string>("");
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!profile) return;
-    supabase.from("business_admins").select("business_id, business:businesses!business_id(name)").eq("user_id", profile.id).single()
-      .then(({ data }) => {
+    supabase.from("business_admins").select("business_id, business:businesses!business_id(name)").eq("user_id", profile.id).maybeSingle()
+      .then(({ data, error: baErr }) => {
+        if (baErr) { setError(baErr.message); setStats({ reviews: 0, avgRating: 0, questions: 0 }); return; }
         if (!data?.business_id) { setStats({ reviews: 0, avgRating: 0, questions: 0 }); return; }
         setBusinessName((data as any).business?.name || "My Business");
         Promise.all([
           supabase.from("review_sessions").select("rating").eq("business_id", data.business_id),
           supabase.from("questions").select("id", { count: "exact", head: true }).eq("business_id", data.business_id).eq("is_active", true),
         ]).then(([r, q]) => {
+          if (r.error || q.error) { setError(r.error?.message || q.error?.message || "Failed to load stats"); }
           const reviews = r.data || [];
           const avg = reviews.length > 0 ? reviews.reduce((s, x) => s + x.rating, 0) / reviews.length : 0;
           setStats({ reviews: reviews.length, avgRating: avg, questions: q.count || 0 });
@@ -27,6 +30,7 @@ export default function BusinessDashboard() {
   }, [profile]);
 
   if (!stats) return <Layout title="Dashboard"><Loading /></Layout>;
+  if (error) return <Layout title="Dashboard"><ErrorState message={error} /></Layout>;
 
   const cards = [
     { label: "Total Reviews", value: stats.reviews, color: "from-primary-500 to-primary-600" },

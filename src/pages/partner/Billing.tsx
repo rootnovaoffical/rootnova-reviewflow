@@ -3,25 +3,28 @@ import Layout from "../../components/Layout";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../context/AuthContext";
 import type { Subscription, Plan } from "../../lib/types";
-import { Loading, EmptyState } from "../../components/States";
+import { Loading, EmptyState, ErrorState } from "../../components/States";
 import { formatCurrency, formatDate } from "../../lib/utils";
 
 export default function PartnerBilling() {
   const { profile } = useAuth();
-  const [sub, setSub] = useState<Subscription | null>(null);
+  const [sub, setSub] = useState<(Subscription & { plan?: Plan }) | null>(null);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!profile) return;
-    supabase.from("organization_members").select("organization_id").eq("user_id", profile.id).single()
-      .then(({ data: mem }) => {
-        if (!mem?.organization_id) { setLoading(false); return; }
+    supabase.from("organization_members").select("organization_id").eq("user_id", profile.id).maybeSingle()
+      .then(({ data: mem, error: memErr }) => {
+        if (memErr || !mem?.organization_id) { setLoading(false); return; }
         Promise.all([
-          supabase.from("subscriptions").select("*").eq("organization_id", mem.organization_id).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+          supabase.from("subscriptions").select("*, plan:plans!plan_id(*)").eq("organization_id", mem.organization_id).order("created_at", { ascending: false }).limit(1).maybeSingle(),
           supabase.from("plans").select("*").eq("is_active", true).order("sort_order"),
         ]).then(([s, p]) => {
-          setSub(s.data as Subscription);
+          if (s.error) setError(s.error.message);
+          if (p.error) setError(p.error.message);
+          setSub(s.data as Subscription & { plan?: Plan });
           setPlans((p.data || []) as Plan[]);
           setLoading(false);
         });
@@ -29,6 +32,7 @@ export default function PartnerBilling() {
   }, [profile]);
 
   if (loading) return <Layout title="Billing"><Loading /></Layout>;
+  if (error) return <Layout title="Billing"><ErrorState message={error} /></Layout>;
 
   return (
     <Layout title="Billing & Subscription">
@@ -36,7 +40,7 @@ export default function PartnerBilling() {
         <div className="glass rounded-2xl p-6 mb-6">
           <h3 className="text-sm font-medium text-slate-400 mb-4">Current Subscription</h3>
           <dl className="space-y-2 text-sm">
-            <div className="flex justify-between"><dt className="text-slate-500">Plan ID</dt><dd className="text-white">{sub.plan_id}</dd></div>
+            <div className="flex justify-between"><dt className="text-slate-500">Plan</dt><dd className="text-white">{sub.plan?.name || "Custom Plan"}</dd></div>
             <div className="flex justify-between"><dt className="text-slate-500">Status</dt><dd><span className={`px-2 py-1 rounded-full text-xs ${sub.status === "ACTIVE" ? "bg-success-500/20 text-success-400" : "bg-slate-500/20 text-slate-400"}`}>{sub.status}</span></dd></div>
             <div className="flex justify-between"><dt className="text-slate-500">Billing Cycle</dt><dd className="text-white">{sub.billing_cycle}</dd></div>
             <div className="flex justify-between"><dt className="text-slate-500">Current Period</dt><dd className="text-white">{formatDate(sub.current_period_start)} — {formatDate(sub.current_period_end)}</dd></div>

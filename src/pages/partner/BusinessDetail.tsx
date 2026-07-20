@@ -47,7 +47,7 @@ export default function PartnerBusinessDetail() {
       setLoading(false);
     });
   };
-  useEffect(() => { load(); }, [id]);
+  useEffect(() => { if (profile) load(); }, [id, profile]);
 
   const saveEdit = async () => {
     if (!business || !profile) return;

@@ -3,24 +3,30 @@ import Layout from "../../components/Layout";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../context/AuthContext";
 import type { ReviewSession } from "../../lib/types";
-import { Loading, EmptyState } from "../../components/States";
+import { Loading, EmptyState, ErrorState } from "../../components/States";
 import { formatDateTime } from "../../lib/utils";
 
 export default function BusinessReviews() {
   const { profile } = useAuth();
   const [reviews, setReviews] = useState<ReviewSession[] | null>(null);
   const [filter, setFilter] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!profile) return;
-    supabase.from("business_admins").select("business_id").eq("user_id", profile.id).single()
-      .then(({ data }) => {
+    supabase.from("business_admins").select("business_id").eq("user_id", profile.id).maybeSingle()
+      .then(({ data, error: baErr }) => {
+        if (baErr) { setError(baErr.message); setReviews([]); return; }
         if (!data?.business_id) { setReviews([]); return; }
-        supabase.from("review_sessions").select("*").eq("business_id", data.business_id).order("created_at", { ascending: false }).then(({ data: r }) => setReviews(r as ReviewSession[] || []));
+        supabase.from("review_sessions").select("*").eq("business_id", data.business_id).order("created_at", { ascending: false }).then(({ data: r, error: rErr }) => {
+          if (rErr) setError(rErr.message);
+          setReviews((r as ReviewSession[]) || []);
+        });
       });
   }, [profile]);
 
   if (!reviews) return <Layout title="Reviews"><Loading /></Layout>;
+  if (error) return <Layout title="Reviews"><ErrorState message={error} /></Layout>;
 
   const filtered = filter ? reviews.filter((r) => r.rating === filter) : reviews;
 

@@ -2,35 +2,37 @@ import { useEffect, useState } from "react";
 import Layout from "../../components/Layout";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../context/AuthContext";
-import { Loading } from "../../components/States";
+import { Loading, ErrorState } from "../../components/States";
 
 export default function PartnerDashboard() {
   const { profile } = useAuth();
   const [stats, setStats] = useState<{ businesses: number; reviews: number; payments: number; } | null>(null);
   const [org, setOrg] = useState<{ name: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!profile) return;
-    supabase.from("organization_members").select("organization_id").eq("user_id", profile.id).single()
-      .then(({ data: mem }) => {
-        if (mem?.organization_id) {
-          supabase.from("organizations").select("name").eq("id", mem.organization_id).single().then(({ data }) => setOrg(data as { name: string } | null));
-          Promise.all([
-            supabase.from("businesses").select("id", { count: "exact", head: true }).eq("organization_id", mem.organization_id),
-            supabase.from("payments").select("id", { count: "exact", head: true }).eq("organization_id", mem.organization_id),
-          ]).then(async ([b, p]) => {
-            const { data: bizIds } = await supabase.from("businesses").select("id").eq("organization_id", mem.organization_id);
-            const ids = (bizIds || []).map((x: { id: string }) => x.id);
-            const reviewCount = ids.length > 0
-              ? await supabase.from("review_sessions").select("id", { count: "exact", head: true }).in("business_id", ids)
-              : { count: 0 };
-            setStats({ businesses: b.count || 0, reviews: reviewCount.count || 0, payments: p.count || 0 });
-          });
-        }
+    supabase.from("organization_members").select("organization_id").eq("user_id", profile.id).maybeSingle()
+      .then(({ data: mem, error: memErr }) => {
+        if (memErr || !mem?.organization_id) { if (memErr) setError(memErr.message); setStats({ businesses: 0, reviews: 0, payments: 0 }); return; }
+        supabase.from("organizations").select("name").eq("id", mem.organization_id).maybeSingle().then(({ data }) => setOrg(data as { name: string } | null));
+        Promise.all([
+          supabase.from("businesses").select("id", { count: "exact", head: true }).eq("organization_id", mem.organization_id),
+          supabase.from("payments").select("id", { count: "exact", head: true }).eq("organization_id", mem.organization_id),
+        ]).then(async ([b, p]) => {
+          if (b.error || p.error) setError(b.error?.message || p.error?.message || "Failed to load stats");
+          const { data: bizIds } = await supabase.from("businesses").select("id").eq("organization_id", mem.organization_id);
+          const ids = (bizIds || []).map((x: { id: string }) => x.id);
+          const reviewCount = ids.length > 0
+            ? await supabase.from("review_sessions").select("id", { count: "exact", head: true }).in("business_id", ids)
+            : { count: 0 };
+          setStats({ businesses: b.count || 0, reviews: reviewCount.count || 0, payments: p.count || 0 });
+        });
       });
   }, [profile]);
 
   if (!stats) return <Layout title="Dashboard"><Loading /></Layout>;
+  if (error) return <Layout title="Dashboard"><ErrorState message={error} /></Layout>;
 
   const cards = [
     { label: "Businesses", value: stats.businesses, color: "from-primary-500 to-primary-600" },

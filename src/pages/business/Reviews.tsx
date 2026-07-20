@@ -16,6 +16,7 @@ export default function BusinessReviews() {
   const [search, setSearch] = useState("");
   const [dateFilter, setDateFilter] = useState<"all" | "7d" | "30d" | "90d">("all");
   const [selected, setSelected] = useState<ReviewSession | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!profile) return;
@@ -44,7 +45,6 @@ export default function BusinessReviews() {
 
   if (!filtered) return <BusinessShell title="Reviews"><div className="p-4 md:p-8"><SkeletonList items={4} /></div></BusinessShell>;
 
-  const [copiedId, setCopiedId] = useState<string | null>(null);
   const handleCopy = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
     setCopiedId(id);

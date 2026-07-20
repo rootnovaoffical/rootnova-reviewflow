@@ -19,7 +19,7 @@ export default function AdminBusinessDetail() {
   useEffect(() => {
     if (!id) return;
     Promise.all([
-      supabase.from("businesses").select("*").eq("id", id).single(),
+      supabase.from("businesses").select("*, organization:organizations(name,type)").eq("id", id).single(),
       supabase.from("questions").select("*").eq("business_id", id).order("sort_order"),
       supabase.from("review_sessions").select("*").eq("business_id", id).order("created_at", { ascending: false }).limit(20),
     ]).then(([b, q, r]) => {
@@ -39,7 +39,7 @@ export default function AdminBusinessDetail() {
         <div className="glass rounded-2xl p-6">
           <div className="flex items-center gap-4 mb-4">
             {business.logo_url ? <img src={business.logo_url} alt={business.name} className="w-14 h-14 rounded-xl object-cover" /> : <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center text-white font-bold text-xl">{business.name[0]}</div>}
-            <div><h2 className="text-lg font-bold text-white">{business.name}</h2><p className="text-sm text-slate-400">{business.status}</p></div>
+            <div><h2 className="text-lg font-bold text-white">{business.name}</h2><p className="text-sm text-slate-400">{business.status}</p>{(business as Business & { organization?: { name: string; type: string } | null }).organization && <span className={`mt-1 inline-block px-2 py-0.5 rounded-full text-xs ${(business as Business & { organization?: { name: string; type: string } | null }).organization!.type === "ROOTNOVA" ? "bg-primary-500/20 text-primary-300" : "bg-accent-500/20 text-accent-300"}`}>{(business as Business & { organization?: { name: string; type: string } | null }).organization!.type === "ROOTNOVA" ? "RootNova Direct" : `Partner: ${(business as Business & { organization?: { name: string; type: string } | null }).organization!.name}`}</span>}</div>
           </div>
           <dl className="space-y-2 text-sm">
             <div><dt className="text-slate-500">Welcome Message</dt><dd className="text-white">{business.welcome_message}</dd></div>

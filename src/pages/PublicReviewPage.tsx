@@ -185,8 +185,9 @@ export default function PublicReviewPage() {
             </div>
           )}
 
+          <div key={stage} className="stage-transition">
           {stage === "welcome" && (
-            <div className="glass-strong rounded-3xl p-10 text-center stage-transition">
+            <div className="glass-strong rounded-3xl p-10 text-center">
               <h1 className="text-3xl font-bold text-white mb-3">{business?.name}</h1>
               <p className="text-lg text-slate-300 mb-8">{business?.welcome_message || "We'd love to hear about your experience!"}</p>
               <button onClick={handleStart} className="choice3d px-8 py-4 bg-gradient-to-r from-primary-600 to-primary-500 text-white text-lg font-semibold rounded-xl shadow-lg shadow-primary-500/30">
@@ -196,7 +197,7 @@ export default function PublicReviewPage() {
           )}
 
           {stage === "rating" && (
-            <div className="glass-strong rounded-3xl p-10 text-center stage-transition">
+            <div className="glass-strong rounded-3xl p-10 text-center">
               <h2 className="text-2xl font-bold text-white mb-2">How was your experience?</h2>
               <p className="text-slate-400 mb-8">Your honest moment matters</p>
               <StarRating3D value={rating} onChange={setRating} />
@@ -207,7 +208,7 @@ export default function PublicReviewPage() {
           )}
 
           {stage === "questions" && questions.length > 0 && (
-            <div className="glass-strong rounded-3xl p-10 stage-transition">
+            <div className="glass-strong rounded-3xl p-10">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-2xl font-bold text-white">Quick Questions</h2>
                 <span className="text-sm text-slate-400">{currentQuestionIndex + 1} of {questions.length}</span>
@@ -249,7 +250,7 @@ export default function PublicReviewPage() {
           )}
 
           {stage === "generating" && (
-            <div className="glass-strong rounded-3xl p-10 text-center stage-transition">
+            <div className="glass-strong rounded-3xl p-10 text-center">
               <div className="ai-generating rounded-2xl p-8 mb-6">
                 <div className="ai-orb mb-6">
                   <div className="ai-orb-ring" />
@@ -264,7 +265,7 @@ export default function PublicReviewPage() {
           )}
 
           {stage === "result" && (
-            <div className="glass-strong rounded-3xl p-10 stage-transition">
+            <div className="glass-strong rounded-3xl p-10">
               <h2 className="text-2xl font-bold text-white mb-4 text-center">Your Review</h2>
               <div className="glass rounded-2xl p-6 mb-8 review-reveal">
                 <p className="text-slate-200 leading-relaxed text-lg">{aiReview}</p>
@@ -306,7 +307,7 @@ export default function PublicReviewPage() {
           )}
 
           {stage === "google" && (
-            <div className="glass-strong rounded-3xl p-10 text-center stage-transition">
+            <div className="glass-strong rounded-3xl p-10 text-center">
               <div className="text-5xl mb-4">{"\u2705"}</div>
               <h2 className="text-2xl font-bold text-white mb-2">Thank You!</h2>
               <p className="text-slate-300 mb-6">We've opened Google Reviews in a new tab. Your feedback means the world to us!</p>
@@ -315,6 +316,7 @@ export default function PublicReviewPage() {
               </button>
             </div>
           )}
+          </div>
         </div>
       </div>
     </>

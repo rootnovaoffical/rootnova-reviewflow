@@ -68,6 +68,8 @@ body { margin: 0; font-family: "Inter", system-ui, sans-serif; -webkit-font-smoo
   background: rgba(255, 255, 255, 0.08);
   backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.12);
+  will-change: opacity;
+  transform: translateZ(0);
 }
 
 .ai-generating {
@@ -144,11 +146,11 @@ body { margin: 0; font-family: "Inter", system-ui, sans-serif; -webkit-font-smoo
 }
 
 .stage-transition {
-  animation: stageTransition 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: stageTransition 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 @keyframes stageTransition {
-  0% { opacity: 0; transform: translateY(15px) scale(0.98); }
-  100% { opacity: 1; transform: translateY(0) scale(1); }
+  0% { opacity: 0; transform: translateY(12px); }
+  100% { opacity: 1; transform: translateY(0); }
 }
 
 .action-primary {

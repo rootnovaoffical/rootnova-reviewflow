@@ -31,6 +31,50 @@ function pickVariation(seed: number, arr: string[]): string {
   return arr[seed % arr.length];
 }
 
+function countWords(text: string): number {
+  return text.trim().split(/\s+/).filter(Boolean).length;
+}
+
+function trimToMaxWords(text: string, maxWords: number): string {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  if (words.length <= maxWords) return text.trim();
+
+  const trimmed = words.slice(0, maxWords).join(" ");
+
+  // Try to cut at last sentence boundary within the trimmed text
+  const lastPeriod = Math.max(trimmed.lastIndexOf("."), trimmed.lastIndexOf("!"), trimmed.lastIndexOf("?"));
+  if (lastPeriod > maxWords * 0.6) {
+    return trimmed.slice(0, lastPeriod + 1).trim();
+  }
+
+  // No clean sentence boundary — find next sentence end in full text
+  const fullText = text.trim();
+  let count = 0;
+  let cutIdx = fullText.length;
+  for (let i = 0; i < fullText.length; i++) {
+    if (fullText[i] === " " || i === fullText.length - 1) {
+      count++;
+      if (count > maxWords) {
+        cutIdx = i;
+        break;
+      }
+    }
+  }
+
+  // Find next sentence end after cutIdx
+  const nextEnd = Math.max(
+    fullText.indexOf(".", cutIdx),
+    fullText.indexOf("!", cutIdx),
+    fullText.indexOf("?", cutIdx),
+  );
+
+  if (nextEnd !== -1 && countWords(fullText.slice(0, nextEnd + 1)) <= maxWords + 15) {
+    return fullText.slice(0, nextEnd + 1).trim();
+  }
+
+  return trimmed.replace(/[,;]$/, "") + ".";
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -60,7 +104,6 @@ Deno.serve(async (req: Request) => {
       ? "balanced and constructive"
       : "honest but respectful";
 
-    // Variation mechanism: each regeneration gets different style instructions
     const seed = typeof variationSeed === "number" ? variationSeed : Math.floor(Math.random() * 1000);
     const openingStyle = pickVariation(seed, OPENING_STYLES);
     const structureStyle = pickVariation(seed + 1, STRUCTURE_STYLES);
@@ -69,11 +112,12 @@ Deno.serve(async (req: Request) => {
     const systemPrompt = `You are a review writing assistant. Write a natural, authentic-sounding review based on the customer's actual experience. Rules:
 - Write in first person as the customer
 - Use only details provided by the customer — never invent menu items, employee names, services, or events
-- Keep it concise (2-4 sentences)
+- Keep it to 35-70 words (hard max 90 words) — one compact paragraph, 2-3 sentences
 - Match the tone to the rating
 - Make it sound human, not robotic or generic
 - Do not use phrases like "highly recommend" unless the customer's input supports it
 - Do not start with "I had a great experience" generically
+- Avoid excessive adjectives, exclamation marks, and marketing language
 - ${openingStyle}
 - ${structureStyle}
 - ${voiceStyle}`;
@@ -82,7 +126,7 @@ Deno.serve(async (req: Request) => {
 Rating: ${rating} out of 5 stars (${sentiment} sentiment, ${toneInstruction} tone).
 Customer feedback: ${answerText || "No specific details provided, but the rating reflects their overall experience."}
 
-Write a natural, specific review that reflects this customer's actual experience. Do not invent details not mentioned by the customer.${regenerate ? " This is a regeneration — write a distinctly different version from any previous attempt, using different wording, sentence structure, and emphasis." : ""}`;
+Write a concise, natural review (35-70 words) that reflects this customer's actual experience. Do not invent details not mentioned by the customer. Do not add filler. Keep it to one short paragraph.${regenerate ? " This is a regeneration — write a distinctly different version from any previous attempt, using different wording, sentence structure, and emphasis." : ""}`;
 
     const openaiKey = Deno.env.get("OPENAI_API_KEY");
     let review: string | null = null;
@@ -97,7 +141,7 @@ Write a natural, specific review that reflects this customer's actual experience
             { role: "system", content: systemPrompt },
             { role: "user", content: userPrompt },
           ],
-          max_tokens: 200,
+          max_tokens: 160,
           temperature: 0.9,
           presence_penalty: regenerate ? 0.6 : 0,
           frequency_penalty: regenerate ? 0.3 : 0,
@@ -121,7 +165,7 @@ Write a natural, specific review that reflects this customer's actual experience
               { role: "system", content: systemPrompt },
               { role: "user", content: userPrompt },
             ],
-            max_tokens: 200,
+            max_tokens: 160,
             temperature: 0.9,
             presence_penalty: regenerate ? 0.6 : 0,
             frequency_penalty: regenerate ? 0.3 : 0,
@@ -134,23 +178,28 @@ Write a natural, specific review that reflects this customer's actual experience
       }
     }
 
-    // Fallback: contextual templates with variation
+    // Fallback: contextual templates with variation (all concise)
     if (!review) {
       const bizName = business?.name || "this place";
       const templates = rating >= 4 ? [
-        `Really enjoyed my visit to ${bizName}. ${answerText}. Would come back again based on this experience.`,
+        `Really enjoyed ${bizName}. ${answerText}. Would come back.`,
         `${bizName} was a great choice. ${answerText}. Glad I stopped by.`,
-        `Loved the experience at ${bizName}. ${answerText}. Definitely returning soon.`,
+        `Loved it at ${bizName}. ${answerText}. Definitely returning.`,
       ] : rating === 3 ? [
-        `My visit to ${bizName} was okay. ${answerText}. There are some areas that could be improved.`,
-        `${bizName} was decent. ${answerText}. A few things could elevate the experience.`,
-        `Stopped by ${bizName}. ${answerText}. It was fine but has room to grow.`,
+        `${bizName} was okay. ${answerText}. Some room to improve.`,
+        `Decent visit to ${bizName}. ${answerText}. Could be better.`,
+        `Stopped by ${bizName}. ${answerText}. Fine but has room to grow.`,
       ] : [
-        `I was disappointed with my visit to ${bizName}. ${answerText}. I hope they can address these issues.`,
-        `${bizName} didn't meet expectations. ${answerText}. I hope improvements are on the way.`,
-        `My experience at ${bizName} fell short. ${answerText}. Hopefully things improve.`,
+        `Disappointed with ${bizName}. ${answerText}. Hope they improve.`,
+        `${bizName} fell short. ${answerText}. Hope things get better.`,
+        `Not great at ${bizName}. ${answerText}. Hopefully they address this.`,
       ];
       review = templates[seed % templates.length];
+    }
+
+    // Final safety: enforce 90-word hard max with sentence-preserving trim
+    if (countWords(review) > 90) {
+      review = trimToMaxWords(review, 90);
     }
 
     return new Response(JSON.stringify({ review, sessionId, variationSeed: seed }), {

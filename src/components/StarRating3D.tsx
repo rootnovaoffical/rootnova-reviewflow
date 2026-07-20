@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState } from "react";
 
 interface StarRating3DProps {
   value: number;
@@ -17,21 +17,17 @@ const RATING_MOODS: Record<number, { emoji: string; label: string; color: string
 export default function StarRating3D({ value, onChange, disabled }: StarRating3DProps) {
   const [hover, setHover] = useState(0);
   const display = hover || value;
-  const containerRef = useRef<HTMLDivElement>(null);
 
   const mood = RATING_MOODS[display] || null;
 
   return (
     <div className="flex flex-col items-center gap-6">
       <div
-        ref={containerRef}
         className="star3d-container flex gap-3 sm:gap-4 justify-center"
         onMouseLeave={() => setHover(0)}
       >
         {[1, 2, 3, 4, 5].map((star) => {
           const isActive = star <= display;
-          const distance = Math.abs(star - display);
-          const nearbyScale = distance === 1 && display > 0 ? 1.08 : 1;
           return (
             <button
               key={star}
@@ -39,11 +35,12 @@ export default function StarRating3D({ value, onChange, disabled }: StarRating3D
               disabled={disabled}
               onMouseEnter={() => !disabled && setHover(star)}
               onClick={() => !disabled && onChange(star)}
-              className={`star3d text-5xl sm:text-6xl ${isActive ? "star3d-active text-yellow-400" : "text-slate-600"} ${disabled ? "cursor-default" : "cursor-pointer"}`}
-              style={isActive ? undefined : { transform: `scale(${nearbyScale})` }}
+              className={`star3d-hit ${disabled ? "cursor-default" : "cursor-pointer"}`}
               aria-label={`${star} star${star > 1 ? "s" : ""}`}
             >
-              {isActive ? "\u2605" : "\u2606"}
+              <span className={`star3d text-5xl sm:text-6xl ${isActive ? "star3d-active text-yellow-400" : "text-slate-600"}`}>
+                {isActive ? "\u2605" : "\u2606"}
+              </span>
             </button>
           );
         })}

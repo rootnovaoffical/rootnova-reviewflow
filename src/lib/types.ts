@@ -214,6 +214,21 @@ export interface AdminInvitation {
   updated_at: string;
 }
 
+export type QRType = "reviewflow" | "menu" | "whatsapp" | "website" | "campaign" | "custom";
+
+export interface QRCode {
+  id: string;
+  business_id: string;
+  name: string;
+  qr_type: QRType;
+  destination_url: string;
+  status: "active" | "inactive";
+  scan_count: number;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
 export type UserRole = Role;
 
 export type FlowType = "RATING_ONLY" | "QUESTIONS" | "DETAILED";

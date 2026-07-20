@@ -41,6 +41,7 @@ import BusinessReviews from "./pages/business/Reviews";
 import BusinessAnalytics from "./pages/business/Analytics";
 import BusinessSettings from "./pages/business/Settings";
 import BusinessQRCodes from "./pages/business/QRCodes";
+import BusinessActions from "./pages/business/Actions";
 
 const ADMIN_ROLES = ["ROOTNOVA_SUPER_ADMIN", "ROOTNOVA_ADMIN"] as const;
 const PARTNER_ROLES = ["PARTNER_OWNER", "PARTNER_ADMIN", "PARTNER_TEAM_MEMBER"] as const;
@@ -99,6 +100,7 @@ export default function App() {
                 <Route path="/business/analytics" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><BusinessAnalytics /></ProtectedRoute>} />
                 <Route path="/business/settings" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><BusinessSettings /></ProtectedRoute>} />
                 <Route path="/business/qr-codes" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><BusinessQRCodes /></ProtectedRoute>} />
+                <Route path="/business/actions" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><BusinessActions /></ProtectedRoute>} />
 
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>

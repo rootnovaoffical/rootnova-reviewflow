@@ -234,3 +234,24 @@ export interface QRCode {
 export type UserRole = Role;
 
 export type FlowType = "RATING_ONLY" | "QUESTIONS" | "DETAILED";
+
+export type ActionItemStatus = "open" | "in_progress" | "resolved" | "dismissed";
+export type PriorityLevel = "critical" | "high" | "medium" | "low";
+export type ConfidenceLevel = "high" | "medium" | "low";
+
+export interface ActionItem {
+  id: string;
+  business_id: string;
+  title: string;
+  explanation: string | null;
+  why_it_matters: string | null;
+  recommended_action: string | null;
+  priority_level: PriorityLevel;
+  confidence: ConfidenceLevel;
+  status: ActionItemStatus;
+  evidence: Record<string, unknown>;
+  internal_notes: string | null;
+  ai_generated_at: string;
+  created_at: string;
+  updated_at: string;
+}

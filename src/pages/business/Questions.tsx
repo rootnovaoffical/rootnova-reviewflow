@@ -44,6 +44,11 @@ export default function BusinessQuestions() {
   };
 
   const remove = async (q: Question) => {
+    const activeRemaining = (questions ?? []).filter(x => x.is_active && x.id !== q.id).length;
+    if (activeRemaining < 4 && q.is_active) {
+      showToast("Cannot delete — minimum 4 active questions required. Disable instead.", "error");
+      return;
+    }
     const { error } = await supabase.from("questions").delete().eq("id", q.id);
     if (error) { showToast("Failed to delete question", "error"); return; }
     if (profile) await insertAuditLog({ actor_id: profile.id, actor_email: profile.email, action: "question_deleted", target_type: "question", target_id: q.id });
@@ -63,12 +68,21 @@ export default function BusinessQuestions() {
     load();
   };
 
+  const activeCount = (questions ?? []).filter(q => q.is_active).length;
+  const maxReached = activeCount >= 5;
+  const minNotMet = activeCount < 4;
+
   if (!questions) return <Layout title="Questions"><Loading /></Layout>;
 
   return (
     <Layout title="Questions">
-      <div className="flex justify-end mb-4">
-        <button onClick={() => setCreating(true)} className="px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white text-sm font-medium rounded-lg transition-colors">New Question</button>
+      <div className="flex items-center justify-between mb-4">
+        <div className="text-sm">
+          <span className={`font-medium ${minNotMet ? "text-warning-400" : "text-slate-300"}`}>{activeCount}/5 active questions</span>
+          {minNotMet && <span className="text-warning-400 ml-2">(minimum 4 required)</span>}
+          {maxReached && <span className="text-slate-500 ml-2">(maximum reached)</span>}
+        </div>
+        <button onClick={() => setCreating(true)} disabled={maxReached} className="px-4 py-2 bg-primary-600 hover:bg-primary-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors">New Question</button>
       </div>
       {questions.length === 0 ? <EmptyState title="No questions" subtitle="Create questions to collect feedback from customers." /> : (
         <div className="space-y-3">
@@ -106,7 +120,7 @@ function QuestionModal({ question, onClose, onSave }: { question: Question | nul
         <h2 className="text-lg font-bold text-white mb-4">{question ? "Edit Question" : "New Question"}</h2>
         <div className="space-y-3">
           <div><label className="block text-xs text-slate-400 mb-1">Question Text</label><input value={form.question_text} onChange={(e) => setForm((f) => ({ ...f, question_text: e.target.value }))} className="w-full px-3 py-2 bg-slate-900/50 border border-white/10 rounded-lg text-white text-sm" /></div>
-          <div><label className="block text-xs text-slate-400 mb-1">Flow Type</label><select value={form.flow_type} onChange={(e) => setForm((f) => ({ ...f, flow_type: e.target.value }))} className="w-full px-3 py-2 bg-slate-900/50 border border-white/10 rounded-lg text-white text-sm"><option value="POSITIVE">Positive</option><option value="NEUTRAL">Neutral</option><option value="NEGATIVE">Negative</option><option value="ALL">All</option></select></div>
+          <div><label className="block text-xs text-slate-400 mb-1">Flow Type</label><select value={form.flow_type} onChange={(e) => setForm((f) => ({ ...f, flow_type: e.target.value }))} className="w-full px-3 py-2 bg-slate-900/50 border border-white/10 rounded-lg text-white text-sm"><option value="ALWAYS">Always (show for all ratings)</option><option value="POSITIVE">Positive (show for 4-5 stars)</option><option value="NEGATIVE">Negative (show for 1-3 stars)</option></select></div>
           <div><label className="block text-xs text-slate-400 mb-1">Options (one per line)</label><textarea value={form.options} onChange={(e) => setForm((f) => ({ ...f, options: e.target.value }))} className="w-full px-3 py-2 bg-slate-900/50 border border-white/10 rounded-lg text-white text-sm" rows={4} /></div>
           <div className="flex gap-4">
             <label className="flex items-center gap-2 text-sm text-slate-300"><input type="checkbox" checked={form.is_required} onChange={(e) => setForm((f) => ({ ...f, is_required: e.target.checked }))} /> Required</label>

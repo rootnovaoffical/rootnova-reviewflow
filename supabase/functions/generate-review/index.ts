@@ -22,7 +22,7 @@ Deno.serve(async (req: Request) => {
     const groqKey = Deno.env.get("GROQ_API_KEY");
 
     const businessRes = await fetch(
-      `${supabaseUrl}/rest/v1/businesses?id=eq.${businessId}&select=name,welcome_message,google_maps_url,primary_color,category`,
+      `${supabaseUrl}/rest/v1/businesses?id=eq.${businessId}&select=name,welcome_message,google_maps_url,primary_color`,
       { headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, "Content-Type": "application/json" } }
     );
     const businesses = await businessRes.json();
@@ -47,8 +47,7 @@ Deno.serve(async (req: Request) => {
           business?.name || "this business",
           rating,
           answerText,
-          business?.welcome_message || "",
-          business?.category || ""
+          business?.welcome_message || ""
         );
         review = result.review;
         provider = result.provider;
@@ -96,8 +95,7 @@ async function generateWithGroq(
   businessName: string,
   rating: number,
   answerText: string,
-  welcomeMessage: string,
-  category: string
+  welcomeMessage: string
 ): Promise<{ review: string; provider: string }> {
   const tone = rating >= 4 ? "positive and appreciative" : rating === 3 ? "balanced and fair" : "constructive but polite";
   const ratingWord = rating >= 5 ? "excellent" : rating === 4 ? "great" : rating === 3 ? "decent" : "disappointing";
@@ -120,7 +118,7 @@ Rules:
     ? answerText.split("; ").filter(Boolean).map((a, i) => `Signal ${i + 1}: ${a}`).join("\n")
     : "No specific details provided — write a brief review based on the rating alone.";
 
-  const userPrompt = `Business: ${businessName}${category ? `\nCategory: ${category}` : ""}
+  const userPrompt = `Business: ${businessName}
 Rating: ${rating} stars (${ratingWord})
 Tone: ${tone}
 

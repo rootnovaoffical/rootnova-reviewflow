@@ -92,6 +92,8 @@ export interface ReviewSession {
   ai_generated_review: string | null;
   ai_status: string;
   google_place_id_snapshot: string | null;
+  business_response: string | null;
+  business_response_at: string | null;
   created_at: string;
   completed_at: string | null;
 }

@@ -17,7 +17,6 @@ const RATING_MOODS: Record<number, { emoji: string; label: string; color: string
 export default function StarRating3D({ value, onChange, disabled }: StarRating3DProps) {
   const [hover, setHover] = useState(0);
   const display = hover || value;
-
   const mood = RATING_MOODS[display] || null;
 
   return (
@@ -46,17 +45,27 @@ export default function StarRating3D({ value, onChange, disabled }: StarRating3D
         })}
       </div>
 
-      {mood && display > 0 && (
-        <div className="rating-mood-block flex flex-col items-center gap-2">
+      {/*
+        CRITICAL: This block is ALWAYS rendered (never conditionally mounted).
+        Height is always reserved. Only opacity changes on hover.
+        This prevents any layout/height shift that would force backdrop-filter repaint.
+      */}
+      <div className="star-mood-reserved">
+        <div
+          className="flex flex-col items-center gap-2 star-mood-inner"
+          style={{ opacity: display > 0 ? 1 : 0 }}
+        >
           <div
-            className="text-4xl sm:text-5xl transition-all duration-500"
-            style={{ filter: `drop-shadow(0 4px 12px ${mood.color})` }}
+            className="text-4xl sm:text-5xl"
+            style={{ filter: mood ? `drop-shadow(0 4px 12px ${mood.color})` : "none" }}
           >
-            {mood.emoji}
+            {mood ? mood.emoji : "\u2605"}
           </div>
-          <p className="text-sm font-medium text-slate-300">{mood.label}</p>
+          <p className="text-sm font-medium text-slate-300">
+            {mood ? mood.label : "\u00A0"}
+          </p>
         </div>
-      )}
+      </div>
     </div>
   );
 }

@@ -27,6 +27,7 @@ body { margin: 0; font-family: "Inter", system-ui, sans-serif; -webkit-font-smoo
 
 .star3d-container {
   perspective: 800px;
+  isolation: isolate;
 }
 
 .star3d-hit {
@@ -42,10 +43,8 @@ body { margin: 0; font-family: "Inter", system-ui, sans-serif; -webkit-font-smoo
 
 .star3d {
   transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.3s ease, color 0.3s ease;
-  transform-style: preserve-3d;
   display: inline-block;
   transform-origin: center center;
-  will-change: transform;
 }
 .star3d-hit:hover .star3d {
   transform: scale(1.25) rotateY(24deg) rotateX(16deg) translateZ(16px);
@@ -75,12 +74,16 @@ body { margin: 0; font-family: "Inter", system-ui, sans-serif; -webkit-font-smoo
 .glass {
   background: rgba(255, 255, 255, 0.05);
   backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.08);
+  isolation: isolate;
 }
 .glass-strong {
   background: rgba(255, 255, 255, 0.08);
   backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.12);
+  isolation: isolate;
 }
 
 .ai-generating {
@@ -160,8 +163,8 @@ body { margin: 0; font-family: "Inter", system-ui, sans-serif; -webkit-font-smoo
   animation: moodEnter 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 @keyframes moodEnter {
-  0% { opacity: 0; transform: translateY(6px); }
-  100% { opacity: 1; transform: translateY(0); }
+  0% { opacity: 0; }
+  100% { opacity: 1; }
 }
 
 .stage-transition {

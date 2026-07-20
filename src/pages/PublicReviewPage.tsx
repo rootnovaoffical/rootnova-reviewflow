@@ -39,7 +39,10 @@ export default function PublicReviewPage() {
   const [shockwaveTrigger, setShockwaveTrigger] = useState(false);
   const [emojisTrigger, setEmojisTrigger] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [copyFailed, setCopyFailed] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [burstTrigger, setBurstTrigger] = useState(false);
+  const [ctaPhase, setCtaPhase] = useState<"idle" | "copying" | "success" | "opening" | "failed">("idle");
   const genTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const genMsgTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -207,11 +210,21 @@ export default function PublicReviewPage() {
     setEditingReview(false);
   };
 
-  const handleCopyReview = () => {
-    if (aiReview) navigator.clipboard.writeText(aiReview);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-    supabase.from("analytics_events").insert({ business_id: business?.id, session_id: sessionId, event_type: "copy_event", metadata: {} }).then();
+  const handleCopyReview = async () => {
+    if (!aiReview) return;
+    try {
+      await navigator.clipboard.writeText(aiReview);
+      setCopied(true);
+      setCopyFailed(false);
+      setBurstTrigger(true);
+      setTimeout(() => setBurstTrigger(false), 1200);
+      setTimeout(() => setCopied(false), 2500);
+      supabase.from("analytics_events").insert({ business_id: business?.id, session_id: sessionId, event_type: "copy_event", metadata: {} }).then();
+    } catch {
+      setCopyFailed(true);
+      setCopied(false);
+      setTimeout(() => setCopyFailed(false), 4000);
+    }
   };
 
   const googleDestination = (() => {
@@ -220,15 +233,35 @@ export default function PublicReviewPage() {
     return url || (business.google_maps_url || null);
   })();
 
-  const handleGoogleClick = () => {
+  const handleGoogleClick = async () => {
     if (!googleDestination || googleLoading) return;
+    setCtaPhase("copying");
     setGoogleLoading(true);
+    let copySuccess = true;
+    if (aiReview) {
+      try {
+        await navigator.clipboard.writeText(aiReview);
+        setCtaPhase("success");
+        setBurstTrigger(true);
+        setTimeout(() => setBurstTrigger(false), 1200);
+      } catch {
+        copySuccess = false;
+        setCtaPhase("failed");
+        setCopyFailed(true);
+      }
+    }
+    if (!copySuccess) {
+      setGoogleLoading(false);
+      return;
+    }
     supabase.from("analytics_events").insert({ business_id: business?.id, session_id: sessionId, event_type: "google_click", metadata: { destination: googleDestination } }).then();
+    setCtaPhase("opening");
     setTimeout(() => {
       window.open(googleDestination, "_blank");
       setGoogleLoading(false);
       setStage("google");
-    }, 400);
+      setCtaPhase("idle");
+    }, 700);
   };
 
   useEffect(() => {
@@ -375,8 +408,8 @@ export default function PublicReviewPage() {
           {stage === "result" && (
             <div className="animate-review-reveal">
               <div className="text-center mb-6">
-                <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full glass mb-4">
-                  <span className="text-sm text-primary-300 font-medium">✨ Your experience is ready to be shared</span>
+                <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full glass mb-4 animate-glow-pulse">
+                  <span className="text-sm text-primary-300 font-medium">✨ Your experience is ready to shine</span>
                 </div>
                 <p className="text-slate-400 text-sm">Let the world know what made your visit special.</p>
               </div>
@@ -398,10 +431,11 @@ export default function PublicReviewPage() {
               ) : (
                 <div className="glass-strong rounded-3xl p-8 sm:p-10 mb-6 relative overflow-hidden">
                   <div className="absolute inset-0 bg-gradient-to-br from-primary-500/5 via-transparent to-accent-500/5 pointer-events-none" />
+                  <div className="absolute -top-20 -right-20 w-40 h-40 bg-primary-500/10 rounded-full blur-3xl pointer-events-none" />
                   <div className="relative">
                     <div className="flex items-center gap-1 mb-4">
                       {[1,2,3,4,5].map((s) => (
-                        <span key={s} className={`text-lg ${s <= rating ? "text-amber-400" : "text-slate-700"}`}>★</span>
+                        <span key={s} className={`text-lg transition-transform ${s <= rating ? "text-amber-400 scale-110" : "text-slate-700"}`}>★</span>
                       ))}
                     </div>
                     <p className="text-slate-100 leading-relaxed text-base sm:text-lg">{aiReview}</p>
@@ -411,19 +445,52 @@ export default function PublicReviewPage() {
 
               {!editingReview && (
                 <>
+                  {burstTrigger && (
+                    <div className="fixed inset-0 pointer-events-none z-50 flex items-center justify-center">
+                      <div className="absolute w-32 h-32 rounded-full bg-success-500/20 blur-2xl animate-burst" />
+                      <div className="absolute w-20 h-20 rounded-full border-2 border-success-400/40 animate-ripple-out" />
+                      <div className="absolute text-2xl animate-spark">✨</div>
+                    </div>
+                  )}
+
+                  {copyFailed && ctaPhase !== "failed" && (
+                    <div className="glass rounded-2xl p-4 mb-4 border border-amber-500/20 animate-step-in">
+                      <p className="text-sm text-amber-300 text-center">Almost there! Your review is ready below — tap to copy it, then we'll take you to Google.</p>
+                    </div>
+                  )}
+
+                  {ctaPhase === "success" && (
+                    <div className="text-center mb-3 animate-step-in">
+                      <p className="text-sm text-success-300 font-medium">🌟 Your words are ready for their spotlight!</p>
+                    </div>
+                  )}
+
+                  {ctaPhase === "opening" && (
+                    <div className="text-center mb-3 animate-step-in">
+                      <p className="text-sm text-primary-300 font-medium">✨ Your words are ready — opening Google...</p>
+                    </div>
+                  )}
+
+                  {ctaPhase === "failed" && (
+                    <div className="glass rounded-2xl p-4 mb-4 border border-amber-500/20 animate-step-in">
+                      <p className="text-sm text-amber-300 text-center">Almost there! Your review is ready below — tap to copy it, then we'll take you to Google.</p>
+                    </div>
+                  )}
+
                   {googleDestination ? (
                     <button
                       onClick={handleGoogleClick}
                       disabled={googleLoading}
-                      className="choice3d w-full py-4 bg-gradient-to-r from-success-600 to-success-500 text-white text-lg font-semibold rounded-2xl shadow-xl shadow-success-500/30 transition-all hover:scale-[1.02] active:scale-[0.99] disabled:opacity-70 disabled:hover:scale-100 mb-3"
+                      aria-label="Copy your review and open Google Reviews to share it"
+                      className="choice3d w-full py-4 bg-gradient-to-r from-success-600 to-success-500 text-white text-lg font-semibold rounded-2xl shadow-xl shadow-success-500/30 transition-all hover:scale-[1.02] hover:shadow-success-500/50 active:scale-[0.98] disabled:opacity-70 disabled:hover:scale-100 mb-3 motion-reduce:transition-none"
                     >
                       {googleLoading ? (
                         <span className="flex items-center justify-center gap-2">
-                          <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                          Opening Google...
+                          <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin motion-reduce:animate-none" />
+                          {ctaPhase === "opening" ? "✨ Opening Google..." : "Copying your words..."}
                         </span>
                       ) : (
-                        "🌟 Continue to Google Review"
+                        "✨ Let Your Experience Shine"
                       )}
                     </button>
                   ) : (
@@ -432,15 +499,15 @@ export default function PublicReviewPage() {
                     </div>
                   )}
 
-                  <div className="flex gap-3">
-                    <button onClick={handleCopyReview} className="choice3d flex-1 py-3 glass text-white font-medium rounded-xl hover:bg-white/10 transition-all">
-                      {copied ? "Copied ✨" : "📋 Copy Review"}
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <button onClick={handleCopyReview} aria-label="Copy your review to clipboard without opening Google" className="choice3d flex-1 py-3 glass text-white font-medium rounded-xl hover:bg-white/10 transition-all motion-reduce:transition-none">
+                      {copied ? "✨ Your words are safely copied!" : "📋 Keep My Words"}
                     </button>
-                    <button onClick={handleRegenerate} disabled={generating} className="choice3d flex-1 py-3 glass text-white font-medium rounded-xl hover:bg-white/10 transition-all disabled:opacity-50">
-                      ↻ Regenerate
+                    <button onClick={handleRegenerate} disabled={generating} aria-label="Generate a fresh variation of your review" className="choice3d flex-1 py-3 glass text-white font-medium rounded-xl hover:bg-white/10 transition-all disabled:opacity-50 motion-reduce:transition-none">
+                      🔄 Give It Another Spark
                     </button>
-                    <button onClick={() => setEditingReview(true)} className="choice3d flex-1 py-3 glass text-white font-medium rounded-xl hover:bg-white/10 transition-all">
-                      ✏️ Edit
+                    <button onClick={() => setEditingReview(true)} aria-label="Edit your review to personalize it" className="choice3d flex-1 py-3 glass text-white font-medium rounded-xl hover:bg-white/10 transition-all motion-reduce:transition-none">
+                      ✍️ Make It More You
                     </button>
                   </div>
                 </>

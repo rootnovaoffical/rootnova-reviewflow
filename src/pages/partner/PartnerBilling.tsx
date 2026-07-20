@@ -23,7 +23,7 @@ export function PartnerBilling() {
     })();
   }, [profile?.id]);
 
-  if (loading) return <Loading message="Loading billing…" />;
+  if (loading) return <Loading />;
   if (error) return <ErrorState message={error} />;
 
   return (

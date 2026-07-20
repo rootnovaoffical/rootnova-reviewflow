@@ -139,6 +139,8 @@ export interface Payment {
   amount: number;
   payment_purpose: string;
   payment_method: string;
+  plan_id: string | null;
+  billing_cycle: string | null;
   upi_id: string | null;
   screenshot_path: string | null;
   utr_reference: string | null;

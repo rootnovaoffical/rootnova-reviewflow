@@ -53,8 +53,10 @@ export default function PublicReviewPage() {
       });
   }, [slug]);
 
-  const loadQuestions = useCallback(async (businessId: string): Promise<Question[]> => {
+  const loadQuestions = useCallback(async (businessId: string, currentRating: number): Promise<Question[]> => {
     const { data } = await supabase.from("questions").select("*").eq("business_id", businessId).eq("is_active", true).order("sort_order");
+    const all = (data || []) as Question[];
+    return all.filter(q => q.flow_type === "ALWAYS" || (q.flow_type === "POSITIVE" && currentRating >= 4) || (q.flow_type === "NEGATIVE" && currentRating <= 3));
     const list = (data || []) as Question[];
     setQuestions(list);
     return list;
@@ -76,7 +78,7 @@ export default function PublicReviewPage() {
     setSessionId(sid);
     supabase.from("analytics_events").insert({ business_id: business.id, session_id: sid, event_type: "rating_submitted", metadata: { rating } }).then();
     if (rating >= 4) { setConfettiTrigger(true); setShockwaveTrigger(true); setEmojisTrigger(true); }
-    const qs = await loadQuestions(business.id);
+    const qs = await loadQuestions(business.id, rating);
     if (qs.length > 0) {
       setStage("questions");
     } else {

@@ -28,13 +28,14 @@ Deno.serve(async (req: Request) => {
     const businesses = await businessRes.json();
     const business = businesses[0];
 
-    const answerText = Array.isArray(answers) && answers.length > 0
+    const structuredAnswers = Array.isArray(answers) && answers.length > 0
       ? answers.map((a: unknown) => {
-          if (typeof a === "string") return a;
+          if (typeof a === "string") return { answer: a };
           const obj = a as Record<string, unknown>;
-          return (obj.answer || obj.text || obj.value || JSON.stringify(a)) as string;
-        }).join("; ")
-      : "";
+          return { question_id: obj.question_id, answer: (obj.answer || obj.text || obj.value || JSON.stringify(a)) as string };
+        })
+      : [];
+    const answerText = structuredAnswers.map((a) => a.answer).join("; ");
 
     let review: string;
     let provider = "fallback";
@@ -101,27 +102,32 @@ async function generateWithGroq(
   const tone = rating >= 4 ? "positive and appreciative" : rating === 3 ? "balanced and fair" : "constructive but polite";
   const ratingWord = rating >= 5 ? "excellent" : rating === 4 ? "great" : rating === 3 ? "decent" : "disappointing";
 
-  const systemPrompt = `You are a helpful assistant that writes natural, personalized Google reviews based on a customer's actual experience. Write in first person as the customer. Keep it concise (2-4 sentences, max 150 words). Use ONLY the details the customer provided — never invent menu items, employee names, specific dishes, prices, or events the customer didn't mention. Sound human and genuine, not robotic or generic. Match the tone to the rating. Vary your language — avoid repeating the same phrases across reviews. Do not start every review with "I had a great experience."`;
+  const systemPrompt = `You are a skilled writer who crafts natural, personalized Google reviews based on a customer's structured feedback. You treat each selected answer as an experience signal — not a checklist to repeat verbatim.
 
-  const contextParts: string[] = [`Business: ${businessName}`];
-  if (category) contextParts.push(`Category: ${category}`);
-  contextParts.push(`Rating: ${rating} stars (${ratingWord} experience)`);
-  contextParts.push(`Tone: ${tone}`);
-  if (welcomeMessage) contextParts.push(`Business welcome message: ${welcomeMessage}`);
-  if (answerText) {
-    contextParts.push(`Customer's feedback highlights: ${answerText}`);
-  } else {
-    contextParts.push("No specific details provided — write a brief review based on the rating alone.");
-  }
+Rules:
+- Write in first person as the customer.
+- Sound like a real person, not a marketing template.
+- Use ONLY the details the customer provided. Never invent menu items, employee names, specific dishes, prices, or events.
+- Vary sentence structure and vocabulary. Never start two reviews the same way.
+- Match the rating's tone: 5 stars = enthusiastic, 4 = warm/satisfied, 3 = balanced/mixed, 2 = disappointed, 1 = upset but dignified.
+- Avoid generic filler ("highly recommend", "will definitely return") unless the customer's signals support it.
+- Do not list the answers back. Weave them into a flowing narrative.
+- Keep it 2-4 sentences, max 150 words, suitable for Google Reviews.
+- If the customer selected "Exceptional" or "Worth Recommending", the review may express enthusiasm naturally.
+- If the customer selected "Good" (3-star range), keep it honest and measured — do not fake enthusiasm.`;
 
-  const userPrompt = `${contextParts.join("\n")}
+  const signalList = structuredAnswers.length > 0
+    ? structuredAnswers.map((a, i) => `Signal ${i + 1}: ${a.answer}`).join("\n")
+    : "No specific details provided — write a brief review based on the rating alone.";
 
-Write a natural, first-person Google review for this customer. Rules:
-- Use only the details provided above — do not invent anything
-- Sound like a real customer, not a marketing template
-- Do not use generic filler like "highly recommend" unless the customer's feedback supports it
-- Keep it 2-4 sentences
-- Vary your opening — don't always start with "I had a great experience"`;
+  const userPrompt = `Business: ${businessName}${category ? `\nCategory: ${category}` : ""}
+Rating: ${rating} stars (${ratingWord})
+Tone: ${tone}
+
+Customer experience signals:
+${signalList}
+
+Write a natural, first-person Google review reflecting these signals. Do not repeat the signals as a list. Vary your opening. Sound human.`;
 
   const client = new OpenAI({
     apiKey,

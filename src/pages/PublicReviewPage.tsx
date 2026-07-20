@@ -9,9 +9,13 @@ import { Confetti, Shockwave, FloatingEmojis, AuroraGlow } from "../components/E
 type Stage = "loading" | "welcome" | "rating" | "questions" | "generating" | "result" | "google" | "disabled" | "error";
 
 const STAGE_ORDER: Stage[] = ["welcome", "rating", "questions", "generating", "result", "google"];
-const STAGE_LABELS: Record<string, string> = {
-  welcome: "Start", rating: "Rate", questions: "Details", generating: "AI Review", result: "Review", google: "Done",
-};
+const GEN_MESSAGES = [
+  "Reading your feedback",
+  "Understanding your experience",
+  "Finding the right words",
+  "Crafting your review",
+  "Polishing the language",
+];
 
 export default function PublicReviewPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -27,12 +31,14 @@ export default function PublicReviewPage() {
   const [generating, setGenerating] = useState(false);
   const [genProgress, setGenProgress] = useState(0);
   const [genStep, setGenStep] = useState(0);
-  const [error, setError] = useState<string | null>(null);
+  const [genMessageIdx, setGenMessageIdx] = useState(0);
+  const [genError, setGenError] = useState<string | null>(null);
   const [confettiTrigger, setConfettiTrigger] = useState(false);
   const [shockwaveTrigger, setShockwaveTrigger] = useState(false);
   const [emojisTrigger, setEmojisTrigger] = useState(false);
   const [copied, setCopied] = useState(false);
   const genTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const genMsgTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     if (!slug) return;
@@ -65,7 +71,7 @@ export default function PublicReviewPage() {
     const { error: insErr } = await supabase.from("review_sessions").insert({
       id: sid, business_id: business.id, rating, answers: [], ai_status: "pending",
     });
-    if (insErr) { setError("Failed to start review session"); return; }
+    if (insErr) { setGenError("Failed to start review session"); return; }
     setSessionId(sid);
     supabase.from("analytics_events").insert({ business_id: business.id, session_id: sid, event_type: "rating_submitted", metadata: { rating } }).then();
     if (rating >= 4) { setConfettiTrigger(true); setShockwaveTrigger(true); setEmojisTrigger(true); }
@@ -90,20 +96,28 @@ export default function PublicReviewPage() {
     setGenerating(true);
     setGenProgress(0);
     setGenStep(0);
-    setError(null);
+    setGenMessageIdx(0);
+    setGenError(null);
 
-    const steps = ["Analyzing your rating", "Reading your feedback", "Crafting your review", "Polishing the language"];
-    let stepIdx = 0;
     let progress = 0;
     genTimerRef.current = setInterval(() => {
-      progress += Math.random() * 8 + 3;
-      if (progress > 90) progress = 90;
-      setGenProgress(Math.min(progress, 90));
-      const newStep = Math.min(Math.floor((progress / 100) * steps.length), steps.length - 1);
-      if (newStep !== stepIdx) { stepIdx = newStep; setGenStep(stepIdx); }
-    }, 400);
+      progress += Math.random() * 6 + 2;
+      if (progress > 92) progress = 92;
+      setGenProgress(Math.min(progress, 92));
+      const newStep = Math.min(Math.floor((progress / 100) * GEN_MESSAGES.length), GEN_MESSAGES.length - 1);
+      if (newStep !== Math.floor((progress - 6) / 100 * GEN_MESSAGES.length)) setGenStep(newStep);
+    }, 500);
 
-    setTimeout(() => generateReview(sid, r, ans), 600);
+    genMsgTimerRef.current = setInterval(() => {
+      setGenMessageIdx((i) => (i + 1) % GEN_MESSAGES.length);
+    }, 2200);
+
+    setTimeout(() => generateReview(sid, r, ans), 800);
+  };
+
+  const stopGenerationTimers = () => {
+    if (genTimerRef.current) { clearInterval(genTimerRef.current); genTimerRef.current = null; }
+    if (genMsgTimerRef.current) { clearInterval(genMsgTimerRef.current); genMsgTimerRef.current = null; }
   };
 
   const generateReview = async (sid: string, r: number, ans: Record<string, unknown>[]) => {
@@ -113,21 +127,29 @@ export default function PublicReviewPage() {
         headers: { "Content-Type": "application/json", apikey: import.meta.env.VITE_SUPABASE_ANON_KEY },
         body: JSON.stringify({ sessionId: sid, rating: r, answers: ans, businessId: business?.id }),
       });
+      if (!res.ok) throw new Error(`Request failed (${res.status})`);
       const json = await res.json();
       const review = json.review || "Thank you for your feedback! We're glad you had a great experience.";
       setAiReview(review);
       setEditText(review);
-      supabase.from("analytics_events").insert({ business_id: business?.id, session_id: sid, event_type: "ai_completion", metadata: {} }).then();
-    } catch {
-      const fallback = "Thank you for your feedback! We appreciate you taking the time to share your experience.";
-      setAiReview(fallback);
-      setEditText(fallback);
+      supabase.from("analytics_events").insert({ business_id: business?.id, session_id: sid, event_type: "ai_completion", metadata: { provider: json.provider } }).then();
+      stopGenerationTimers();
+      setGenProgress(100);
+      setGenStep(GEN_MESSAGES.length - 1);
+      setGenerating(false);
+      setTimeout(() => setStage("result"), 600);
+    } catch (err) {
+      stopGenerationTimers();
+      setGenerating(false);
+      setGenError(err instanceof Error ? err.message : "Generation failed");
+      setGenProgress(0);
     }
-    if (genTimerRef.current) clearInterval(genTimerRef.current);
-    setGenProgress(100);
-    setGenStep(3);
-    setGenerating(false);
-    setTimeout(() => setStage("result"), 500);
+  };
+
+  const handleRetry = async () => {
+    if (!sessionId || !business) return;
+    const answerArray = Object.entries(answers).map(([qid, answer]) => ({ question_id: qid, answer }));
+    startGeneration(sessionId, rating, answerArray);
   };
 
   const handleRegenerate = async () => {
@@ -136,21 +158,21 @@ export default function PublicReviewPage() {
     setGenerating(true);
     setGenProgress(0);
     setGenStep(0);
-    setError(null);
+    setGenMessageIdx(0);
+    setGenError(null);
 
-    const steps = ["Re-analyzing your feedback", "Exploring new phrasing", "Crafting a fresh review", "Polishing the language"];
-    let stepIdx = 0;
     let progress = 0;
     genTimerRef.current = setInterval(() => {
-      progress += Math.random() * 8 + 3;
-      if (progress > 90) progress = 90;
-      setGenProgress(Math.min(progress, 90));
-      const newStep = Math.min(Math.floor((progress / 100) * steps.length), steps.length - 1);
-      if (newStep !== stepIdx) { stepIdx = newStep; setGenStep(stepIdx); }
-    }, 400);
+      progress += Math.random() * 6 + 2;
+      if (progress > 92) progress = 92;
+      setGenProgress(Math.min(progress, 92));
+    }, 500);
+    genMsgTimerRef.current = setInterval(() => {
+      setGenMessageIdx((i) => (i + 1) % GEN_MESSAGES.length);
+    }, 2200);
 
     const answerArray = Object.entries(answers).map(([qid, answer]) => ({ question_id: qid, answer }));
-    setTimeout(() => generateReview(sessionId, rating, answerArray), 600);
+    setTimeout(() => generateReview(sessionId, rating, answerArray), 800);
   };
 
   const handleSaveEdit = async () => {
@@ -174,17 +196,17 @@ export default function PublicReviewPage() {
   };
 
   useEffect(() => {
-    return () => { if (genTimerRef.current) clearInterval(genTimerRef.current); };
+    return () => stopGenerationTimers();
   }, []);
 
   const currentStepIndex = STAGE_ORDER.indexOf(stage);
   const progressSteps = STAGE_ORDER.slice(0, 5);
+  const answeredCount = Object.keys(answers).length;
+  const totalQuestions = questions.length;
 
   if (stage === "loading") return <><SpatialBackground /><div className="min-h-screen flex items-center justify-center"><div className="w-12 h-12 border-4 border-primary-500/30 border-t-primary-500 rounded-full animate-spin" /></div></>;
   if (stage === "error") return <><SpatialBackground /><div className="min-h-screen flex items-center justify-center text-center p-4"><div><h1 className="text-2xl font-bold text-white mb-2">Business Not Found</h1><p className="text-slate-400">This review link is invalid.</p></div></div></>;
   if (stage === "disabled") return <><SpatialBackground /><div className="min-h-screen flex items-center justify-center text-center p-4"><div><h1 className="text-2xl font-bold text-white mb-2">Reviews Temporarily Disabled</h1><p className="text-slate-400">Please check back later.</p></div></div></>;
-
-  const genSteps = ["Analyzing your rating", "Reading your feedback", "Crafting your review", "Polishing the language"];
 
   return (
     <>
@@ -223,7 +245,7 @@ export default function PublicReviewPage() {
           )}
 
           {stage === "rating" && (
-            <div className="glass-strong rounded-3xl p-10 text-center animate-scale-in">
+            <div className="glass-strong rounded-3xl p-10 text-center animate-step-in">
               <h2 className="text-2xl font-bold text-white mb-2">How was your experience?</h2>
               <p className="text-slate-400 mb-8">Tap to rate</p>
               <StarRating3D value={rating} onChange={setRating} />
@@ -234,24 +256,30 @@ export default function PublicReviewPage() {
           )}
 
           {stage === "questions" && (
-            <div className="glass-strong rounded-3xl p-10 animate-scale-in">
-              <h2 className="text-2xl font-bold text-white mb-6">Tell us more</h2>
+            <div className="glass-strong rounded-3xl p-8 sm:p-10 animate-step-in">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold text-white">Tell us more</h2>
+                <span className="text-xs text-slate-500">{answeredCount}/{totalQuestions}</span>
+              </div>
               <div className="space-y-6">
                 {questions.map((q, qi) => (
                   <div key={q.id} className="animate-slide-up" style={{ animationDelay: `${qi * 100}ms` }}>
                     <p className="text-white font-medium mb-3">{q.question_text}{q.is_required && <span className="text-error-400 ml-1">*</span>}</p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {q.options.map((opt) => (
-                        <button
-                          key={opt}
-                          onClick={() => setAnswers((a) => ({ ...a, [q.id]: opt }))}
-                          className={`choice3d px-4 py-3 rounded-xl text-sm font-medium transition-all ${
-                            answers[q.id] === opt ? "bg-primary-600/30 border border-primary-500/50 text-white scale-105" : "glass text-slate-300 hover:text-white hover:scale-102"
-                          }`}
-                        >
-                          {opt}
-                        </button>
-                      ))}
+                      {q.options.map((opt) => {
+                        const isSelected = answers[q.id] === opt;
+                        return (
+                          <button
+                            key={opt}
+                            onClick={() => setAnswers((a) => ({ ...a, [q.id]: opt }))}
+                            className={`choice3d px-4 py-3 rounded-xl text-sm font-medium transition-all text-left ${
+                              isSelected ? "bg-primary-600/30 border border-primary-500/50 text-white scale-105" : "glass text-slate-300 hover:text-white hover:scale-102"
+                            }`}
+                          >
+                            {opt}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 ))}
@@ -263,26 +291,21 @@ export default function PublicReviewPage() {
           )}
 
           {stage === "generating" && (
-            <div className="glass-strong rounded-3xl p-10 text-center animate-scale-in">
+            <div className="glass-strong rounded-3xl p-10 text-center animate-step-in">
               <div className="ai-generating rounded-2xl p-8 mb-6 relative overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-r from-primary-500/5 via-accent-500/10 to-primary-500/5 animate-aurora" />
-
-                <div className="relative">
-                  <div className="flex items-center justify-center gap-2 mb-6">
-                    {[0, 1, 2, 3].map((i) => (
-                      <div
-                        key={i}
-                        className={`w-3 h-3 rounded-full transition-all duration-300 ${i === genStep ? "bg-primary-400 scale-150" : i < genStep ? "bg-primary-500/60 scale-100" : "bg-slate-600 scale-75"}`}
-                        style={{ animation: `bounce 1s ${i * 0.15}s infinite` }}
-                      />
-                    ))}
+                <div className="relative flex flex-col items-center">
+                  <div className="relative w-24 h-24 mb-6">
+                    <div className="ai-orb absolute inset-0 rounded-full bg-gradient-to-br from-primary-500 to-accent-500 opacity-80" />
+                    <div className="ai-pulse-ring absolute inset-0 rounded-full border-2 border-primary-400/50" />
+                    <div className="ai-pulse-ring absolute inset-0 rounded-full border-2 border-primary-400/30" style={{ animationDelay: "1s" }} />
                   </div>
 
-                  <div className="space-y-2 mb-6">
-                    {genSteps.map((step, i) => (
+                  <div className="space-y-2 mb-6 w-full max-w-xs">
+                    {GEN_MESSAGES.map((msg, i) => (
                       <div key={i} className={`flex items-center justify-center gap-2 text-sm transition-all duration-300 ${i === genStep ? "text-white opacity-100" : i < genStep ? "text-primary-400/60 opacity-60" : "text-slate-600 opacity-30"}`}>
                         <span>{i < genStep ? "\u2713" : i === genStep ? "\u25CF" : "\u25CB"}</span>
-                        <span>{step}</span>
+                        <span>{msg}</span>
                       </div>
                     ))}
                   </div>
@@ -295,13 +318,26 @@ export default function PublicReviewPage() {
                   </div>
                 </div>
               </div>
-              <p className="text-lg font-medium text-white">Crafting your personalized review...</p>
-              <p className="text-sm text-slate-400 mt-1">Using your rating and feedback to write a natural review</p>
+
+              {genError ? (
+                <div className="animate-shake">
+                  <p className="text-lg font-medium text-error-400 mb-2">Generation hit a snag</p>
+                  <p className="text-sm text-slate-400 mb-4">{genError}</p>
+                  <button onClick={handleRetry} className="choice3d px-6 py-3 bg-gradient-to-r from-primary-600 to-primary-500 text-white font-semibold rounded-xl transition-all hover:scale-105">
+                    Try Again
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <p className="text-lg font-medium text-white">{GEN_MESSAGES[genMessageIdx]}...</p>
+                  <p className="text-sm text-slate-400 mt-1">Transforming your feedback into a natural review</p>
+                </>
+              )}
             </div>
           )}
 
           {stage === "result" && (
-            <div className="glass-strong rounded-3xl p-10 animate-scale-in">
+            <div className="glass-strong rounded-3xl p-8 sm:p-10 animate-review-reveal">
               <h2 className="text-2xl font-bold text-white mb-4 text-center">Your Review</h2>
               {editingReview ? (
                 <div className="mb-6">
@@ -349,7 +385,7 @@ export default function PublicReviewPage() {
           )}
 
           {stage === "google" && (
-            <div className="glass-strong rounded-3xl p-10 text-center animate-scale-in">
+            <div className="glass-strong rounded-3xl p-10 text-center animate-step-in">
               <div className="text-6xl mb-4 animate-bounce">{"\u2705"}</div>
               <h2 className="text-2xl font-bold text-white mb-2">Thank You!</h2>
               <p className="text-slate-300 mb-6">We've opened Google Reviews in a new tab. Paste your review there to share it with the world!</p>

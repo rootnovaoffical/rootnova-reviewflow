@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import Layout from "../../components/Layout";
+import BusinessShell from "./BusinessShell";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../context/AuthContext";
 import type { Question } from "../../lib/types";
@@ -63,10 +63,10 @@ export default function BusinessQuestions() {
     load();
   };
 
-  if (!questions) return <Layout title="Questions"><Loading /></Layout>;
+  if (!questions) return <BusinessShell title="Questions"><Loading /></BusinessShell>;
 
   return (
-    <Layout title="Questions">
+    <BusinessShell title="Questions">
       <div className="flex justify-end mb-4">
         <button onClick={() => setCreating(true)} className="px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white text-sm font-medium rounded-lg transition-colors">New Question</button>
       </div>
@@ -89,7 +89,7 @@ export default function BusinessQuestions() {
         </div>
       )}
       {(editing || creating) && <QuestionModal question={editing} onClose={() => { setEditing(null); setCreating(false); }} onSave={save} />}
-    </Layout>
+    </BusinessShell>
   );
 }
 

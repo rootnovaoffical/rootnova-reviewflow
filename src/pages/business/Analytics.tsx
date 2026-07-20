@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import Layout from "../../components/Layout";
+import BusinessShell from "./BusinessShell";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../context/AuthContext";
 import { Loading, EmptyState } from "../../components/States";
@@ -29,13 +29,13 @@ export default function BusinessAnalytics() {
       });
   }, [profile]);
 
-  if (!events) return <Layout title="Analytics"><Loading /></Layout>;
+  if (!events) return <BusinessShell title="Analytics"><Loading /></BusinessShell>;
 
   const maxCount = Math.max(...dailyData.map((d) => d.count), 1);
   const eventTypes = ["page_view", "review_start", "rating_submitted", "questions_submitted", "ai_completion", "copy_event", "google_click"];
 
   return (
-    <Layout title="Analytics">
+    <BusinessShell title="Analytics">
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 mb-6">
         {eventTypes.map((t) => (
           <div key={t} className="glass rounded-xl p-4">
@@ -57,6 +57,6 @@ export default function BusinessAnalytics() {
           </div>
         )}
       </div>
-    </Layout>
+    </BusinessShell>
   );
 }

@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import Layout from "../../components/Layout";
+import BusinessShell from "./BusinessShell";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
 import { updateProfile } from "../../lib/auth";
@@ -32,7 +32,7 @@ export default function BusinessSettings() {
   };
 
   return (
-    <Layout title="Settings">
+    <BusinessShell title="Settings">
       <div className="glass rounded-2xl p-6 max-w-lg">
         <h3 className="text-sm font-medium text-slate-400 mb-4">My Profile</h3>
         <div className="flex items-center gap-4 mb-4">
@@ -45,6 +45,6 @@ export default function BusinessSettings() {
         </div>
         <button onClick={saveProfile} className="mt-4 px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white text-sm font-medium rounded-lg transition-colors">Save Profile</button>
       </div>
-    </Layout>
+    </BusinessShell>
   );
 }

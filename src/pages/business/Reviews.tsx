@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import Layout from "../../components/Layout";
+import BusinessShell from "./BusinessShell";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../context/AuthContext";
 import type { ReviewSession } from "../../lib/types";
@@ -20,12 +20,12 @@ export default function BusinessReviews() {
       });
   }, [profile]);
 
-  if (!reviews) return <Layout title="Reviews"><Loading /></Layout>;
+  if (!reviews) return <BusinessShell title="Reviews"><Loading /></BusinessShell>;
 
   const filtered = filter ? reviews.filter((r) => r.rating === filter) : reviews;
 
   return (
-    <Layout title="Reviews">
+    <BusinessShell title="Reviews">
       <div className="flex gap-2 mb-4">
         <button onClick={() => setFilter(null)} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${filter === null ? "bg-primary-600 text-white" : "glass text-slate-300"}`}>All</button>
         {[5, 4, 3, 2, 1].map((s) => (
@@ -46,6 +46,6 @@ export default function BusinessReviews() {
           ))}
         </div>
       )}
-    </Layout>
+    </BusinessShell>
   );
 }

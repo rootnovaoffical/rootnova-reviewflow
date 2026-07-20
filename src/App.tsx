@@ -34,6 +34,7 @@ import PartnerBilling from "./pages/partner/Billing";
 import PartnerSettings from "./pages/partner/Settings";
 
 import BusinessDashboard from "./pages/business/Dashboard";
+import BusinessOnboarding from "./pages/business/Onboarding";
 import BusinessMyBusiness from "./pages/business/MyBusiness";
 import BusinessQuestions from "./pages/business/Questions";
 import BusinessReviews from "./pages/business/Reviews";
@@ -90,6 +91,7 @@ export default function App() {
                 <Route path="/partner/settings" element={<ProtectedRoute roles={[...PARTNER_ROLES]}><PartnerSettings /></ProtectedRoute>} />
 
                 <Route path="/business" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><BusinessDashboard /></ProtectedRoute>} />
+                <Route path="/business/onboarding" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><BusinessOnboarding /></ProtectedRoute>} />
                 <Route path="/business/my-business" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><BusinessMyBusiness /></ProtectedRoute>} />
                 <Route path="/business/questions" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><BusinessQuestions /></ProtectedRoute>} />
                 <Route path="/business/reviews" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><BusinessReviews /></ProtectedRoute>} />

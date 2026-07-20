@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import Layout from "../../components/Layout";
+import BusinessShell from "./BusinessShell";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../context/AuthContext";
 import type { Business } from "../../lib/types";
@@ -59,11 +59,11 @@ export default function BusinessMyBusiness() {
     if (logoRef.current) logoRef.current.value = "";
   };
 
-  if (loading) return <Layout title="My Business"><Loading /></Layout>;
-  if (!business) return <Layout title="My Business"><ErrorState message="No business assigned to your account." /></Layout>;
+  if (loading) return <BusinessShell title="My Business"><Loading /></BusinessShell>;
+  if (!business) return <BusinessShell title="My Business"><ErrorState message="No business assigned to your account." /></BusinessShell>;
 
   return (
-    <Layout title={business.name}>
+    <BusinessShell title={business.name}>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="glass rounded-2xl p-6">
           <div className="flex items-center gap-4 mb-4">
@@ -110,6 +110,6 @@ export default function BusinessMyBusiness() {
           {business.google_review_url && <a href={business.google_review_url} target="_blank" rel="noreferrer" className="mt-2 block text-center py-2 bg-success-600 hover:bg-success-500 text-white text-sm font-medium rounded-lg transition-colors">Open Google Review</a>}
         </div>
       </div>
-    </Layout>
+    </BusinessShell>
   );
 }

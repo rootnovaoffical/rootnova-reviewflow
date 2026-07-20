@@ -53,6 +53,11 @@ export interface Business {
   public_review_enabled: boolean;
   status: string;
   organization_id: string | null;
+  business_category: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
+  location_city: string | null;
+  onboarding_completed: boolean;
   created_at: string;
   updated_at: string;
 }

@@ -116,6 +116,8 @@ export default function PublicReviewPage() {
     setTimeout(() => generateReview(sid, r, ans), 800);
   };
 
+  const FETCH_TIMEOUT_MS = 30000;
+
   const stopGenerationTimers = () => {
     if (genTimerRef.current) { clearInterval(genTimerRef.current); genTimerRef.current = null; }
     if (genMsgTimerRef.current) { clearInterval(genMsgTimerRef.current); genMsgTimerRef.current = null; }
@@ -123,11 +125,15 @@ export default function PublicReviewPage() {
 
   const generateReview = async (sid: string, r: number, ans: Record<string, unknown>[]) => {
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-review`, {
         method: "POST",
         headers: { "Content-Type": "application/json", apikey: import.meta.env.VITE_SUPABASE_ANON_KEY },
         body: JSON.stringify({ sessionId: sid, rating: r, answers: ans, businessId: business?.id }),
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
       if (!res.ok) throw new Error(`Request failed (${res.status})`);
       const json = await res.json();
       const review = json.review || "Thank you for your feedback! We're glad you had a great experience.";
@@ -142,7 +148,8 @@ export default function PublicReviewPage() {
     } catch (err) {
       stopGenerationTimers();
       setGenerating(false);
-      setGenError(err instanceof Error ? err.message : "Generation failed");
+      const isTimeout = err instanceof DOMException && err.name === "AbortError";
+      setGenError(isTimeout ? "Generation timed out. Please try again." : (err instanceof Error ? err.message : "Generation failed"));
       setGenProgress(0);
     }
   };

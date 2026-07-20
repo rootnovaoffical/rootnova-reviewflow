@@ -49,13 +49,13 @@ export default function BusinessMyBusiness() {
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !business) return;
-    const url = await uploadBusinessLogo(business.id, file);
+    const { url, error: uploadError } = await uploadBusinessLogo(business.id, file);
     if (url) {
       await supabase.from("businesses").update({ logo_url: url }).eq("id", business.id);
       if (profile) await insertAuditLog({ actor_id: profile.id, actor_email: profile.email, action: "business_logo_updated", target_type: "business", target_id: business.id });
       showToast("Logo updated", "success");
       supabase.from("businesses").select("*").eq("id", business.id).single().then(({ data }) => setBusiness(data as Business));
-    } else { showToast("Upload failed", "error"); }
+    } else { showToast(uploadError || "Upload failed", "error"); }
     if (logoRef.current) logoRef.current.value = "";
   };
 

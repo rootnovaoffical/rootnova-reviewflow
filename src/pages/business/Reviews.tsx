@@ -3,7 +3,8 @@ import BusinessShell from "./BusinessShell";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
-import { Loading, EmptyState } from "../../components/States";
+import { SkeletonList } from "../../components/Skeleton";
+import { EmptyState } from "../../components/States";
 import { formatDateTime, timeAgo } from "../../lib/utils";
 import type { ReviewSession } from "../../lib/types";
 
@@ -41,11 +42,14 @@ export default function BusinessReviews() {
     return result;
   }, [reviews, filter, search, dateFilter]);
 
-  if (!filtered) return <BusinessShell title="Reviews"><Loading /></BusinessShell>;
+  if (!filtered) return <BusinessShell title="Reviews"><div className="p-4 md:p-8"><SkeletonList items={4} /></div></BusinessShell>;
 
-  const handleCopy = (text: string) => {
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const handleCopy = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
-    showToast("Review copied", "success");
+    setCopiedId(id);
+    showToast("Review copied to clipboard", "success");
+    setTimeout(() => setCopiedId(null), 1500);
   };
 
   return (
@@ -114,10 +118,10 @@ export default function BusinessReviews() {
                   <p className="text-xs text-slate-600">{timeAgo(r.created_at)}</p>
                   {r.ai_generated_review && (
                     <button
-                      onClick={(e) => { e.stopPropagation(); handleCopy(r.ai_generated_review!); }}
-                      className="text-xs text-primary-400 hover:text-primary-300 transition-colors"
+                      onClick={(e) => { e.stopPropagation(); handleCopy(r.ai_generated_review!, r.id); }}
+                      className={`text-xs text-primary-400 hover:text-primary-300 transition-colors ${copiedId === r.id ? "copy-success text-success-400" : ""}`}
                     >
-                      Copy
+                      {copiedId === r.id ? "\u2713 Copied" : "Copy"}
                     </button>
                   )}
                 </div>
@@ -160,8 +164,8 @@ export default function BusinessReviews() {
             )}
             <div className="flex gap-3">
               {selected.ai_generated_review && (
-                <button onClick={() => handleCopy(selected.ai_generated_review!)} className="btn-primary flex-1 py-2.5 text-white text-sm font-medium rounded-lg">
-                  Copy Review
+                <button onClick={() => handleCopy(selected.ai_generated_review!, selected.id)} className={`btn-primary flex-1 py-2.5 text-white text-sm font-medium rounded-lg ${copiedId === selected.id ? "copy-success" : ""}`}>
+                  {copiedId === selected.id ? "\u2713 Copied!" : "Copy Review"}
                 </button>
               )}
               <button onClick={() => setSelected(null)} className="btn-ghost flex-1 py-2.5 text-white text-sm font-medium rounded-lg">

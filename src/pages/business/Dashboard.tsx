@@ -3,9 +3,11 @@ import { useNavigate } from "react-router-dom";
 import BusinessShell from "./BusinessShell";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../context/AuthContext";
-import { Loading } from "../../components/States";
+import { SkeletonStatGrid, SkeletonCard } from "../../components/Skeleton";
 import { StatTile, RatingDistribution, Sparkline } from "../../components/StatTile";
+import { InfoDot } from "../../components/Tooltip";
 import { timeAgo } from "../../lib/utils";
+import { useToast } from "../../context/ToastContext";
 import type { Business, ReviewSession } from "../../lib/types";
 
 export default function BusinessDashboard() {
@@ -35,7 +37,26 @@ export default function BusinessDashboard() {
       });
   }, [profile, navigate]);
 
-  if (loading) return <BusinessShell title="Dashboard"><Loading /></BusinessShell>;
+  const { showToast } = useToast();
+  const [copied, setCopied] = useState(false);
+
+  if (loading) return (
+    <BusinessShell title="Dashboard">
+      <div className="p-4 md:p-8 space-y-6">
+        <div className="flex items-center gap-4">
+          <SkeletonCard className="!min-h-[56px] w-14" />
+          <div className="flex-1"><SkeletonCard className="!min-h-[56px]" /></div>
+        </div>
+        <SkeletonStatGrid />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+        </div>
+        <SkeletonCard className="!min-h-[200px]" />
+      </div>
+    </BusinessShell>
+  );
 
   if (!business) {
     return (
@@ -94,12 +115,26 @@ export default function BusinessDashboard() {
           </div>
         </div>
 
-        {/* Animated stat tiles */}
+        {/* Animated stat tiles with contextual tooltips */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatTile label="Total Reviews" value={reviews.length} icon={"\u2B50"} accent="primary" delay={0} />
-          <StatTile label="Avg Rating" value={avg} icon={"\uD83D\uDCCA"} accent="accent" delay={80} />
-          <StatTile label="AI Reviews" value={aiGenerated} icon={"\u2728"} accent="success" delay={160} hint="Generated for customers" />
-          <StatTile label="Last 7 Days" value={last7} icon={"\uD83D\uDE80"} accent="warning" delay={240} hint="New reviews" />
+          <div className="stat-tile-3d">
+            <StatTile label="Total Reviews" value={reviews.length} icon={"\u2B50"} accent="primary" delay={0} />
+          </div>
+          <div className="stat-tile-3d">
+            <div className="relative">
+              <StatTile label="Avg Rating" value={avg} icon={"\uD83D\uDCCA"} accent="accent" delay={80} />
+              <div className="absolute top-2 right-2"><InfoDot content="The average star rating across all your reviews" /></div>
+            </div>
+          </div>
+          <div className="stat-tile-3d">
+            <div className="relative">
+              <StatTile label="AI Reviews" value={aiGenerated} icon={"\u2728"} accent="success" delay={160} hint="Generated for customers" />
+              <div className="absolute top-2 right-2"><InfoDot content="Reviews automatically written by AI based on customer ratings & answers" /></div>
+            </div>
+          </div>
+          <div className="stat-tile-3d">
+            <StatTile label="Last 7 Days" value={last7} icon={"\uD83D\uDE80"} accent="warning" delay={240} hint="New reviews" />
+          </div>
         </div>
 
         {/* Two-column layout */}
@@ -132,10 +167,10 @@ export default function BusinessDashboard() {
               <p className="text-sm text-primary-300 break-all">{reviewUrl}</p>
             </div>
             <button
-              onClick={() => { navigator.clipboard.writeText(reviewUrl); }}
-              className="btn-primary w-full py-2.5 text-white text-sm font-medium rounded-lg"
+              onClick={() => { navigator.clipboard.writeText(reviewUrl); setCopied(true); showToast("Review link copied to clipboard", "success"); setTimeout(() => setCopied(false), 1500); }}
+              className={`btn-primary w-full py-2.5 text-white text-sm font-medium rounded-lg ${copied ? "copy-success" : ""}`}
             >
-              Copy Link
+              {copied ? "\u2713 Copied!" : "Copy Link"}
             </button>
             <div className="mt-4 space-y-1.5">
               <button onClick={() => navigate("/business/questions")} className="w-full text-left px-3 py-2 rounded-lg text-sm text-slate-300 hover:bg-white/5 transition-colors">

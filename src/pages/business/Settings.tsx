@@ -7,7 +7,8 @@ import { updateProfile } from "../../lib/auth";
 import { uploadAvatar, uploadBusinessLogo } from "../../lib/storage";
 import { insertAuditLog } from "../../lib/auth";
 import Avatar from "../../components/Avatar";
-import { Loading, ErrorState } from "../../components/States";
+import { SkeletonCard } from "../../components/Skeleton";
+import { ErrorState } from "../../components/States";
 import type { Business } from "../../lib/types";
 
 type Tab = "profile" | "business" | "branding" | "google" | "reviewflow";
@@ -122,7 +123,7 @@ export default function BusinessSettings() {
     showToast("ReviewFlow settings saved", "success");
   };
 
-  if (loading) return <BusinessShell title="Settings"><Loading /></BusinessShell>;
+  if (loading) return <BusinessShell title="Settings"><div className="p-4 md:p-8 space-y-6"><SkeletonCard /><SkeletonCard /><SkeletonCard /></div></BusinessShell>;
   if (!business) return <BusinessShell title="Settings"><ErrorState message="No business assigned to your account." /></BusinessShell>;
 
   const tabs: { key: Tab; label: string; icon: string }[] = [

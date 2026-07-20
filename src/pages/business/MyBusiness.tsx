@@ -3,7 +3,8 @@ import BusinessShell from "./BusinessShell";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../context/AuthContext";
 import type { Business } from "../../lib/types";
-import { Loading, ErrorState } from "../../components/States";
+import { SkeletonCard } from "../../components/Skeleton";
+import { ErrorState } from "../../components/States";
 import { useToast } from "../../context/ToastContext";
 import { insertAuditLog } from "../../lib/auth";
 import { uploadBusinessLogo } from "../../lib/storage";
@@ -15,6 +16,7 @@ export default function BusinessMyBusiness() {
   const [business, setBusiness] = useState<Business | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [editForm, setEditForm] = useState({ name: "", welcome_message: "", google_review_url: "", primary_color: "#6366f1", secondary_color: "#a855f7", public_review_enabled: true });
   const logoRef = useRef<HTMLInputElement>(null);
   const reviewUrl = business ? `${window.location.origin}/r/${business.slug}` : null;
@@ -59,7 +61,7 @@ export default function BusinessMyBusiness() {
     if (logoRef.current) logoRef.current.value = "";
   };
 
-  if (loading) return <BusinessShell title="My Business"><Loading /></BusinessShell>;
+  if (loading) return <BusinessShell title="My Business"><div className="p-4 md:p-8 grid grid-cols-1 lg:grid-cols-3 gap-6"><SkeletonCard /><SkeletonCard /><SkeletonCard /></div></BusinessShell>;
   if (!business) return <BusinessShell title="My Business"><ErrorState message="No business assigned to your account." /></BusinessShell>;
 
   return (
@@ -106,7 +108,7 @@ export default function BusinessMyBusiness() {
         <div className="glass rounded-2xl p-6">
           <h3 className="text-sm font-medium text-slate-400 mb-4">Review Link</h3>
           <p className="text-xs text-slate-500 mb-3 break-all">{reviewUrl}</p>
-          <button onClick={() => { if (reviewUrl) navigator.clipboard.writeText(reviewUrl); showToast("Link copied", "success"); }} className="w-full py-2 glass text-white text-sm font-medium rounded-lg hover:bg-white/10 transition-colors">Copy Link</button>
+          <button onClick={() => { if (reviewUrl) navigator.clipboard.writeText(reviewUrl); setCopied(true); showToast("Link copied", "success"); setTimeout(() => setCopied(false), 1500); }} className={`w-full py-2 glass text-white text-sm font-medium rounded-lg hover:bg-white/10 transition-colors ${copied ? "copy-success" : ""}`}>{copied ? "\u2713 Copied!" : "Copy Link"}</button>
           {business.google_review_url && <a href={business.google_review_url} target="_blank" rel="noreferrer" className="mt-2 block text-center py-2 bg-success-600 hover:bg-success-500 text-white text-sm font-medium rounded-lg transition-colors">Open Google Review</a>}
         </div>
       </div>

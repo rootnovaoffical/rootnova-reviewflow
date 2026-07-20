@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import ProfileMenu from "./ProfileMenu";
 import { useBranding } from "../context/BrandingContext";
 import { cacheBustUrl } from "../lib/utils";
+import BusinessAmbient from "./BusinessAmbient";
 
 export interface NavItem { label: string; to: string; icon?: ReactNode; }
 
@@ -39,7 +40,8 @@ export function ShellLayout({ children, nav, title, brandLogo: _brandLogo, brand
   );
 
   return (
-    <div className="min-h-screen flex bg-slate-950">
+    <div className="min-h-screen flex bg-slate-950 relative">
+      <BusinessAmbient />
       {/* Desktop sidebar */}
       <aside className="w-60 border-r border-white/5 flex flex-col shrink-0 hidden md:flex bg-slate-950/50 backdrop-blur-sm">
         <SidebarContent />

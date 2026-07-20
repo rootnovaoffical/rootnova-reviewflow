@@ -3,7 +3,8 @@ import BusinessShell from "./BusinessShell";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../context/AuthContext";
 import type { Question } from "../../lib/types";
-import { Loading, EmptyState } from "../../components/States";
+import { SkeletonList } from "../../components/Skeleton";
+import { EmptyState } from "../../components/States";
 import { useToast } from "../../context/ToastContext";
 import { insertAuditLog } from "../../lib/auth";
 
@@ -63,7 +64,7 @@ export default function BusinessQuestions() {
     load();
   };
 
-  if (!questions) return <BusinessShell title="Questions"><Loading /></BusinessShell>;
+  if (!questions) return <BusinessShell title="Questions"><div className="p-4 md:p-8"><SkeletonList items={3} /></div></BusinessShell>;
 
   return (
     <BusinessShell title="Questions">

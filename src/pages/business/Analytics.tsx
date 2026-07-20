@@ -2,8 +2,10 @@ import { useEffect, useState, useMemo } from "react";
 import BusinessShell from "./BusinessShell";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../context/AuthContext";
-import { Loading, EmptyState } from "../../components/States";
+import { SkeletonStatGrid, SkeletonChart } from "../../components/Skeleton";
 import { StatTile, RatingDistribution, Sparkline } from "../../components/StatTile";
+import { InfoDot } from "../../components/Tooltip";
+import { EmptyState } from "../../components/States";
 import type { ReviewSession, AnalyticsEvent } from "../../lib/types";
 
 export default function BusinessAnalytics() {
@@ -60,7 +62,18 @@ export default function BusinessAnalytics() {
     return { ratings, avg, positive, negative, aiGenerated, dailyReviews, eventCounts, trend, last7Count: last7.length };
   }, [reviews, events]);
 
-  if (loading) return <BusinessShell title="Analytics"><Loading /></BusinessShell>;
+  if (loading) return (
+    <BusinessShell title="Analytics">
+      <div className="p-4 md:p-8 space-y-6">
+        <SkeletonStatGrid />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <SkeletonChart />
+          <SkeletonChart />
+        </div>
+        <SkeletonChart />
+      </div>
+    </BusinessShell>
+  );
 
   const hasData = reviews.length > 0 || events.length > 0;
 
@@ -76,10 +89,10 @@ export default function BusinessAnalytics() {
           <>
             {/* Key metrics */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <StatTile label="Total Reviews" value={reviews.length} icon={"\u2B50"} accent="primary" delay={0} />
-              <StatTile label="Average Rating" value={stats.avg} icon={"\uD83D\uDCCA"} accent="accent" delay={80} />
-              <StatTile label="Positive (4-5)" value={stats.positive} icon={"\u2705"} accent="success" delay={160} hint={`${reviews.length > 0 ? Math.round((stats.positive / reviews.length) * 100) : 0}% of total`} />
-              <StatTile label="AI Generated" value={stats.aiGenerated} icon={"\u2728"} accent="warning" delay={240} hint="Reviews written by AI" />
+              <div className="stat-tile-3d"><StatTile label="Total Reviews" value={reviews.length} icon={"\u2B50"} accent="primary" delay={0} /></div>
+              <div className="stat-tile-3d"><div className="relative"><StatTile label="Average Rating" value={stats.avg} icon={"\uD83D\uDCCA"} accent="accent" delay={80} /><div className="absolute top-2 right-2"><InfoDot content="Average across all submitted ratings" /></div></div></div>
+              <div className="stat-tile-3d"><StatTile label="Positive (4-5)" value={stats.positive} icon={"\u2705"} accent="success" delay={160} hint={`${reviews.length > 0 ? Math.round((stats.positive / reviews.length) * 100) : 0}% of total`} /></div>
+              <div className="stat-tile-3d"><div className="relative"><StatTile label="AI Generated" value={stats.aiGenerated} icon={"\u2728"} accent="warning" delay={240} hint="Reviews written by AI" /><div className="absolute top-2 right-2"><InfoDot content="Reviews automatically generated from customer feedback" /></div></div></div>
             </div>
 
             {/* Charts row */}

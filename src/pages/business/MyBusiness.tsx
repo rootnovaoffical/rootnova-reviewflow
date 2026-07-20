@@ -66,23 +66,23 @@ export default function BusinessMyBusiness() {
 
   return (
     <BusinessShell title={business.name}>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="glass rounded-2xl p-6">
+      <div className="page-enter grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="glass rounded-2xl p-6 card-hover animate-fade-up" style={{ animationDelay: "0ms" }}>
           <div className="flex items-center gap-4 mb-4">
             {business.logo_url ? <img src={business.logo_url} alt={business.name} className="w-14 h-14 rounded-xl object-cover" /> : <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center text-white font-bold text-xl">{business.name[0]}</div>}
             <div><h2 className="text-lg font-bold text-white">{business.name}</h2><p className="text-sm text-slate-400">{business.status}</p></div>
           </div>
           {editing ? (
             <div className="space-y-3">
-              <input value={editForm.name} onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))} className="w-full px-3 py-2 bg-slate-900/50 border border-white/10 rounded-lg text-white text-sm" />
-              <textarea value={editForm.welcome_message} onChange={(e) => setEditForm((f) => ({ ...f, welcome_message: e.target.value }))} className="w-full px-3 py-2 bg-slate-900/50 border border-white/10 rounded-lg text-white text-sm" rows={2} />
-              <input value={editForm.google_review_url} onChange={(e) => setEditForm((f) => ({ ...f, google_review_url: e.target.value }))} placeholder="Google Review URL" className="w-full px-3 py-2 bg-slate-900/50 border border-white/10 rounded-lg text-white text-sm" />
+              <input value={editForm.name} onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))} className="input-field w-full" />
+              <textarea value={editForm.welcome_message} onChange={(e) => setEditForm((f) => ({ ...f, welcome_message: e.target.value }))} className="input-field w-full" rows={2} />
+              <input value={editForm.google_review_url} onChange={(e) => setEditForm((f) => ({ ...f, google_review_url: e.target.value }))} placeholder="Google Review URL" className="input-field w-full" />
               <div className="flex gap-3">
                 <div><label className="block text-xs text-slate-400 mb-1">Primary Color</label><input type="color" value={editForm.primary_color} onChange={(e) => setEditForm((f) => ({ ...f, primary_color: e.target.value }))} className="w-12 h-8 rounded" /></div>
                 <div><label className="block text-xs text-slate-400 mb-1">Secondary Color</label><input type="color" value={editForm.secondary_color} onChange={(e) => setEditForm((f) => ({ ...f, secondary_color: e.target.value }))} className="w-12 h-8 rounded" /></div>
               </div>
               <label className="flex items-center gap-2 text-sm text-slate-300"><input type="checkbox" checked={editForm.public_review_enabled} onChange={(e) => setEditForm((f) => ({ ...f, public_review_enabled: e.target.checked }))} /> Public reviews enabled</label>
-              <div className="flex gap-2"><button onClick={saveEdit} className="flex-1 py-2 bg-primary-600 text-white text-sm rounded-lg">Save</button><button onClick={() => setEditing(false)} className="flex-1 py-2 glass text-white text-sm rounded-lg">Cancel</button></div>
+              <div className="flex gap-2"><button onClick={saveEdit} className="btn-primary flex-1">Save</button><button onClick={() => setEditing(false)} className="btn-ghost flex-1">Cancel</button></div>
             </div>
           ) : (
             <div>
@@ -92,23 +92,23 @@ export default function BusinessMyBusiness() {
                 <div><dt className="text-slate-500">Public Reviews</dt><dd className="text-white">{business.public_review_enabled ? "Enabled" : "Disabled"}</dd></div>
                 <div className="flex gap-3"><div><dt className="text-slate-500">Primary</dt><dd><div className="w-6 h-6 rounded" style={{ background: business.primary_color }} /></dd></div><div><dt className="text-slate-500">Secondary</dt><dd><div className="w-6 h-6 rounded" style={{ background: business.secondary_color }} /></dd></div></div>
               </dl>
-              <button onClick={() => setEditing(true)} className="mt-4 w-full py-2 glass text-white text-sm font-medium rounded-lg hover:bg-white/10 transition-colors">Edit</button>
+              <button onClick={() => setEditing(true)} className="btn-ghost mt-4 w-full">Edit</button>
             </div>
           )}
           <div className="mt-4">
             <input ref={logoRef} type="file" accept="image/*" onChange={handleLogoUpload} className="block w-full text-sm text-slate-400 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-primary-600 file:text-white file:cursor-pointer" />
           </div>
         </div>
-        <div className="glass rounded-2xl p-6">
+        <div className="glass rounded-2xl p-6 card-hover animate-fade-up" style={{ animationDelay: "80ms" }}>
           <h3 className="text-sm font-medium text-slate-400 mb-4">ReviewFlow QR</h3>
           {qrUrl && <img src={qrUrl} alt="QR" className="w-48 h-48 rounded-xl mb-4" />}
           <p className="text-xs text-slate-500 mb-3 break-all">{reviewUrl}</p>
-          {qrUrl && <button onClick={() => downloadQR(qrUrl, `${business.slug}-qr.png`)} className="w-full py-2 bg-primary-600 hover:bg-primary-500 text-white text-sm font-medium rounded-lg transition-colors">Download QR</button>}
+          {qrUrl && <button onClick={() => downloadQR(qrUrl, `${business.slug}-qr.png`)} className="btn-primary w-full">Download QR</button>}
         </div>
-        <div className="glass rounded-2xl p-6">
+        <div className="glass rounded-2xl p-6 card-hover animate-fade-up" style={{ animationDelay: "160ms" }}>
           <h3 className="text-sm font-medium text-slate-400 mb-4">Review Link</h3>
           <p className="text-xs text-slate-500 mb-3 break-all">{reviewUrl}</p>
-          <button onClick={() => { if (reviewUrl) navigator.clipboard.writeText(reviewUrl); setCopied(true); showToast("Link copied", "success"); setTimeout(() => setCopied(false), 1500); }} className={`w-full py-2 glass text-white text-sm font-medium rounded-lg hover:bg-white/10 transition-colors ${copied ? "copy-success" : ""}`}>{copied ? "\u2713 Copied!" : "Copy Link"}</button>
+          <button onClick={() => { if (reviewUrl) navigator.clipboard.writeText(reviewUrl); setCopied(true); showToast("Link copied", "success"); setTimeout(() => setCopied(false), 1500); }} className={`btn-ghost w-full ${copied ? "copy-success" : ""}`}>{copied ? "\u2713 Copied!" : "Copy Link"}</button>
           {business.google_review_url && <a href={business.google_review_url} target="_blank" rel="noreferrer" className="mt-2 block text-center py-2 bg-success-600 hover:bg-success-500 text-white text-sm font-medium rounded-lg transition-colors">Open Google Review</a>}
         </div>
       </div>

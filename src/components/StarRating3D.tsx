@@ -47,10 +47,7 @@ export default function StarRating3D({ value, onChange, disabled }: StarRating3D
       </div>
 
       {mood && display > 0 && (
-        <div
-          key={display}
-          className="flex flex-col items-center gap-2 animate-fade-in"
-        >
+        <div className="rating-mood-block flex flex-col items-center gap-2">
           <div
             className="text-4xl sm:text-5xl transition-all duration-500"
             style={{ filter: `drop-shadow(0 4px 12px ${mood.color})` }}

@@ -81,8 +81,6 @@ body { margin: 0; font-family: "Inter", system-ui, sans-serif; -webkit-font-smoo
   background: rgba(255, 255, 255, 0.08);
   backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.12);
-  will-change: opacity;
-  transform: translateZ(0);
 }
 
 .ai-generating {
@@ -156,6 +154,14 @@ body { margin: 0; font-family: "Inter", system-ui, sans-serif; -webkit-font-smoo
 
 .rating-mood-glow {
   transition: box-shadow 0.5s ease;
+}
+
+.rating-mood-block {
+  animation: moodEnter 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+@keyframes moodEnter {
+  0% { opacity: 0; transform: translateY(6px); }
+  100% { opacity: 1; transform: translateY(0); }
 }
 
 .stage-transition {

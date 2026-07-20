@@ -185,7 +185,7 @@ export default function PublicReviewPage() {
             </div>
           )}
 
-          <div key={stage} className="stage-transition">
+          <div className="stage-transition" key={stage}>
           {stage === "welcome" && (
             <div className="glass-strong rounded-3xl p-10 text-center">
               <h1 className="text-3xl font-bold text-white mb-3">{business?.name}</h1>

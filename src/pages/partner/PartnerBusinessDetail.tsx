@@ -3,7 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import QRCode from "qrcode";
 import { supabase } from "../../lib/supabase";
 import { Loading, ErrorState, EmptyState } from "../../components/States";
-import { Avatar } from "../../components/Avatar";
+import Avatar from "../../components/Avatar";
 import { useToast } from "../../components/Toast";
 import { Modal, ConfirmDialog } from "../../components/Modal";
 import { timeAgo, cacheBustUrl } from "../../lib/utils";
@@ -128,7 +128,7 @@ export function PartnerBusinessDetail() {
     <div className="space-y-6">
       <div className="flex items-center gap-3">
         <Link to="/partner/businesses" className="text-ink-400 hover:text-ink-100">←</Link>
-        <Avatar src={business.logo_url ? cacheBustUrl(business.logo_url) : business.logo_url} name={business.name} size="lg" ring />
+        <Avatar url={business.logo_url ? cacheBustUrl(business.logo_url) : business.logo_url} name={business.name} size="lg" ring />
         <div className="flex-1"><h1 className="font-display text-2xl font-bold text-ink-50">{business.name}</h1><p className="text-sm text-ink-400">/{business.slug}</p></div>
         <span className={`rounded-full px-3 py-1 text-xs font-semibold ${business.status === "active" ? "bg-emerald-500/15 text-emerald-300" : "bg-ink-700 text-ink-400"}`}>{business.status}</span>
       </div>
@@ -197,7 +197,7 @@ export function PartnerBusinessDetail() {
           <div className="card space-y-4">
             <h3 className="font-display text-base font-semibold text-ink-50">Business Logo</h3>
             <div className="flex items-center gap-4">
-              <Avatar src={business.logo_url ? cacheBustUrl(business.logo_url) : business.logo_url} name={business.name} size="xl" ring />
+              <Avatar url={business.logo_url ? cacheBustUrl(business.logo_url) : business.logo_url} name={business.name} size="xl" ring />
               <label className="btn-secondary cursor-pointer">
                 {logoUploading ? "Uploading…" : "Upload Logo"}
                 <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleLogoUpload(f); e.currentTarget.value = ""; }} disabled={logoUploading} />

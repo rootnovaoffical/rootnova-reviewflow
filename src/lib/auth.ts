@@ -42,3 +42,5 @@ export async function callManageAdmin(action: string, payload: Record<string, un
   if (!res.ok) return { ok: false, error: json.error || `HTTP ${res.status}` };
   return { ok: true, data: json };
 }
+
+export { useAuth } from "../context/AuthContext";

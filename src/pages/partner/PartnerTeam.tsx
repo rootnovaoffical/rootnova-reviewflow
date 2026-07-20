@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../context/AuthContext";
 import { Loading, ErrorState, EmptyState } from "../../components/States";
-import { Avatar } from "../../components/Avatar";
+import Avatar from "../../components/Avatar";
 import { timeAgo } from "../../lib/utils";
 
 export function PartnerTeam() {
@@ -34,7 +34,7 @@ export function PartnerTeam() {
           {members.map((m: any) => (
             <div key={m.id} className="card flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <Avatar src={m.profile?.avatar_url} name={m.profile?.full_name || "?"} size="md" />
+                <Avatar url={m.profile?.avatar_url} name={m.profile?.full_name || "?"} size="md" />
                 <div><p className="font-medium text-ink-50">{m.profile?.full_name || "Unknown"}</p><p className="text-sm text-ink-400">{m.profile?.email}</p></div>
               </div>
               <div className="flex items-center gap-3"><span className="rounded-full bg-violet-500/15 px-2.5 py-0.5 text-xs font-semibold text-violet-300">{m.role}</span><span className="text-xs text-ink-400">{timeAgo(m.created_at)}</span></div>

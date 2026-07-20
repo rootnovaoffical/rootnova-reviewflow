@@ -5,6 +5,7 @@ export interface Toast { id: string; message: string; type: "success" | "error" 
 interface ToastContextValue {
   toasts: Toast[];
   showToast: (message: string, type?: Toast["type"]) => void;
+  show: (message: string, type?: Toast["type"]) => void;
   dismissToast: (id: string) => void;
 }
 
@@ -24,7 +25,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   }, [dismissToast]);
 
   return (
-    <ToastContext.Provider value={{ toasts, showToast, dismissToast }}>
+    <ToastContext.Provider value={{ toasts, showToast, show: showToast, dismissToast }}>
       {children}
       <div className="fixed top-4 right-4 z-[9999] space-y-2">
         {toasts.map((t) => (

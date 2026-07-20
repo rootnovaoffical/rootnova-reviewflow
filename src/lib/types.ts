@@ -208,3 +208,7 @@ export interface AdminInvitation {
   created_at: string;
   updated_at: string;
 }
+
+export type UserRole = Role;
+
+export type FlowType = "RATING_ONLY" | "QUESTIONS" | "DETAILED";

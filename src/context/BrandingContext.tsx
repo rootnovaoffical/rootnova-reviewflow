@@ -4,6 +4,7 @@ import { cacheBustUrl } from "../lib/utils";
 import type { PlatformAsset, FeatureFlag } from "../lib/types";
 
 interface BrandingContextValue {
+  logoPrimary: string | null;
   assets: Record<string, PlatformAsset>;
   flags: Record<string, FeatureFlag>;
   upiId: string | null;
@@ -48,7 +49,7 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
   const upiQrUrl = assets["rootnova_upi_qr"]?.public_url ?? null;
 
   return (
-    <BrandingContext.Provider value={{ assets, flags, upiId, upiQrUrl, refresh }}>
+    <BrandingContext.Provider value={{ assets, flags, upiId, upiQrUrl, logoPrimary: assets["rootnova_logo"]?.public_url ?? null, refresh }}>
       {children}
     </BrandingContext.Provider>
   );

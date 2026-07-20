@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../context/AuthContext";
 import { Loading, ErrorState } from "../../components/States";
-import { Avatar } from "../../components/Avatar";
+import Avatar from "../../components/Avatar";
 import { useToast } from "../../components/Toast";
 import { cacheBustUrl } from "../../lib/utils";
 import type { Organization } from "../../lib/types";
@@ -77,7 +77,7 @@ export function PartnerSettings() {
       <div className="card space-y-4">
         <h3 className="font-display text-base font-semibold text-ink-50">Your Avatar</h3>
         <div className="flex items-center gap-4">
-          <Avatar src={profile?.avatar_url ? cacheBustUrl(profile.avatar_url) : profile?.avatar_url} name={profile?.full_name || "?"} size="xl" ring />
+          <Avatar url={profile?.avatar_url ? cacheBustUrl(profile.avatar_url) : profile?.avatar_url} name={profile?.full_name || "?"} size="xl" ring />
           <label className="btn-secondary cursor-pointer">
             {avatarUploading ? "Uploading…" : "Upload Avatar"}
             <input type="file" accept="image/*" className="hidden" ref={avatarInputRef} onChange={(e) => { const f = e.target.files?.[0]; if (f) handleAvatarUpload(f); e.currentTarget.value = ""; }} disabled={avatarUploading} />
@@ -88,7 +88,7 @@ export function PartnerSettings() {
       <div className="card space-y-4">
         <h3 className="font-display text-base font-semibold text-ink-50">Organization Logo</h3>
         <div className="flex items-center gap-4">
-          <Avatar src={org.logo_url ? cacheBustUrl(org.logo_url) : org.logo_url} name={org.name} size="xl" ring />
+          <Avatar url={org.logo_url ? cacheBustUrl(org.logo_url) : org.logo_url} name={org.name} size="xl" ring />
           <label className="btn-secondary cursor-pointer">
             {orgLogoUploading ? "Uploading…" : "Upload Logo"}
             <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleOrgLogoUpload(f); e.currentTarget.value = ""; }} disabled={orgLogoUploading} />

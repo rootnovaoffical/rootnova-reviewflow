@@ -3,7 +3,7 @@ import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../context/AuthContext";
 import { Loading, ErrorState, EmptyState } from "../../components/States";
 import { useToast } from "../../components/Toast";
-import { formatCurrency, formatDate } from "../../lib/utils";
+import { formatCurrency, timeAgo } from "../../lib/utils";
 import type { Payment } from "../../lib/types";
 
 export function PartnerPayments() {

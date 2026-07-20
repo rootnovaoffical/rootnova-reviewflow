@@ -19,6 +19,17 @@ const GEN_MESSAGES = [
   "Polishing the language",
 ];
 
+const REGEN_MESSAGES = [
+  "Finding a fresh way to tell your story",
+  "Adding a new spark",
+  "Creating another version of your experience",
+  "Reimagining your words",
+  "Crafting a new perspective",
+];
+
+const SIMILARITY_THRESHOLD = 0.82;
+const MAX_CLIENT_REGEN_RETRIES = 2;
+
 export default function PublicReviewPage() {
   const { slug } = useParams<{ slug: string }>();
   const [business, setBusiness] = useState<Business | null>(null);
@@ -43,8 +54,12 @@ export default function PublicReviewPage() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [burstTrigger, setBurstTrigger] = useState(false);
   const [ctaPhase, setCtaPhase] = useState<"idle" | "copying" | "success" | "opening" | "failed">("idle");
+  const [regenerationAttempt, setRegenerationAttempt] = useState(0);
+  const [reviewTransitioning, setReviewTransitioning] = useState(false);
   const genTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const genMsgTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const activeRequestIdRef = useRef<string | null>(null);
+  const isGeneratingRef = useRef(false);
 
   useEffect(() => {
     if (!slug) return;
@@ -127,7 +142,11 @@ export default function PublicReviewPage() {
       setGenMessageIdx((i) => (i + 1) % GEN_MESSAGES.length);
     }, 2200);
 
-    setTimeout(() => generateReview(sid, r, ans), 800);
+    isGeneratingRef.current = true;
+    const requestId = crypto.randomUUID();
+    activeRequestIdRef.current = requestId;
+    setRegenerationAttempt(0);
+    setTimeout(() => generateReview(sid, r, ans, false, 0, requestId), 800);
   };
 
   const FETCH_TIMEOUT_MS = 30000;
@@ -137,31 +156,84 @@ export default function PublicReviewPage() {
     if (genMsgTimerRef.current) { clearInterval(genMsgTimerRef.current); genMsgTimerRef.current = null; }
   };
 
-  const generateReview = async (sid: string, r: number, ans: Record<string, unknown>[]) => {
+  const generateReview = async (
+    sid: string,
+    r: number,
+    ans: Record<string, unknown>[],
+    isRegeneration: boolean,
+    attempt: number,
+    requestId: string,
+  ) => {
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-review`, {
         method: "POST",
         headers: { "Content-Type": "application/json", apikey: import.meta.env.VITE_SUPABASE_ANON_KEY },
-        body: JSON.stringify({ sessionId: sid, rating: r, answers: ans, businessId: business?.id }),
+        body: JSON.stringify({
+          sessionId: sid,
+          rating: r,
+          answers: ans,
+          businessId: business?.id,
+          regenerationAttempt: attempt,
+          requestId,
+          previousReview: isRegeneration ? aiReview : null,
+        }),
         signal: controller.signal,
       });
       clearTimeout(timeoutId);
+
+      // Race condition guard: a newer request superseded this one — discard result
+      if (activeRequestIdRef.current !== requestId) {
+        console.log("Discarding stale response for request", requestId);
+        return;
+      }
+
       if (!res.ok) throw new Error(`Request failed (${res.status})`);
       const json = await res.json();
-      const review = json.review || "Thank you for your feedback! We're glad you had a great experience.";
+      let review = json.review || "Thank you for your feedback! We're glad you had a great experience.";
+
+      // Client-side duplicate protection for regenerations
+      if (isRegeneration && aiReview && isTooSimilar(review, aiReview)) {
+        console.warn(`Regeneration attempt ${attempt} produced too-similar review — retrying`);
+        if (attempt < MAX_CLIENT_REGEN_RETRIES) {
+          stopGenerationTimers();
+          const newRequestId = crypto.randomUUID();
+          activeRequestIdRef.current = newRequestId;
+          setTimeout(() => generateReview(sid, r, ans, true, attempt + 1, newRequestId), 400);
+          return;
+        }
+        console.warn("Max client retries reached — accepting last generation");
+      }
+
       setAiReview(review);
       setEditText(review);
-      supabase.from("analytics_events").insert({ business_id: business?.id, session_id: sid, event_type: "ai_completion", metadata: { provider: json.provider } }).then();
+      supabase.from("analytics_events").insert({
+        business_id: business?.id,
+        session_id: sid,
+        event_type: isRegeneration ? "ai_regeneration" : "ai_completion",
+        metadata: { provider: json.provider, regenerationAttempt: attempt, rejectedAsDuplicate: json.rejectedAsDuplicate || 0 },
+      }).then();
       stopGenerationTimers();
       setGenProgress(100);
       setGenStep(GEN_MESSAGES.length - 1);
       setGenerating(false);
-      setTimeout(() => setStage("result"), 600);
+      isGeneratingRef.current = false;
+      if (isRegeneration) {
+        setReviewTransitioning(true);
+        setTimeout(() => {
+          setStage("result");
+          setReviewTransitioning(false);
+        }, 500);
+      } else {
+        setTimeout(() => setStage("result"), 600);
+      }
     } catch (err) {
+      // Race condition guard: don't surface error if superseded
+      if (activeRequestIdRef.current !== requestId) return;
       stopGenerationTimers();
       setGenerating(false);
+      isGeneratingRef.current = false;
       const isTimeout = err instanceof DOMException && err.name === "AbortError";
       setGenError(isTimeout ? "Generation timed out. Please try again." : (err instanceof Error ? err.message : "Generation failed"));
       setGenProgress(0);
@@ -169,7 +241,7 @@ export default function PublicReviewPage() {
   };
 
   const handleRetry = async () => {
-    if (!sessionId || !business || generating) return;
+    if (!sessionId || !business || generating || isGeneratingRef.current) return;
     const answerArray = Object.entries(answers).map(([qid, answer]) => {
       const q = questions.find(qq => qq.id === qid);
       return { question_id: qid, question: q?.question_text || "", answer };
@@ -178,7 +250,15 @@ export default function PublicReviewPage() {
   };
 
   const handleRegenerate = async () => {
-    if (!sessionId || !business || generating) return;
+    if (!sessionId || !business || generating || isGeneratingRef.current || !aiReview) return;
+
+    // Race condition guard
+    isGeneratingRef.current = true;
+    const requestId = crypto.randomUUID();
+    activeRequestIdRef.current = requestId;
+    const nextAttempt = regenerationAttempt + 1;
+    setRegenerationAttempt(nextAttempt);
+
     setStage("generating");
     setGenerating(true);
     setGenProgress(0);
@@ -193,14 +273,14 @@ export default function PublicReviewPage() {
       setGenProgress(Math.min(progress, 92));
     }, 500);
     genMsgTimerRef.current = setInterval(() => {
-      setGenMessageIdx((i) => (i + 1) % GEN_MESSAGES.length);
+      setGenMessageIdx((i) => (i + 1) % REGEN_MESSAGES.length);
     }, 2200);
 
     const answerArray = Object.entries(answers).map(([qid, answer]) => {
       const q = questions.find(qq => qq.id === qid);
       return { question_id: qid, question: q?.question_text || "", answer };
     });
-    setTimeout(() => generateReview(sessionId, rating, answerArray), 800);
+    setTimeout(() => generateReview(sessionId, rating, answerArray, true, nextAttempt, requestId), 800);
   };
 
   const handleSaveEdit = async () => {
@@ -209,6 +289,23 @@ export default function PublicReviewPage() {
     await supabase.from("review_sessions").update({ ai_generated_review: editText }).eq("id", sessionId);
     setEditingReview(false);
   };
+
+  function normalizeText(text: string): string {
+    return text.toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
+  }
+
+  function isTooSimilar(a: string, b: string): boolean {
+    const na = normalizeText(a);
+    const nb = normalizeText(b);
+    if (na === nb) return true;
+    const wordsA = new Set(na.split(" "));
+    const wordsB = new Set(nb.split(" "));
+    if (wordsA.size === 0 || wordsB.size === 0) return false;
+    let intersection = 0;
+    for (const w of wordsA) if (wordsB.has(w)) intersection++;
+    const union = wordsA.size + wordsB.size - intersection;
+    return intersection / union > SIMILARITY_THRESHOLD;
+  }
 
   const handleCopyReview = async () => {
     if (!aiReview) return;
@@ -371,7 +468,7 @@ export default function PublicReviewPage() {
                   </div>
 
                   <div className="space-y-2 mb-6 w-full max-w-xs">
-                    {GEN_MESSAGES.map((msg, i) => (
+                    {(regenerationAttempt > 0 ? REGEN_MESSAGES : GEN_MESSAGES).map((msg, i) => (
                       <div key={i} className={`flex items-center justify-center gap-2 text-sm transition-all duration-300 ${i === genStep ? "text-white opacity-100" : i < genStep ? "text-primary-400/60 opacity-60" : "text-slate-600 opacity-30"}`}>
                         <span>{i < genStep ? "\u2713" : i === genStep ? "\u25CF" : "\u25CB"}</span>
                         <span>{msg}</span>
@@ -398,15 +495,15 @@ export default function PublicReviewPage() {
                 </div>
               ) : (
                 <>
-                  <p className="text-lg font-medium text-white">{GEN_MESSAGES[genMessageIdx]}...</p>
-                  <p className="text-sm text-slate-400 mt-1">Transforming your feedback into a natural review</p>
+                  <p className="text-lg font-medium text-white">{(regenerationAttempt > 0 ? REGEN_MESSAGES : GEN_MESSAGES)[genMessageIdx]}...</p>
+                  <p className="text-sm text-slate-400 mt-1">{regenerationAttempt > 0 ? "Creating a fresh variation of your experience" : "Transforming your feedback into a natural review"}</p>
                 </>
               )}
             </div>
           )}
 
           {stage === "result" && (
-            <div className="animate-review-reveal">
+            <div className={`animate-review-reveal ${reviewTransitioning ? "animate-review-out" : ""}`}>
               <div className="text-center mb-6">
                 <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full glass mb-4 animate-glow-pulse">
                   <span className="text-sm text-primary-300 font-medium">✨ Your experience is ready to shine</span>

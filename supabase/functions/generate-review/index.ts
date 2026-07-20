@@ -9,6 +9,8 @@ const corsHeaders = {
 
 const AI_TIMEOUT_MS = 25000;
 const GROQ_MODEL = "llama-3.3-70b-versatile";
+const MAX_REGEN_RETRIES = 2;
+const SIMILARITY_THRESHOLD = 0.82;
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -16,7 +18,16 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { sessionId, rating, answers, businessId } = await req.json();
+    const {
+      sessionId,
+      rating,
+      answers,
+      businessId,
+      regenerationAttempt = 0,
+      requestId = null,
+      previousReview = null,
+    } = await req.json();
+
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const groqKey = Deno.env.get("GROQ_API_KEY");
@@ -41,6 +52,7 @@ Deno.serve(async (req: Request) => {
 
     let review: string;
     let provider = "fallback";
+    let rejectedAsDuplicate = 0;
 
     if (groqKey) {
       try {
@@ -49,10 +61,13 @@ Deno.serve(async (req: Request) => {
           business?.name || "this business",
           rating,
           answerText,
-          business?.welcome_message || ""
+          business?.welcome_message || "",
+          regenerationAttempt,
+          previousReview,
         );
         review = result.review;
         provider = result.provider;
+        rejectedAsDuplicate = result.rejectedAsDuplicate;
       } catch (err) {
         console.error("AI provider error:", err.message);
         review = fallbackReview(business?.name || "this business", rating, answerText);
@@ -76,7 +91,15 @@ Deno.serve(async (req: Request) => {
     }
 
     return new Response(
-      JSON.stringify({ review, sessionId, status: "completed", provider }),
+      JSON.stringify({
+        review,
+        sessionId,
+        status: "completed",
+        provider,
+        requestId,
+        regenerationAttempt,
+        rejectedAsDuplicate,
+      }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
@@ -97,10 +120,14 @@ async function generateWithGroq(
   businessName: string,
   rating: number,
   answerText: string,
-  welcomeMessage: string
-): Promise<{ review: string; provider: string }> {
+  welcomeMessage: string,
+  regenerationAttempt: number,
+  previousReview: string | null,
+): Promise<{ review: string; provider: string; rejectedAsDuplicate: number }> {
   const tone = rating >= 4 ? "positive and appreciative" : rating === 3 ? "balanced and fair" : "constructive but polite";
   const ratingWord = rating >= 5 ? "excellent" : rating === 4 ? "great" : rating === 3 ? "decent" : "disappointing";
+
+  const isRegeneration = regenerationAttempt > 0 && previousReview;
 
   const systemPrompt = `You are a skilled writer who crafts natural, personalized Google reviews based on a customer's structured feedback. You treat each selected answer as an experience signal — not a checklist to repeat verbatim.
 
@@ -120,7 +147,7 @@ Rules:
     ? answerText.split("; ").filter(Boolean).map((a, i) => `Signal ${i + 1}: ${a}`).join("\n")
     : "No specific details provided — write a brief review based on the rating alone.";
 
-  const userPrompt = `Business: ${businessName}
+  let userPrompt = `Business: ${businessName}
 Rating: ${rating} stars (${ratingWord})
 Tone: ${tone}
 
@@ -129,6 +156,32 @@ ${signalList}
 
 Write a natural, first-person Google review reflecting these signals. Do not repeat the signals as a list. Vary your opening. Sound human.`;
 
+  if (isRegeneration) {
+    const attemptLevel = Math.min(regenerationAttempt, 3);
+    const intensity = attemptLevel >= 3 ? "strongly" : attemptLevel === 2 ? "substantially" : "clearly";
+    userPrompt = `This is a regeneration request (attempt #${regenerationAttempt}). The customer experience signals are unchanged, but the generated review MUST be ${intensity} different from the previous review. Do not reuse the previous wording, sentence structure, opening, or narrative pattern.
+
+Business: ${businessName}
+Rating: ${rating} stars (${ratingWord})
+Tone: ${tone}
+
+Customer experience signals (unchanged):
+${signalList}
+
+Previous review (for comparison reference ONLY — do NOT copy, paraphrase, or reuse its structure):
+"""
+${previousReview}
+"""
+
+Write a COMPLETELY DIFFERENT natural, first-person Google review reflecting the SAME signals. You MUST:
+- Use a different opening sentence and structure.
+- Rearrange the narrative order of the signals.
+- Use different vocabulary and emotional expression.
+- Vary the review length within the 2-4 sentence range.
+- Weave the customer's answers in a new way.
+Do NOT merely replace a few words. Produce a genuinely fresh alternative.`;
+  }
+
   const client = new OpenAI({
     apiKey,
     baseURL: "https://api.groq.com/openai/v1",
@@ -136,28 +189,66 @@ Write a natural, first-person Google review reflecting these signals. Do not rep
     maxRetries: 0,
   });
 
-  try {
-    const completion = await client.chat.completions.create({
-      model: GROQ_MODEL,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-      temperature: 0.85,
-      max_tokens: 200,
-      presence_penalty: 0.6,
-      frequency_penalty: 0.4,
-    });
+  let rejectedAsDuplicate = 0;
 
-    const generated = completion.choices[0]?.message?.content?.trim();
-    if (!generated || generated.length < 10) {
-      return { review: fallbackReview(businessName, rating, answerText), provider: "fallback_after_empty" };
+  for (let attempt = 0; attempt <= MAX_REGEN_RETRIES; attempt++) {
+    const tempBoost = isRegeneration ? 0.85 + Math.min(attempt * 0.05, 0.15) : 0.85;
+    const presenceBoost = isRegeneration ? 0.6 + Math.min(attempt * 0.2, 0.6) : 0.6;
+    const freqBoost = isRegeneration ? 0.4 + Math.min(attempt * 0.2, 0.6) : 0.4;
+
+    try {
+      const completion = await client.chat.completions.create({
+        model: GROQ_MODEL,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt + (attempt > 0 ? `\n\nVariation nonce: ${crypto.randomUUID()}. Produce yet another distinct version.` : "") },
+        ],
+        temperature: tempBoost,
+        max_tokens: 200,
+        presence_penalty: presenceBoost,
+        frequency_penalty: freqBoost,
+      });
+
+      const generated = completion.choices[0]?.message?.content?.trim();
+      if (!generated || generated.length < 10) {
+        return { review: fallbackReview(businessName, rating, answerText), provider: "fallback_after_empty", rejectedAsDuplicate };
+      }
+
+      if (isRegeneration && previousReview && isTooSimilar(generated, previousReview)) {
+        rejectedAsDuplicate++;
+        if (attempt < MAX_REGEN_RETRIES) {
+          console.log(`Regeneration attempt ${attempt + 1} rejected as too similar (similarity > ${SIMILARITY_THRESHOLD})`);
+          continue;
+        }
+        console.log("Max retries reached — accepting last generation despite similarity");
+      }
+
+      return { review: generated, provider: "groq", rejectedAsDuplicate };
+    } catch (err) {
+      console.error("Groq API error:", err.message);
+      return { review: fallbackReview(businessName, rating, answerText), provider: "fallback_after_api_error", rejectedAsDuplicate };
     }
-    return { review: generated, provider: "groq" };
-  } catch (err) {
-    console.error("Groq API error:", err.message);
-    return { review: fallbackReview(businessName, rating, answerText), provider: "fallback_after_api_error" };
   }
+
+  return { review: fallbackReview(businessName, rating, answerText), provider: "fallback_after_retries", rejectedAsDuplicate };
+}
+
+function normalizeText(text: string): string {
+  return text.toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
+}
+
+function isTooSimilar(a: string, b: string): boolean {
+  const na = normalizeText(a);
+  const nb = normalizeText(b);
+  if (na === nb) return true;
+  const wordsA = new Set(na.split(" "));
+  const wordsB = new Set(nb.split(" "));
+  if (wordsA.size === 0 || wordsB.size === 0) return false;
+  let intersection = 0;
+  for (const w of wordsA) if (wordsB.has(w)) intersection++;
+  const union = wordsA.size + wordsB.size - intersection;
+  const jaccard = intersection / union;
+  return jaccard > SIMILARITY_THRESHOLD;
 }
 
 function fallbackReview(businessName: string, rating: number, answerText: string): string {

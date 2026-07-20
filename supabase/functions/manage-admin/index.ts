@@ -43,10 +43,21 @@ Deno.serve(async (req: Request) => {
         return new Response(JSON.stringify({ error: "Not authorized to invite this role" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
 
+      // Set expiry to 7 days from now
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
       const inviteRes = await fetch(`${supabaseUrl}/rest/v1/admin_invitations`, {
         method: "POST",
         headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, "Content-Type": "application/json", Prefer: "return=representation" },
-        body: JSON.stringify({ email, role, business_id: business_id || null, status: "INVITED", invited_by: user.id }),
+        body: JSON.stringify({
+          email,
+          role,
+          business_id: business_id || null,
+          organization_id: organization_id || null,
+          status: "INVITED",
+          invited_by: user.id,
+          expires_at: expiresAt,
+        }),
       });
       const inviteData = await inviteRes.json();
       const invitation = inviteData[0];

@@ -27,11 +27,9 @@ export default function BusinessReviews() {
   return (
     <Layout title="Reviews">
       <div className="flex gap-2 mb-4">
-        <button onClick={() => setFilter(null)} className={`px-3 py-1.5        ) : (
-      transition-colors ${filter === null ? "bg-primary-600 text-white" : "glass text-slate-300"}`}>All</button>
+        <button onClick={() => setFilter(null)} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${filter === null ? "bg-primary-600 text-white" : "glass text-slate-300"}`}>All</button>
         {[5, 4, 3, 2, 1].map((s) => (
-          <button key={s} onClick={() => setFilter(s)} className={`px-3 py-1.5        ) : (
-      transition-colors ${filter === s ? "bg-primary-600 text-white" : "glass text-slate-300"}`}>{"\u2B50".repeat(s)}</button>
+          <button key={s} onClick={() => setFilter(s)} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${filter === s ? "bg-primary-600 text-white" : "glass text-slate-300"}`}><span className="text-lg">{"\u2B50".repeat(s)}</span></button>
         ))}
       </div>
       {filtered.length === 0 ? <EmptyState title="No reviews" subtitle="Reviews will appear here once customers submit feedback." /> : (

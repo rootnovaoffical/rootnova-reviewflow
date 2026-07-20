@@ -41,7 +41,7 @@ export default function PartnerPayments() {
     }).select().single();
     if (!payData) { showToast("Failed to submit payment", "error"); return; }
     if (file) {
-      const { path } = await uploadPaymentProof(payData.id, file);
+      const { path } = await uploadPaymentProof(orgId, payData.id, file);
       if (path) await supabase.from("payments").update({ screenshot_path: path }).eq("id", payData.id);
     }
     await insertAuditLog({ actor_id: profile.id, actor_email: profile.email, action: "payment_submitted", target_type: "payment", target_id: payData.id, organization_id: orgId, metadata: { amount: Number(amount), utr } });

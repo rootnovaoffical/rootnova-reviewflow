@@ -13,7 +13,7 @@ Deno.serve(async (req: Request) => {
 
   try {
     const body = await req.json();
-    const { token, password, fullName, action } = body;
+    const { token, action } = body;
 
     if (!token) {
       return new Response(
@@ -26,16 +26,40 @@ Deno.serve(async (req: Request) => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 
-    const headers = {
+    // Require a valid authenticated user
+    const authHeader = req.headers.get("Authorization") || "";
+    const userToken = authHeader.replace("Bearer ", "");
+
+    if (!userToken || userToken === "") {
+      return new Response(
+        JSON.stringify({ error: "Authentication required" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    // Verify the user's session
+    const userRes = await fetch(`${supabaseUrl}/auth/v1/user`, {
+      headers: { Authorization: `Bearer ${userToken}`, apikey: anonKey },
+    });
+    const authUser = await userRes.json();
+
+    if (!authUser || !authUser.id) {
+      return new Response(
+        JSON.stringify({ error: "Invalid or expired session" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    // Fetch the invitation with service role key
+    const serviceHeaders = {
       apikey: serviceKey,
       Authorization: `Bearer ${serviceKey}`,
       "Content-Type": "application/json",
     };
 
-    // Fetch the invitation with service role key
     const invRes = await fetch(
-      `${supabaseUrl}/rest/v1/admin_invitations?id=eq.${token}&status=eq.INVITED`,
-      { headers },
+      `${supabaseUrl}/rest/v1/admin_invitations?id=eq.${token}&select=*&limit=1`,
+      { headers: serviceHeaders },
     );
     const invitations = await invRes.json();
 
@@ -48,11 +72,27 @@ Deno.serve(async (req: Request) => {
 
     const invitation = invitations[0];
 
-    // Check expiry
+    // Check that the invitation is still pending
+    if (invitation.status !== "INVITED") {
+      return new Response(
+        JSON.stringify({ error: "This invitation has already been used or revoked" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    // Check expiry (if expires_at is set)
     if (invitation.expires_at && new Date(invitation.expires_at) < new Date()) {
       return new Response(
         JSON.stringify({ error: "This invitation has expired" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    // Verify that the authenticated user's email matches the invitation email
+    if (authUser.email !== invitation.email) {
+      return new Response(
+        JSON.stringify({ error: "This invitation is not for your account" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
@@ -64,53 +104,22 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Action: accept — create the account
-    if (!password || !fullName) {
+    // Action: accept — assign the role to the existing authenticated user
+    const { fullName } = body;
+
+    if (!fullName) {
       return new Response(
         JSON.stringify({ error: "Missing required fields" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
-    if (password.length < 6) {
-      return new Response(
-        JSON.stringify({ error: "Password must be at least 6 characters" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
-
-    // Create the auth user via the Supabase Admin API
-    const userRes = await fetch(`${supabaseUrl}/auth/v1/admin/users`, {
+    // Upsert the profile with the invitation's role
+    await fetch(`${supabaseUrl}/rest/v1/profiles?id=eq.${authUser.id}`, {
       method: "POST",
-      headers: {
-        apikey: serviceKey,
-        Authorization: `Bearer ${serviceKey}`,
-        "Content-Type": "application/json",
-      },
+      headers: { ...serviceHeaders, Prefer: "resolution=merge-duplicates,return=minimal" },
       body: JSON.stringify({
-        email: invitation.email,
-        password,
-        email_confirm: true,
-        user_metadata: { full_name: fullName },
-      }),
-    });
-
-    if (!userRes.ok) {
-      const errBody = await userRes.json();
-      return new Response(
-        JSON.stringify({ error: errBody.msg || errBody.message || "Failed to create account" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
-
-    const user = await userRes.json();
-
-    // 4. Upsert the profile with the invitation's role
-    await fetch(`${supabaseUrl}/rest/v1/profiles?id=eq.${user.id}`, {
-      method: "POST",
-      headers: { ...headers, Prefer: "resolution=merge-duplicates,return=minimal" },
-      body: JSON.stringify({
-        id: user.id,
+        id: authUser.id,
         email: invitation.email,
         full_name: fullName,
         role: invitation.role,
@@ -118,7 +127,7 @@ Deno.serve(async (req: Request) => {
       }),
     });
 
-    // 5. If partner role, add to organization_members
+    // If partner role, add to organization_members
     if (invitation.role.startsWith("PARTNER") && invitation.organization_id) {
       const memberRole = invitation.role === "PARTNER_OWNER"
         ? "OWNER"
@@ -128,32 +137,32 @@ Deno.serve(async (req: Request) => {
 
       await fetch(`${supabaseUrl}/rest/v1/organization_members`, {
         method: "POST",
-        headers: { ...headers, Prefer: "return=minimal" },
+        headers: { ...serviceHeaders, Prefer: "return=minimal" },
         body: JSON.stringify({
           organization_id: invitation.organization_id,
-          user_id: user.id,
+          user_id: authUser.id,
           role: memberRole,
           status: "ACTIVE",
         }),
       });
     }
 
-    // 6. If business admin, add to business_admins
+    // If business admin, add to business_admins
     if (invitation.role === "BUSINESS_ADMIN" && invitation.business_id) {
       await fetch(`${supabaseUrl}/rest/v1/business_admins`, {
         method: "POST",
-        headers: { ...headers, Prefer: "return=minimal" },
+        headers: { ...serviceHeaders, Prefer: "return=minimal" },
         body: JSON.stringify({
           business_id: invitation.business_id,
-          user_id: user.id,
+          user_id: authUser.id,
         }),
       });
     }
 
-    // 7. Mark invitation as accepted
+    // Mark invitation as accepted
     await fetch(`${supabaseUrl}/rest/v1/admin_invitations?id=eq.${token}`, {
       method: "PATCH",
-      headers: { ...headers, Prefer: "return=minimal" },
+      headers: { ...serviceHeaders, Prefer: "return=minimal" },
       body: JSON.stringify({
         status: "ACCEPTED",
         accepted_at: new Date().toISOString(),
@@ -161,25 +170,23 @@ Deno.serve(async (req: Request) => {
       }),
     });
 
-    // 8. Try to sign in the user to get a session
-    const signInRes = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
+    // Log the acceptance in audit_logs
+    await fetch(`${supabaseUrl}/rest/v1/audit_logs`, {
       method: "POST",
-      headers: {
-        apikey: anonKey,
-        "Content-Type": "application/json",
-      },
+      headers: { ...serviceHeaders, Prefer: "return=minimal" },
       body: JSON.stringify({
-        email: invitation.email,
-        password,
+        actor_id: authUser.id,
+        actor_email: invitation.email,
+        action: "invitation_accepted",
+        target_type: "admin_invitation",
+        target_id: token,
+        metadata: { role: invitation.role },
       }),
     });
-
-    const session = signInRes.ok ? await signInRes.json() : null;
 
     return new Response(
       JSON.stringify({
         success: true,
-        session: session?.access_token ? session : null,
         role: invitation.role,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },

@@ -28,9 +28,9 @@ export async function uploadPlatformAsset(key: string, file: File): Promise<stri
   return uploadToBucket("platform-assets", `branding/${key}-${Date.now()}.${ext}`, file);
 }
 
-export async function uploadPaymentProof(paymentId: string, file: File): Promise<{ path: string | null; signedUrl: string | null }> {
+export async function uploadPaymentProof(orgId: string, paymentId: string, file: File): Promise<{ path: string | null; signedUrl: string | null }> {
   const ext = file.name.split(".").pop() || "png";
-  const path = `proofs/${paymentId}/proof-${Date.now()}.${ext}`;
+  const path = `${orgId}/${paymentId}/proof-${Date.now()}.${ext}`;
   const { error } = await supabase.storage.from("payment-proofs").upload(path, file, { upsert: true, contentType: file.type });
   if (error) { console.error("Payment proof upload failed:", error.message); return { path: null, signedUrl: null }; }
   const { data } = await supabase.storage.from("payment-proofs").createSignedUrl(path, 3600);

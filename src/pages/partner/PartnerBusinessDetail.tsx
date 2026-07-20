@@ -12,7 +12,7 @@ import type { Business, Question, ReviewSession, FlowType } from "../../lib/type
 type Tab = "overview" | "questions" | "reviews" | "qr" | "analytics" | "settings";
 
 export function PartnerBusinessDetail() {
-  const { businessId } = useParams<{ businessId: string }>();
+  const { id: businessId } = useParams<{ id: string }>();
   const { toast } = useToast();
   const [business, setBusiness] = useState<Business | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);

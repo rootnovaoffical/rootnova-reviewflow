@@ -1,11 +1,11 @@
 import { useEffect, useState, useMemo } from 'react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid, PieChart, Pie, Cell } from 'recharts'
-import { BarChart3, Loader2, AlertCircle } from 'lucide-react'
+import { BarChart3, AlertCircle } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { listBusinessesByOrg, getReviewSessions, getAnalyticsEvents } from '../../lib/db'
 import type { Business, ReviewSession, AnalyticsEvent } from '../../lib/types'
 import { FadeIn } from '../../components/Animations'
-import { formatDate } from '../../lib/utils'
+import {  } from '../../lib/utils'
 
 export function PartnerAnalytics() {
   const { organization } = useAuth()
@@ -27,7 +27,7 @@ export function PartnerAnalytics() {
         setBusinesses(b)
         const allSessions: ReviewSession[] = []; for (const biz of b) { const s = await getReviewSessions(biz.id); allSessions.push(...s) }
         if (m) setSessions(allSessions)
-        const e = await getAnalyticsEvents(); if (m) setEvents(e)
+        const e = await getAnalyticsEvents(''); if (m) setEvents(e)
       } catch (e) { if (m) setError(e instanceof Error ? e.message : 'Failed') }
       finally { if (m) setLoading(false) }
     })()

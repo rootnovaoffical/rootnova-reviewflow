@@ -16,10 +16,10 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!loading && session.user && profile) {
+    if (!loading && session?.user && profile) {
       navigate(isRootNovaStaff(profile) ? '/admin/dashboard' : isPartnerMember(profile) ? '/partner/dashboard' : '/login')
     }
-  }, [session.user, profile, loading, navigate])
+  }, [session?.user, profile, loading, navigate])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

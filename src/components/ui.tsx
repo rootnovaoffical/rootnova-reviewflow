@@ -140,23 +140,23 @@ export function Badge({ color = "slate", children }: { color?: BadgeColor; child
 }
 
 // Empty state
-export function EmptyState({ icon, title, description, action }: { icon?: ReactNode; title: string; description?: string; action?: ReactNode }) {
+export function EmptyState({ icon, title, description, message, action }: { icon?: ReactNode; title: string; description?: string; message?: string; action?: ReactNode }) {
   return (
     <div className="flex flex-col items-center justify-center text-center py-16 px-6">
       {icon && <div className="mb-4 text-slate-600">{icon}</div>}
       <h3 className="text-lg font-semibold text-slate-200">{title}</h3>
-      {description && <p className="mt-1.5 text-sm text-slate-500 max-w-md">{description}</p>}
+      {(description || message) && <p className="mt-1.5 text-sm text-slate-500 max-w-md">{description || message}</p>}
       {action && <div className="mt-5">{action}</div>}
     </div>
   );
 }
 
 // Spinner / loading
-export function Loading({ label = "Loading..." }: { label?: string }) {
+export function Loading({ label = "Loading...", message }: { label?: string; message?: string }) {
   return (
     <div className="flex flex-col items-center justify-center py-16 gap-3">
       <Loader2 className="w-7 h-7 animate-spin text-indigo-400" />
-      <p className="text-sm text-slate-400">{label}</p>
+      <p className="text-sm text-slate-400">{message || label}</p>
     </div>
   );
 }

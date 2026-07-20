@@ -30,12 +30,12 @@ export function QRCampaignPage() {
   const url = publicReviewUrl(business.slug)
 
   const handleCopy = async () => {
-    const ok = await copyToClipboard(url)
-    if (ok) { setCopied(true); setTimeout(() => setCopied(false), 2000) }
+    await copyToClipboard(url)
+    setCopied(true); setTimeout(() => setCopied(false), 2000)
   }
 
   const handleDownload = () => {
-    const svg = document.querySelector('#qr-code-svg')
+    const svg = document.querySelector('#qr-code-svg') as SVGSVGElement | null
     if (!svg) return
     const svgData = new XMLSerializer().serializeToString(svg)
     const canvas = document.createElement('canvas')

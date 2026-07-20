@@ -16,7 +16,7 @@ export function SignupPage() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
 
-  useEffect(() => { if (!loading && session.user) navigate('/login') }, [session.user, loading, navigate])
+  useEffect(() => { if (!loading && session?.user) navigate('/login') }, [session?.user, loading, navigate])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

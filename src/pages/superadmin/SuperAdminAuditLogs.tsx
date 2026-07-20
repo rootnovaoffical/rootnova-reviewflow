@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
-import { ScrollText, Loader2, AlertCircle, Filter } from 'lucide-react'
+import { ScrollText, AlertCircle, Filter } from 'lucide-react'
 import { listAuditLogs } from '../../lib/db'
 import type { AuditLog } from '../../lib/types'
 import { FadeIn, StaggerContainer, StaggerItem } from '../../components/Animations'

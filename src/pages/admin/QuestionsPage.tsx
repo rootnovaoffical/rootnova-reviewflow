@@ -6,7 +6,7 @@ import { useAuth } from "../../auth/AuthContext";
 import { listBusinesses, getMyBusiness } from "../../lib/business";
 import { listQuestions, createQuestion, updateQuestion, deleteQuestion } from "../../lib/questions";
 import type { Business, Question } from "../../types";
-import { Button, Card, Select, Badge, Loading, EmptyState, Modal, Input, Textarea } from "../../components/ui";
+import { Button, Card, Select, Badge, Loading, EmptyState, Modal, Input, } from "../../components/ui";
 import { HelpCircle, Plus, Pencil, Trash2, X, Store } from "lucide-react";
 
 export default function QuestionsPage() {

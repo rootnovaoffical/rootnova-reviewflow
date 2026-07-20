@@ -15,8 +15,8 @@ export default function SuperAdminFeatureFlags() {
   };
   useEffect(() => {
     load();
-    const unsub = subscribe<FeatureFlag>("feature_flags", undefined, () => { load(); });
-    return unsub;
+    const unsub = subscribe("feature_flags", "", () => { load(); });
+    return () => { unsub; };
   }, []);
   const toggle = async (f: FeatureFlag) => {
     const next = !f.is_enabled;

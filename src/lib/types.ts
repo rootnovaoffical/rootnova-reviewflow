@@ -206,3 +206,7 @@ export interface AdminInvitation {
   created_at: string;
   updated_at: string;
 }
+
+export type UserRole = Role;
+export type OrgMemberRole = "OWNER" | "ADMIN" | "TEAM_MEMBER";
+export type FlowType = "ALWAYS" | "POSITIVE" | "NEGATIVE";

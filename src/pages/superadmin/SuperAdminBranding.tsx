@@ -64,7 +64,7 @@ export function SuperAdminBranding() {
               <h3 className="font-display text-base font-semibold text-ink-50">{key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}</h3>
               {asset?.public_url ? (
                 <div className="flex items-center gap-4">
-                  <img src={cacheBustUrl(asset.public_url)} alt={key} className="h-16 w-16 rounded-xl border border-white/10 object-contain bg-white/5" />
+                  <img src={cacheBustUrl(asset.public_url) ?? undefined} alt={key} className="h-16 w-16 rounded-xl border border-white/10 object-contain bg-white/5" />
                   <div className="flex gap-2">
                     <label className="btn-secondary cursor-pointer text-xs">
                       {uploading === key ? "Uploading…" : "Replace"}

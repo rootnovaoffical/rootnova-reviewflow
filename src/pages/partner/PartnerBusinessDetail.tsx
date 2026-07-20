@@ -28,7 +28,7 @@ export function PartnerBusinessDetail() {
   const [logoUploading, setLogoUploading] = useState(false);
   const [qEditorOpen, setQEditorOpen] = useState(false);
   const [editingQ, setEditingQ] = useState<Question | null>(null);
-  const [qForm, setQForm] = useState<{ question_text: string; flow_type: FlowType; options: string[]; is_required: boolean }>({ question_text: "", flow_type: "ALWAYS", options: [], is_required: true });
+  const [qForm, setQForm] = useState<{ question_text: string; flow_type: any; options: string[]; is_required: boolean }>({ question_text: "", flow_type: "ALWAYS", options: [], is_required: true });
   const [optionInput, setOptionInput] = useState("");
   const [deleteQOpen, setDeleteQOpen] = useState<Question | null>(null);
   const [deactivateOpen, setDeactivateOpen] = useState(false);
@@ -96,7 +96,7 @@ export function PartnerBusinessDetail() {
     if (!qForm.question_text.trim()) { toast("Question text is required", "error"); return; }
     if (qForm.options.length === 0) { toast("Add at least one option", "error"); return; }
     setSaving(true);
-    const payload = { business_id: businessId, question_text: qForm.question_text, question_type: "multiple_choice", flow_type: qForm.flow_type, options: qForm.options, is_required: qForm.is_required, is_active: true, sort_order: editingQ ? editingQ.sort_order : questions.length };
+    const payload = { business_id: businessId, question_text: qForm.question_text, question_type: "multiple_choice", flow_type: qForm.flow_type as string as any as FlowType, options: qForm.options, is_required: qForm.is_required, is_active: true, sort_order: editingQ ? editingQ.sort_order : questions.length };
     if (editingQ) {
       const { error } = await supabase.from("questions").update(payload).eq("id", editingQ.id);
       if (error) toast(error.message, "error"); else toast("Question updated", "success");
@@ -230,7 +230,7 @@ export function PartnerBusinessDetail() {
           </div>
         </div>
       )}
-      <Modal open={qEditorOpen} onClose={() => setQEditorOpen(false)} title={editingQ ? "Edit Question" : "New Question"} size="lg">
+      <Modal open={qEditorOpen} onClose={() => setQEditorOpen(false)} title={editingQ ? "Edit Question" : "New Question"} maxWidth={672}>
         <div className="space-y-4">
           <div><label className="label">Question Text</label><input className="input" value={qForm.question_text} onChange={(e) => setQForm({ ...qForm, question_text: e.target.value })} /></div>
           <div><label className="label">Flow Type</label><select className="input" value={qForm.flow_type} onChange={(e) => setQForm({ ...qForm, flow_type: e.target.value as FlowType })}><option value="ALWAYS">Always show</option><option value="POSITIVE">Show for positive (4-5 stars)</option><option value="NEGATIVE">Show for negative (1-3 stars)</option></select></div>

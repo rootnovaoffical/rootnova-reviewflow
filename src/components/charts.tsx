@@ -74,7 +74,6 @@ export function DonutChart({ data, size = 160 }: { data: { label: string; value:
   const total = data.reduce((s, d) => s + d.value, 0);
   const radius = size / 2;
   const stroke = 22;
-  const innerR = radius - stroke;
   const circ = 2 * Math.PI * (radius - stroke / 2);
 
   let offset = 0;

@@ -1,6 +1,6 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { isRootNovaSuperAdmin, roleLabel } from '../lib/auth-api'
+import { roleLabel } from '../lib/auth-api'
 import { SpatialBackground, GlowOrb } from './SpatialBackground'
 import { LayoutDashboard, Building2, CreditCard, Package, Palette, ToggleLeft, ScrollText, LogOut, Menu, X } from 'lucide-react'
 import { useState } from 'react'
@@ -26,7 +26,7 @@ export function SuperAdminLayout() {
 
   return (
     <div className="min-h-screen flex relative overflow-hidden">
-      <SpatialBackground primary="#6366f1" secondary="#8b5cf6" />
+      <SpatialBackground color1="#6366f1" color2="#8b5cf6" />
       <GlowOrb color="#6366f1" size={500} className="-top-40 -left-40" />
       <GlowOrb color="#8b5cf6" size={400} className="bottom-0 right-0" />
 

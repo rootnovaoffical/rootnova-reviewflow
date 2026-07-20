@@ -49,7 +49,7 @@ export default function SuperAdminBranding() {
         <Card>
           <h3 className="text-white font-semibold mb-4">Platform logo</h3>
           <div className="flex items-center gap-4 mb-4">
-            {logoUrl ? <img src={cacheBustUrl(logoUrl)} alt="Logo" className="h-16 w-16 rounded-xl object-cover" /> : <div className="h-16 w-16 rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center text-white font-bold text-2xl">R</div>}
+            {logoUrl ? <img src={cacheBustUrl(logoUrl) ?? undefined} alt="Logo" className="h-16 w-16 rounded-xl object-cover" /> : <div className="h-16 w-16 rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center text-white font-bold text-2xl">R</div>}
             <label className="px-3 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium cursor-pointer">Upload logo<input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && uploadLogo(e.target.files[0])} /></label>
           </div>
         </Card>

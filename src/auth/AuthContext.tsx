@@ -107,7 +107,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         session,
         user,
         profile,
-        role: profile?.role ?? null,
+        role: (profile?.role ?? null) as UserRole | null,
         loading,
         needsSetup,
         signIn,

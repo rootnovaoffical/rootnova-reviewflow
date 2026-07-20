@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Save, Loader2, AlertCircle, Star, MessageSquare, ExternalLink, Plus, Trash2 } from 'lucide-react'
+import { ArrowLeft, Save, Loader2, AlertCircle, Star, ExternalLink, Plus, Trash2 } from 'lucide-react'
 import { getBusinessById, updateBusiness, getQuestions, createQuestion, updateQuestion, deleteQuestion, getReviewSessions, getAnalyticsEvents, logAudit } from '../../lib/db'
 import { useAuth } from '../../context/AuthContext'
 import type { Business, Question, ReviewSession, AnalyticsEvent } from '../../lib/types'
@@ -14,7 +14,7 @@ export function PartnerBusinessWorkspace() {
   const [business, setBusiness] = useState<Business | null>(null)
   const [questions, setQuestions] = useState<Question[]>([])
   const [sessions, setSessions] = useState<ReviewSession[]>([])
-  const [events, setEvents] = useState<AnalyticsEvent[]>([])
+  const [, setEvents] = useState<AnalyticsEvent[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -46,7 +46,7 @@ export function PartnerBusinessWorkspace() {
 
   const handleAddQuestion = async () => {
     if (!id || !newQuestion.question_text.trim()) return
-    try { const q = await createQuestion({ business_id: id, ...newQuestion, is_required: true, flow_type: 'ALWAYS', options: [], is_active: true }); setQuestions((p) => [...p, q].sort((a, b) => a.sort_order - b.sort_order)); setNewQuestion({ question_text: '', question_type: 'multiple_choice', sort_order: questions.length }); await logAudit('QUESTION_CREATED', 'QUESTION', q.id, organization?.id) }
+    try { const q = await createQuestion(id, { business_id: id, ...newQuestion, is_required: true, flow_type: 'ALWAYS', options: [], is_active: true }); setQuestions((p) => [...p, q].sort((a, b) => a.sort_order - b.sort_order)); setNewQuestion({ question_text: '', question_type: 'multiple_choice', sort_order: questions.length }); await logAudit('QUESTION_CREATED', 'QUESTION', q.id, organization?.id) }
     catch (e) { setError(e instanceof Error ? e.message : 'Failed') }
   }
 

@@ -16,12 +16,13 @@ export function Modal({ open, onClose, title, children, maxWidth = 480 }: { open
   );
 }
 
-export function ConfirmDialog({ open, title, message, danger, confirmLabel = "Confirm", onConfirm, onCancel }: { open: boolean; title: string; message: string; danger?: boolean; confirmLabel?: string; onConfirm: () => void; onCancel: () => void }) {
+export function ConfirmDialog({ open, title, message, danger, confirmLabel = "Confirm", onConfirm, onCancel, onClose }: { open: boolean; title: string; message: string; danger?: boolean; confirmLabel?: string; onConfirm: () => void | Promise<void>; onCancel?: () => void; onClose?: () => void }) {
+  const handleClose = onCancel || onClose || (() => {});
   return (
-    <Modal open={open} onClose={onCancel} title={title} maxWidth={400}>
+    <Modal open={open} onClose={handleClose} title={title} maxWidth={400}>
       <p className="text-slate-300 text-sm mb-6">{message}</p>
       <div className="flex justify-end gap-3">
-        <button onClick={onCancel} className="px-4 py-2 rounded-lg text-sm text-slate-300 hover:bg-slate-800">Cancel</button>
+        <button onClick={handleClose} className="px-4 py-2 rounded-lg text-sm text-slate-300 hover:bg-slate-800">Cancel</button>
         <button onClick={onConfirm} className={`px-4 py-2 rounded-lg text-sm text-white ${danger ? "bg-rose-600 hover:bg-rose-700" : "bg-brand-600 hover:bg-brand-700"}`}>{confirmLabel}</button>
       </div>
     </Modal>

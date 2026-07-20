@@ -31,8 +31,8 @@ export default function AdminBranding() {
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !uploadKey) return;
-    const url = await uploadPlatformAsset(uploadKey, file);
-    if (url) {
+    const { url, error } = await uploadPlatformAsset(uploadKey, file);
+    if (url && !error) {
       await upsertPlatformAsset(uploadKey, uploadKey.replace(/_/g, " "), "IMAGE", url, `branding/${uploadKey}`);
       if (profile) await insertAuditLog({ actor_id: profile.id, actor_email: profile.email, action: "branding_asset_uploaded", target_type: "platform_asset", metadata: { key: uploadKey } });
       showToast("Asset uploaded", "success");

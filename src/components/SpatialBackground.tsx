@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 
 interface Particle { x: number; y: number; vx: number; vy: number; size: number; opacity: number; }
 
-export default function SpatialBackground() {
+export default function SpatialBackground({ color1: _color1, color2: _color2 }: { color1?: string; color2?: string }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const particlesRef = useRef<Particle[]>([]);
   const mouseRef = useRef({ x: -1000, y: -1000 });
@@ -100,5 +100,16 @@ export default function SpatialBackground() {
       <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary-600/10 rounded-full blur-[120px] animate-aurora" />
       <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-accent-600/10 rounded-full blur-[120px] animate-aurora" style={{ animationDelay: "2s" }} />
     </div>
+  );
+}
+
+export { SpatialBackground };
+
+export function GlowOrb({ color, size, className }: { color: string; size: number; className?: string }) {
+  return (
+    <div
+      className={`absolute rounded-full blur-[120px] animate-aurora ${className || ""}`}
+      style={{ width: size, height: size, background: `${color}15` }}
+    />
   );
 }

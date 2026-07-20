@@ -57,7 +57,7 @@ export function SuperAdminPlans() {
           ))}
         </div>
       )}
-      <Modal open={editorOpen} onClose={() => setEditorOpen(false)} title={editing ? "Edit Plan" : "New Plan"} size="lg">
+      <Modal open={editorOpen} onClose={() => setEditorOpen(false)} title={editing ? "Edit Plan" : "New Plan"} maxWidth={672}>
         <div className="space-y-4">
           <div><label className="label">Name</label><input className="input" value={form.name || ""} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
           <div><label className="label">Description</label><textarea className="input" rows={2} value={form.description || ""} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>

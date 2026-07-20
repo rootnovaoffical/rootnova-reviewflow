@@ -1,7 +1,7 @@
 // Business admin management — calls the `manage-admin` edge function which
 // uses the service-role key to create auth users and link them to businesses.
 
-import { SUPABASE_URL, supabase } from "./supabase";
+import { supabase } from "./supabase";
 
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
@@ -10,7 +10,7 @@ async function callManageAdmin(body: unknown) {
   const token = session?.session?.access_token;
   if (!token) throw new Error("Not authenticated");
 
-  const res = await fetch(`${SUPABASE_URL}/functions/v1/manage-admin`, {
+  const res = await fetch(`${supabase}/functions/v1/manage-admin`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

@@ -24,7 +24,7 @@ export function PartnerLayout() {
 
   return (
     <div className="min-h-screen flex relative overflow-hidden">
-      <SpatialBackground primary="#6366f1" secondary="#8b5cf6" />
+      <SpatialBackground color1="#6366f1" color2="#8b5cf6" />
       <GlowOrb color="#6366f1" size={500} className="-top-40 -left-40" />
       <GlowOrb color="#8b5cf6" size={400} className="bottom-0 right-0" />
 

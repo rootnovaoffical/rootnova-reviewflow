@@ -1,4 +1,90 @@
 import { supabase } from "./supabase";
+import type { Business, ReviewSession, AnalyticsEvent, Profile } from "./types";
+
+export async function getBusinessById(id: string): Promise<Business | null> {
+  const { data, error } = await supabase.from("businesses").select("*").eq("id", id).maybeSingle();
+  if (error) throw error;
+  return data as Business | null;
+}
+
+export async function getReviewSessions(businessId: string): Promise<ReviewSession[]> {
+  const { data, error } = await supabase.from("review_sessions").select("*").eq("business_id", businessId).order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data || []) as ReviewSession[];
+}
+
+export async function getAnalyticsEvents(businessId: string): Promise<AnalyticsEvent[]> {
+  const { data, error } = await supabase.from("analytics_events").select("*").eq("business_id", businessId).order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data || []) as AnalyticsEvent[];
+}
+
+export async function listBusinessesByOrg(orgId: string): Promise<Business[]> {
+  const { data, error } = await supabase.from("businesses").select("*").eq("organization_id", orgId).order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data || []) as Business[];
+}
+
+export async function listProfiles(): Promise<Profile[]> {
+  const { data, error } = await supabase.from("profiles").select("*").order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data || []) as Profile[];
+}
+
+
+export async function listBusinesses(): Promise<Business[]> {
+  const { data, error } = await supabase.from("businesses").select("*").order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data || []) as Business[];
+}
+
+export async function getQuestions(businessId: string): Promise<import("./types").Question[]> {
+  const { data, error } = await supabase.from("questions").select("*").eq("business_id", businessId).order("sort_order", { ascending: true });
+  if (error) throw error;
+  return (data || []) as import("./types").Question[];
+}
+
+export async function createQuestion(businessId: string, input: Record<string, unknown>): Promise<import("./types").Question> {
+  const { data, error } = await supabase.from("questions").insert({ ...input, business_id: businessId }).select("*").single();
+  if (error) throw error;
+  return data as import("./types").Question;
+}
+
+export async function updateQuestion(id: string, patch: Record<string, unknown>): Promise<import("./types").Question> {
+  const { data, error } = await supabase.from("questions").update(patch).eq("id", id).select("*").single();
+  if (error) throw error;
+  return data as import("./types").Question;
+}
+
+export async function deleteQuestion(id: string): Promise<void> {
+  const { error } = await supabase.from("questions").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function updateBusiness(id: string, patch: Record<string, unknown>): Promise<Business> {
+  const { data, error } = await supabase.from("businesses").update(patch).eq("id", id).select("*").single();
+  if (error) throw error;
+  return data as Business;
+}
+
+export async function listAdminInvitations(): Promise<import("./types").AdminInvitation[]> {
+  const { data, error } = await supabase.from("admin_invitations").select("*").order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data || []) as import("./types").AdminInvitation[];
+}
+
+export async function updateProfileStatus(userId: string, status: string): Promise<void> {
+  const { error } = await supabase.from("profiles").update({ account_status: status }).eq("id", userId);
+  if (error) throw error;
+}
+
+export async function listAuditLogs(limit = 100): Promise<import("./types").AuditLog[]> {
+  const { data, error } = await supabase.from("audit_logs").select("*").order("created_at", { ascending: false }).limit(limit);
+  if (error) throw error;
+  return (data || []) as import("./types").AuditLog[];
+}
+
+export { logAudit } from "./audit";
 
 export const db = {
   getProfile: (id: string) => supabase.from("profiles").select("*").eq("id", id).maybeSingle(),

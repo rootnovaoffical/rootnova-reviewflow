@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
-import { Sparkles, Loader2, AlertCircle, Star, TrendingUp, TrendingDown, Lightbulb } from 'lucide-react'
+import { Sparkles, AlertCircle, Star, TrendingUp, TrendingDown, Lightbulb } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { listBusinessesByOrg, getReviewSessions } from '../../lib/db'
 import type { Business, ReviewSession } from '../../lib/types'

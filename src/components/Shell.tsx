@@ -4,9 +4,9 @@ import ProfileMenu from "./ProfileMenu";
 import { useBranding } from "../context/BrandingContext";
 import { cacheBustUrl } from "../lib/utils";
 
-export interface NavItem { label: string; to: string; icon?: string; }
+export interface NavItem { label: string; to: string; icon?: ReactNode; }
 
-export function ShellLayout({ children, nav, title }: { children: ReactNode; nav: NavItem[]; title: string }) {
+export function ShellLayout({ children, nav, title, brandLogo: _brandLogo, brandName: _brandName }: { children: ReactNode; nav: NavItem[]; title?: string; brandLogo?: string | null; brandName?: string }) {
   const { logoPrimary } = useBranding();
   const location = useLocation();
   return (
@@ -54,22 +54,23 @@ export function Card({ children, className = "" }: { children: ReactNode; classN
   return <div className={`bg-slate-900 border border-slate-800 rounded-xl p-5 ${className}`}>{children}</div>;
 }
 
-export function StatCard({ label, value, icon }: { label: string; value: string | number; icon?: string }) {
+export function StatCard({ label, value, icon, hint }: { label: string; value: string | number; icon?: ReactNode; hint?: string }) {
   return (
     <Card>
       <div className="flex items-center justify-between">
         <div><p className="text-slate-400 text-xs uppercase tracking-wide">{label}</p><p className="text-2xl font-bold text-white mt-1">{value}</p></div>
         {icon && <span className="text-3xl opacity-50">{icon}</span>}
       </div>
+      {hint && <p className="text-xs text-slate-500 mt-1">{hint}</p>}
     </Card>
   );
 }
 
-export function Badge({ children, color = "slate" }: { children: ReactNode; color?: "slate" | "brand" | "green" | "amber" | "rose" | "blue" }) {
+export function Badge({ children, color = "slate" }: { children: ReactNode; color?: "slate" | "brand" | "green" | "amber" | "rose" | "blue" | "red" | "indigo" | "sky" | "emerald" }) {
   const colors: Record<string, string> = {
     slate: "bg-slate-700 text-slate-200", brand: "bg-brand-500/20 text-brand-300",
     green: "bg-emerald-500/20 text-emerald-300", amber: "bg-amber-500/20 text-amber-300",
-    rose: "bg-rose-500/20 text-rose-300", blue: "bg-blue-500/20 text-blue-300",
+    rose: "bg-rose-500/20 text-rose-300", blue: "bg-blue-500/20 text-blue-300", red: "bg-rose-500/20 text-rose-300", indigo: "bg-indigo-500/20 text-indigo-300", sky: "bg-sky-500/20 text-sky-300", emerald: "bg-emerald-500/20 text-emerald-300",
   };
   return <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${colors[color]}`}>{children}</span>;
 }

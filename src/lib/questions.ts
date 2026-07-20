@@ -61,7 +61,7 @@ export async function deleteQuestion(id: string): Promise<void> {
   if (error) throw error;
 }
 
-export async function reorderQuestions(businessId: string, orderedIds: string[]): Promise<void> {
+export async function reorderQuestions(_businessId: string, orderedIds: string[]): Promise<void> {
   const updates = orderedIds.map((id, idx) => ({ id, sort_order: idx }));
   const { error } = await supabase
     .from("questions")

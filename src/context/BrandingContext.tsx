@@ -8,6 +8,7 @@ interface BrandingContextValue {
   flags: Record<string, FeatureFlag>;
   upiId: string | null;
   upiQrUrl: string | null;
+  logoPrimary: string | null;
   refresh: () => Promise<void>;
 }
 
@@ -48,7 +49,7 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
   const upiQrUrl = assets["upi_qr"]?.public_url ?? null;
 
   return (
-    <BrandingContext.Provider value={{ assets, flags, upiId, upiQrUrl, refresh }}>
+    <BrandingContext.Provider value={{ assets, flags, upiId, upiQrUrl, logoPrimary: assets["logo_primary"]?.public_url ?? null, refresh }}>
       {children}
     </BrandingContext.Provider>
   );

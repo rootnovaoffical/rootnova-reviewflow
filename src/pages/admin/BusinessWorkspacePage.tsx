@@ -80,7 +80,7 @@ export function BusinessWorkspacePage() {
         const updated = await updateQuestion(q.id, { question_text: q.question_text, flow_type: q.flow_type, options: q.options, is_required: q.is_required, is_active: q.is_active, sort_order: q.sort_order })
         setQuestions((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
       } else {
-        const created = await createQuestion({ business_id: id, question_text: q.question_text, question_type: 'multiple_choice', flow_type: q.flow_type ?? 'ALWAYS', options: q.options ?? [], is_required: q.is_required ?? true, is_active: q.is_active ?? true, sort_order: q.sort_order ?? questions.length })
+        const created = await createQuestion(id, { business_id: id, question_text: q.question_text, question_type: 'multiple_choice', flow_type: q.flow_type ?? 'ALWAYS', options: q.options ?? [], is_required: q.is_required ?? true, is_active: q.is_active ?? true, sort_order: q.sort_order ?? questions.length })
         setQuestions((prev) => [...prev, created])
       }
       setEditingQuestion(null); setNewQuestion(null)
@@ -200,7 +200,7 @@ export function BusinessWorkspacePage() {
                 </div>
                 {s.ai_generated_review && <p className="text-sm text-ink-200 mb-2">{s.ai_generated_review}</p>}
                 {s.answers && Array.isArray(s.answers) && s.answers.length > 0 && (
-                  <div className="text-xs text-ink-400 space-y-1">{s.answers.map((a, i) => <div key={i}><span className="text-ink-300">{a.question_text}:</span> {a.selected.join(', ')}</div>)}</div>
+                  <div className="text-xs text-ink-400 space-y-1">{s.answers.map((a: any, i) => <div key={i}><span className="text-ink-300">{a.question_text}:</span> {a.selected.join(', ')}</div>)}</div>
                 )}
               </div>
             ))}

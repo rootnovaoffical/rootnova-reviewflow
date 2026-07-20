@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, QrCode, Download, Loader2, AlertCircle, Copy, Check } from 'lucide-react'
+import { ArrowLeft, QrCode, Download, AlertCircle, Copy, Check } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { getBusinessById } from '../../lib/db'
 import type { Business } from '../../lib/types'

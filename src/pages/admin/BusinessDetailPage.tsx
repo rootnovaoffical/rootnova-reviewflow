@@ -15,10 +15,10 @@ import {
   getTopCategories,
   getEventCounts,
 } from "../../lib/analytics";
-import type { Business, Question, ReviewSession, BusinessAdmin } from "../../types";
+import type { Business, Question, ReviewSession } from "../../types";
 import { Button, Card, Input, Textarea, Select, Badge, Loading, EmptyState, Modal } from "../../components/ui";
 import { AreaChart, BarChart, DonutChart, BarList } from "../../components/charts";
-import { Copy, Check, Download, QrCode, Plus, Pencil, Trash2, ExternalLink, Users, HelpCircle, MessageSquareText, BarChart3, Store, Star, Sparkles, X } from "lucide-react";
+import { Copy, Check, Download, Plus, Pencil, Trash2, ExternalLink, Users, HelpCircle, MessageSquareText, BarChart3, Store, Star, X } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
 type Tab = "overview" | "questions" | "sessions" | "analytics" | "admins";
@@ -181,7 +181,7 @@ function OverviewTab({ business, reviewUrl, copied, copyReviewUrl, qrUrl, onDown
       </Card>
 
       {editing && (
-        <EditBusinessModal business={business} onClose={() => setEditing(false)} onSaved={(b) => { setEditing(false); window.location.reload(); }} />
+        <EditBusinessModal business={business} onClose={() => setEditing(false)} onSaved={() => { setEditing(false); window.location.reload(); }} />
       )}
     </div>
   );
@@ -461,7 +461,7 @@ function SessionsTab({ businessId }: { businessId: string }) {
                 )}
                 {Array.isArray(s.answers) && s.answers.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-1.5">
-                    {s.answers.flatMap((a) => a.selected).map((sel, i) => (
+                    {s.answers.flatMap((a: any) => a.selected).map((sel, i) => (
                       <span key={i} className="text-xs px-2 py-0.5 rounded-md bg-slate-800 text-slate-300">{sel}</span>
                     ))}
                   </div>

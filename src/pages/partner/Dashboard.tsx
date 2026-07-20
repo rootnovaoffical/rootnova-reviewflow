@@ -12,14 +12,22 @@ export default function PartnerDashboard() {
   useEffect(() => {
     if (!profile) return;
     supabase.from("organization_members").select("organization_id").eq("user_id", profile.id).single()
-      .then(({ data: mem }) => {
+      .then(async ({ data: mem }) => {
         if (mem?.organization_id) {
-          supabase.from("organizations").select("name").eq("id", mem.organization_id).single().then(({ data }) => setOrg(data as { name: string } | null));
-          Promise.all([
+          const orgRes = await supabase.from("organizations").select("name").eq("id", mem.organization_id).single();
+          setOrg(orgRes.data as { name: string } | null);
+
+          const [b, p] = await Promise.all([
             supabase.from("businesses").select("id", { count: "exact", head: true }).eq("organization_id", mem.organization_id),
-            supabase.from("review_sessions").select("id", { count: "exact", head: true }),
             supabase.from("payments").select("id", { count: "exact", head: true }).eq("organization_id", mem.organization_id),
-          ]).then(([b, r, p]) => setStats({ businesses: b.count || 0, reviews: r.count || 0, payments: p.count || 0 }));
+          ]);
+
+          const businessIds = (await supabase.from("businesses").select("id").eq("organization_id", mem.organization_id)).data?.map((b: { id: string }) => b.id) || [];
+          const r = businessIds.length > 0
+            ? await supabase.from("review_sessions").select("id", { count: "exact", head: true }).in("business_id", businessIds)
+            : { count: 0 };
+
+          setStats({ businesses: b.count || 0, reviews: r.count || 0, payments: p.count || 0 });
         }
       });
   }, [profile]);

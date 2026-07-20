@@ -37,7 +37,7 @@ export default function AdminPaymentDetail() {
     setActing(true);
     const { error } = await supabase.from("payments").update({ status: "UNDER_REVIEW", reviewed_by: profile.id, reviewed_at: new Date().toISOString() }).eq("id", payment.id);
     if (error) { showToast("Failed to update payment", "error"); setActing(false); return; }
-    await insertAuditLog({ actor_id: payment.id, actor_email: profile.email, action: "payment_under_review", target_type: "payment", target_id: payment.id, organization_id: payment.organization_id });
+    await insertAuditLog({ actor_id: profile.id, actor_email: profile.email, action: "payment_under_review", target_type: "payment", target_id: payment.id, organization_id: payment.organization_id });
     showToast("Marked under review", "success");
     load();
     setActing(false);

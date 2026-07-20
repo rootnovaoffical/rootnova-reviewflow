@@ -9,10 +9,11 @@ import { Confetti, Shockwave, FloatingEmojis, AuroraGlow } from "../components/E
 type Stage = "loading" | "welcome" | "rating" | "questions" | "generating" | "result" | "google" | "disabled" | "error";
 
 const AI_MESSAGES = [
-  "Reading your experience...",
-  "Finding what stood out...",
-  "Crafting your review...",
+  "Listening to what stood out...",
+  "Finding the feeling behind your experience...",
+  "Shaping your words...",
   "Making it sound like you...",
+  "Your experience is becoming a story...",
 ];
 
 const REGEN_LIMIT = 3;
@@ -34,6 +35,7 @@ export default function PublicReviewPage() {
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [copied, setCopied] = useState(false);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [, setVariationSeed] = useState(0);
   const aiMessageTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -89,7 +91,9 @@ export default function PublicReviewPage() {
       setStage("questions");
     } else {
       setStage("generating");
-      setTimeout(() => generateReview(data.id, rating, []), 500);
+      const seed = Math.floor(Math.random() * 1000);
+      setVariationSeed(seed);
+      setTimeout(() => generateReview(data.id, rating, [], seed, false), 500);
     }
   };
 
@@ -109,21 +113,23 @@ export default function PublicReviewPage() {
     await supabase.from("review_sessions").update({ answers: answerArray }).eq("id", sessionId);
     supabase.from("analytics_events").insert({ business_id: business.id, session_id: sessionId, event_type: "questions_submitted", metadata: { count: answerArray.length } }).then();
     setStage("generating");
-    setTimeout(() => generateReview(sessionId, rating, answerArray), 500);
+    const seed = Math.floor(Math.random() * 1000);
+    setVariationSeed(seed);
+    setTimeout(() => generateReview(sessionId, rating, answerArray, seed, false), 500);
   };
 
-  const generateReview = async (sid: string, r: number, ans: Record<string, unknown>[]) => {
+  const generateReview = async (sid: string, r: number, ans: Record<string, unknown>[], seed: number, isRegen: boolean) => {
     try {
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-review`, {
         method: "POST",
         headers: { "Content-Type": "application/json", apikey: import.meta.env.VITE_SUPABASE_ANON_KEY },
-        body: JSON.stringify({ sessionId: sid, rating: r, answers: ans, businessId: business?.id }),
+        body: JSON.stringify({ sessionId: sid, rating: r, answers: ans, businessId: business?.id, regenerate: isRegen, variationSeed: seed }),
       });
       const json = await res.json();
       const review = json.review || "Thank you for your feedback! We're glad you had a great experience.";
       setAiReview(review);
       await supabase.from("review_sessions").update({ ai_generated_review: review, ai_status: "completed", completed_at: new Date().toISOString() }).eq("id", sid);
-      supabase.from("analytics_events").insert({ business_id: business?.id, session_id: sid, event_type: "ai_completion", metadata: {} }).then();
+      supabase.from("analytics_events").insert({ business_id: business?.id, session_id: sid, event_type: "ai_completion", metadata: { regenerated: isRegen } }).then();
     } catch {
       setAiReview("Thank you for your feedback! We appreciate you taking the time to share your experience.");
       await supabase.from("review_sessions").update({ ai_status: "completed", completed_at: new Date().toISOString() }).eq("id", sid);
@@ -136,23 +142,11 @@ export default function PublicReviewPage() {
     setIsRegenerating(true);
     setStage("generating");
     const answerArray = Object.entries(answers).map(([qid, answer]) => ({ question_id: qid, answer }));
-    try {
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-review`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", apikey: import.meta.env.VITE_SUPABASE_ANON_KEY },
-        body: JSON.stringify({ sessionId, rating, answers: answerArray, businessId: business.id, regenerate: true }),
-      });
-      const json = await res.json();
-      const review = json.review || aiReview || "Thank you for your feedback!";
-      setAiReview(review);
-      await supabase.from("review_sessions").update({ ai_generated_review: review, updated_at: new Date().toISOString() }).eq("id", sessionId);
-      supabase.from("analytics_events").insert({ business_id: business.id, session_id: sessionId, event_type: "review_regenerated", metadata: { count: regenCount + 1 } }).then();
-    } catch {
-      setAiReview("Thank you for your feedback! We appreciate you taking the time to share your experience.");
-    }
+    const seed = Math.floor(Math.random() * 1000) + regenCount * 100;
+    setVariationSeed(seed);
+    await generateReview(sessionId, rating, answerArray, seed, true);
     setRegenCount((c) => c + 1);
     setIsRegenerating(false);
-    setStage("result");
   };
 
   const handleCopyReview = () => {
@@ -162,7 +156,7 @@ export default function PublicReviewPage() {
     supabase.from("analytics_events").insert({ business_id: business?.id, session_id: sessionId, event_type: "copy_event", metadata: {} }).then();
   };
 
-  const handleCopyAndGoogle = () => {
+  const handleShareToGoogle = () => {
     if (aiReview) navigator.clipboard.writeText(aiReview);
     supabase.from("analytics_events").insert({ business_id: business?.id, session_id: sessionId, event_type: "google_click", metadata: {} }).then();
     if (googleDestination) {
@@ -192,7 +186,7 @@ export default function PublicReviewPage() {
           )}
 
           {stage === "welcome" && (
-            <div className="glass-strong rounded-3xl p-10 text-center animate-scale-in">
+            <div className="glass-strong rounded-3xl p-10 text-center stage-transition">
               <h1 className="text-3xl font-bold text-white mb-3">{business?.name}</h1>
               <p className="text-lg text-slate-300 mb-8">{business?.welcome_message || "We'd love to hear about your experience!"}</p>
               <button onClick={handleStart} className="choice3d px-8 py-4 bg-gradient-to-r from-primary-600 to-primary-500 text-white text-lg font-semibold rounded-xl shadow-lg shadow-primary-500/30">
@@ -202,7 +196,7 @@ export default function PublicReviewPage() {
           )}
 
           {stage === "rating" && (
-            <div className="glass-strong rounded-3xl p-10 text-center animate-scale-in">
+            <div className="glass-strong rounded-3xl p-10 text-center stage-transition">
               <h2 className="text-2xl font-bold text-white mb-2">How was your experience?</h2>
               <p className="text-slate-400 mb-8">Your honest moment matters</p>
               <StarRating3D value={rating} onChange={setRating} />
@@ -213,7 +207,7 @@ export default function PublicReviewPage() {
           )}
 
           {stage === "questions" && questions.length > 0 && (
-            <div className="glass-strong rounded-3xl p-10 animate-scale-in">
+            <div className="glass-strong rounded-3xl p-10 stage-transition">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-2xl font-bold text-white">Quick Questions</h2>
                 <span className="text-sm text-slate-400">{currentQuestionIndex + 1} of {questions.length}</span>
@@ -248,14 +242,14 @@ export default function PublicReviewPage() {
               </div>
               {currentQuestionIndex === questions.length - 1 && (
                 <button onClick={handleQuestionsSubmit} className="choice3d mt-8 w-full py-3 bg-gradient-to-r from-primary-600 to-primary-500 text-white font-semibold rounded-xl transition-all">
-                  Craft My Review
+                  Bring My Experience to Life
                 </button>
               )}
             </div>
           )}
 
           {stage === "generating" && (
-            <div className="glass-strong rounded-3xl p-10 text-center animate-scale-in">
+            <div className="glass-strong rounded-3xl p-10 text-center stage-transition">
               <div className="ai-generating rounded-2xl p-8 mb-6">
                 <div className="ai-orb mb-6">
                   <div className="ai-orb-ring" />
@@ -264,45 +258,47 @@ export default function PublicReviewPage() {
                   <div className="ai-orb-core" />
                 </div>
                 <p className="text-lg font-medium text-white animate-fade-in" key={aiMessageIndex}>{AI_MESSAGES[aiMessageIndex]}</p>
-                <p className="text-sm text-slate-400 mt-2">Crafting a personalized review from your feedback</p>
+                <p className="text-sm text-slate-400 mt-2">Shaping your experience into words</p>
               </div>
             </div>
           )}
 
           {stage === "result" && (
-            <div className="glass-strong rounded-3xl p-10 animate-scale-in">
+            <div className="glass-strong rounded-3xl p-10 stage-transition">
               <h2 className="text-2xl font-bold text-white mb-4 text-center">Your Review</h2>
-              <div className="glass rounded-2xl p-6 mb-6 review-reveal">
-                <p className="text-slate-200 leading-relaxed">{aiReview}</p>
+              <div className="glass rounded-2xl p-6 mb-8 review-reveal">
+                <p className="text-slate-200 leading-relaxed text-lg">{aiReview}</p>
               </div>
-              <div className="flex flex-col sm:flex-row gap-3">
-                <button
-                  onClick={handleRegenerate}
-                  disabled={regenCount >= REGEN_LIMIT || isRegenerating}
-                  className="choice3d flex-1 py-3 glass text-white font-medium rounded-xl hover:bg-white/10 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {regenCount >= REGEN_LIMIT ? "Regeneration limit reached" : "\u2728 Regenerate Review"}
-                </button>
-                <button
-                  onClick={handleCopyReview}
-                  className={`choice3d flex-1 py-3 glass text-white font-medium rounded-xl hover:bg-white/10 transition-all ${copied ? "copied-pulse" : ""}`}
-                >
-                  {copied ? "\u2713 Copied!" : "\uD83D\uDCCB Copy Review"}
-                </button>
+              <div className="flex flex-col gap-3">
                 {rating >= 4 && googleDestination && (
                   <button
-                    onClick={handleCopyAndGoogle}
-                    className="choice3d flex-1 py-3 bg-gradient-to-r from-success-600 to-success-500 text-white font-semibold rounded-xl shadow-lg shadow-success-500/30 transition-all"
+                    onClick={handleShareToGoogle}
+                    className="action-primary choice3d w-full py-4 text-white text-lg font-semibold rounded-xl"
                   >
-                    {"\u2B50 Copy & Open Google"}
+                    {"\u2B50 Share My Experience"}
                   </button>
                 )}
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <button
+                    onClick={handleRegenerate}
+                    disabled={regenCount >= REGEN_LIMIT || isRegenerating}
+                    className="action-secondary choice3d flex-1 py-3 text-white font-medium rounded-xl disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {regenCount >= REGEN_LIMIT ? "All versions explored" : "\u2728 Try Another Voice"}
+                  </button>
+                  <button
+                    onClick={handleCopyReview}
+                    className={`action-utility choice3d flex-1 py-3 text-white font-medium rounded-xl ${copied ? "copied-pulse" : ""}`}
+                  >
+                    {copied ? "\u2713 Saved!" : "Save My Words"}
+                  </button>
+                </div>
               </div>
               {rating >= 4 && !googleDestination && (
                 <p className="text-sm text-slate-400 text-center mt-4">Google review destination is not configured for this business.</p>
               )}
               {rating < 4 && (
-                <button onClick={() => setStage("welcome")} className="choice3d mt-4 w-full py-3 glass text-white font-medium rounded-xl hover:bg-white/10 transition-all">
+                <button onClick={() => setStage("welcome")} className="action-utility choice3d mt-4 w-full py-3 text-white font-medium rounded-xl">
                   Done
                 </button>
               )}
@@ -310,11 +306,11 @@ export default function PublicReviewPage() {
           )}
 
           {stage === "google" && (
-            <div className="glass-strong rounded-3xl p-10 text-center animate-scale-in">
+            <div className="glass-strong rounded-3xl p-10 text-center stage-transition">
               <div className="text-5xl mb-4">{"\u2705"}</div>
               <h2 className="text-2xl font-bold text-white mb-2">Thank You!</h2>
               <p className="text-slate-300 mb-6">We've opened Google Reviews in a new tab. Your feedback means the world to us!</p>
-              <button onClick={() => setStage("welcome")} className="choice3d px-6 py-3 glass text-white font-medium rounded-xl hover:bg-white/10 transition-all">
+              <button onClick={() => setStage("welcome")} className="action-utility choice3d px-6 py-3 text-white font-medium rounded-xl">
                 Done
               </button>
             </div>

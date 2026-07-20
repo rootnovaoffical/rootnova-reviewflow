@@ -3,7 +3,7 @@ import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../context/AuthContext";
 import { Loading, ErrorState, EmptyState } from "../../components/States";
 import { useToast } from "../../components/Toast";
-import { formatCurrency, timeAgo } from "../../lib/utils";
+import { formatCurrency, formatDate } from "../../lib/utils";
 import type { Payment } from "../../lib/types";
 
 export function PartnerPayments() {
@@ -52,7 +52,7 @@ export function PartnerPayments() {
     setSubmitting(false);
   };
 
-  if (loading) return <Loading message="Loading payments…" />;
+  if (loading) return <Loading />;
   if (error) return <ErrorState message={error} />;
 
   return (
@@ -71,7 +71,7 @@ export function PartnerPayments() {
       </form>
       <div>
         <h2 className="mb-4 font-display text-lg font-semibold text-ink-50">Payment History</h2>
-        {payments.length === 0 ? <EmptyState title="No payments yet" message="Submit your first payment using the form above." /> : (
+        {payments.length === 0 ? <EmptyState title="No payments yet" subtitle="Submit your first payment using the form above." /> : (
           <div className="space-y-2">
             {payments.map((p) => (
               <div key={p.id} className="card flex items-center justify-between">

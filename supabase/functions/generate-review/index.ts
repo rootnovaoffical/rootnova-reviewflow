@@ -1,9 +1,8 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
@@ -13,131 +12,34 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { sessionId } = await req.json();
-    if (!sessionId) {
-      return new Response(JSON.stringify({ error: "sessionId is required" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    const { sessionId, rating, answers, businessId } = await req.json();
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    );
+    const businessRes = await fetch(`${supabaseUrl}/rest/v1/businesses?id=eq.${businessId}&select=name,welcome_message`, {
+      headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, "Content-Type": "application/json" },
+    });
+    const businesses = await businessRes.json();
+    const business = businesses[0];
 
-    const { data: session, error: sessError } = await supabase
-      .from("review_sessions")
-      .select("*")
-      .eq("id", sessionId)
-      .maybeSingle();
+    const ratingText = rating >= 4 ? "excellent" : rating === 3 ? "good" : "poor";
+    const answerText = Array.isArray(answers) && answers.length > 0
+      ? answers.map((a: any) => a.answer).join(", ")
+      : "No specific feedback provided";
 
-    if (sessError || !session) {
-      return new Response(JSON.stringify({ error: "Session not found" }), {
-        status: 404,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    const review = rating >= 4
+      ? `I had an ${ratingText} experience at ${business?.name || "this business"}. ${answerText}. The service was attentive and I would definitely recommend it to others. Thank you for the wonderful experience!`
+      : rating === 3
+      ? `My experience at ${business?.name || "this business"} was ${ratingText}. ${answerText}. There is room for improvement but the staff was friendly.`
+      : `I had a ${ratingText} experience at ${business?.name || "this business"}. ${answerText}. I hope management can address these issues.`;
 
-    await supabase
-      .from("review_sessions")
-      .update({ ai_status: "generating" })
-      .eq("id", sessionId);
-
-    const { data: business } = await supabase
-      .from("businesses")
-      .select("name, primary_color, secondary_color")
-      .eq("id", session.business_id)
-      .maybeSingle();
-
-    const answers = session.answers as Array<{
-      question_text: string;
-      answer: string;
-    }>;
-
-    const rating = session.rating;
-    const businessName = business?.name || "this business";
-
-    const reviewText = buildReview(rating, answers, businessName);
-
-    const { error: updateError } = await supabase
-      .from("review_sessions")
-      .update({
-        ai_generated_review: reviewText,
-        ai_status: "completed",
-        completed_at: new Date().toISOString(),
-      })
-      .eq("id", sessionId);
-
-    if (updateError) {
-      return new Response(JSON.stringify({ error: "Failed to save review" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    return new Response(JSON.stringify({ review: reviewText, sessionId }), {
+    return new Response(JSON.stringify({ review, sessionId }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), {
-      status: 500,
+    return new Response(JSON.stringify({ error: err.message, review: "Thank you for your feedback!" }), {
+      status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });
-
-function buildReview(
-  rating: number,
-  answers: Array<{ question_text: string; answer: string }>,
-  businessName: string
-): string {
-  const isPositive = rating >= 4;
-  const ratingWord =
-    rating === 5 ? "exceptional"
-    : rating === 4 ? "great"
-    : rating === 3 ? "decent"
-    : rating === 2 ? "disappointing"
-    : "poor";
-
-  let review = `I had a ${ratingWord} experience at ${businessName}. `;
-
-  if (isPositive) {
-    review += `From the moment I walked in, everything felt welcoming and well-organized. `;
-  } else {
-    review += `While there's definitely room for improvement, I appreciate the effort the team put in. `;
-  }
-
-  for (const a of answers) {
-    const q = a.question_text.toLowerCase();
-    const ans = a.answer;
-
-    if (q.includes("service") || q.includes("staff") || q.includes("friendly")) {
-      review += `The service was ${ans.toLowerCase()}, and it really shaped my overall impression. `;
-    } else if (q.includes("clean") || q.includes("atmosphere") || q.includes("environment")) {
-      review += `The atmosphere was ${ans.toLowerCase()}, which added to the experience. `;
-    } else if (q.includes("speed") || q.includes("fast") || q.includes("wait")) {
-      review += `In terms of timing, things felt ${ans.toLowerCase()}. `;
-    } else if (q.includes("quality") || q.includes("product") || q.includes("food")) {
-      review += `The quality of what I received was ${ans.toLowerCase()}. `;
-    } else if (q.includes("price") || q.includes("value") || q.includes("cost")) {
-      review += `For the price, I'd say it was ${ans.toLowerCase()}. `;
-    } else if (q.includes("recommend") || q.includes("return") || q.includes("again")) {
-      review += `When it comes to whether I'd return: ${ans.toLowerCase()}. `;
-    } else {
-      review += `Regarding "${a.question_text}", I'd say ${ans.toLowerCase()}. `;
-    }
-  }
-
-  if (isPositive) {
-    review += `I'd happily recommend ${businessName} to friends and family looking for a reliable, quality experience. `;
-  } else if (rating === 3) {
-    review += `With a few tweaks, ${businessName} could easily turn things around. `;
-  } else {
-    review += `I hope ${businessName} takes this feedback constructively — there's real potential here. `;
-  }
-
-  review += `Overall, I rate them ${rating} out of 5 stars.`;
-
-  return review;
-}

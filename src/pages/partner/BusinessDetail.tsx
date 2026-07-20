@@ -1,225 +1,126 @@
-import { useEffect, useState, useCallback } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useEffect, useState, useRef } from "react";
+import { useParams } from "react-router-dom";
+import Layout from "../../components/Layout";
 import { supabase } from "../../lib/supabase";
-import { useAuth } from "../../lib/auth";
-import {
-  LoadingSpinner,
-  ErrorState,
-  EmptyState,
-  Badge,
-  PageHeader,
-} from "../../components/ui";
-import type { Business, ReviewSession } from "../../lib/types";
+import type { Business, Question, ReviewSession } from "../../lib/types";
+import { Loading, ErrorState, EmptyState } from "../../components/States";
+import { useToast } from "../../context/ToastContext";
+import { useAuth } from "../../context/AuthContext";
+import { insertAuditLog } from "../../lib/auth";
+import { uploadBusinessLogo } from "../../lib/storage";
+import { useQRCode, downloadQR } from "../../lib/qr";
+import { formatDateTime } from "../../lib/utils";
 
-interface EditForm {
-  name: string;
-  welcome_message: string;
-  primary_color: string;
-  secondary_color: string;
-  google_review_url: string;
-  public_review_enabled: boolean;
-}
-
-export default function BusinessDetail() {
+export default function PartnerBusinessDetail() {
   const { id } = useParams<{ id: string }>();
   const { profile } = useAuth();
+  const { showToast } = useToast();
   const [business, setBusiness] = useState<Business | null>(null);
-  const [reviewSessions, setReviewSessions] = useState<ReviewSession[]>([]);
-  const [questionsCount, setQuestionsCount] = useState(0);
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [reviews, setReviews] = useState<ReviewSession[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState<EditForm | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({ name: "", welcome_message: "", google_review_url: "", public_review_enabled: true });
+  const logoRef = useRef<HTMLInputElement>(null);
+  const reviewUrl = business ? `${window.location.origin}/r/${business.slug}` : null;
+  const qrUrl = useQRCode(reviewUrl);
 
-  const load = useCallback(async () => {
-    if (!id || !profile) return;
-    setLoading(true);
-    setError(null);
-
-    const { data: memberData } = await supabase
-      .from("organization_members")
-      .select("organization_id")
-      .eq("user_id", profile.id)
-      .maybeSingle();
-    const orgId = memberData?.organization_id;
-
-    const [bizRes, reviewsRes, questionsRes] = await Promise.all([
-      supabase.from("businesses").select("*").eq("id", id).maybeSingle(),
-      supabase
-        .from("review_sessions")
-        .select("*")
-        .eq("business_id", id)
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("questions")
-        .select("*", { count: "exact", head: true })
-        .eq("business_id", id),
-    ]);
-
-    if (bizRes.error) {
-      setError(bizRes.error.message);
+  const load = () => {
+    if (!id) return;
+    Promise.all([
+      supabase.from("businesses").select("*").eq("id", id).single(),
+      supabase.from("questions").select("*").eq("business_id", id).order("sort_order"),
+      supabase.from("review_sessions").select("*").eq("business_id", id).order("created_at", { ascending: false }).limit(20),
+    ]).then(([b, q, r]) => {
+      setBusiness(b.data as Business);
+      setQuestions((q.data || []) as Question[]);
+      setReviews((r.data || []) as ReviewSession[]);
+      setEditForm({ name: (b.data as Business).name, welcome_message: (b.data as Business).welcome_message, google_review_url: (b.data as Business).google_review_url || "", public_review_enabled: (b.data as Business).public_review_enabled });
       setLoading(false);
-      return;
-    }
-    const biz = bizRes.data as Business | null;
-    if (biz && orgId && biz.organization_id !== orgId) {
-      setError("You do not have access to this business.");
-      setLoading(false);
-      return;
-    }
-    setBusiness(biz);
-    setReviewSessions((reviewsRes.data ?? []) as ReviewSession[]);
-    setQuestionsCount(questionsRes.count ?? 0);
-    setLoading(false);
-  }, [id, profile]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  function startEditing() {
-    if (!business) return;
-    setForm({
-      name: business.name,
-      welcome_message: business.welcome_message,
-      primary_color: business.primary_color,
-      secondary_color: business.secondary_color,
-      google_review_url: business.google_review_url ?? "",
-      public_review_enabled: business.public_review_enabled,
     });
-    setEditing(true);
-    setSaveError(null);
-  }
+  };
+  useEffect(() => { load(); }, [id]);
 
-  async function handleSave(e: React.FormEvent) {
-    e.preventDefault();
-    if (!id || !form) return;
-    setSaving(true);
-    setSaveError(null);
-    const { error: updateError } = await supabase
-      .from("businesses")
-      .update({
-        name: form.name,
-        welcome_message: form.welcome_message,
-        primary_color: form.primary_color,
-        secondary_color: form.secondary_color,
-        google_review_url: form.google_review_url || null,
-        public_review_enabled: form.public_review_enabled,
-      })
-      .eq("id", id);
-    setSaving(false);
-    if (updateError) {
-      setSaveError(updateError.message);
-      return;
-    }
-    setEditing(false);
-    load();
-  }
+  const saveEdit = async () => {
+    if (!business || !profile) return;
+    const { error } = await supabase.from("businesses").update({
+      name: editForm.name, welcome_message: editForm.welcome_message, google_review_url: editForm.google_review_url || null, public_review_enabled: editForm.public_review_enabled,
+    }).eq("id", business.id);
+    if (error) { showToast("Failed to save", "error"); return; }
+    await insertAuditLog({ actor_id: profile.id, actor_email: profile.email, action: "business_updated", target_type: "business", target_id: business.id });
+    showToast("Business updated", "success");
+    setEditing(false); load();
+  };
 
-  if (loading) return <LoadingSpinner />;
-  if (error) return <ErrorState message={error} onRetry={load} />;
-  if (!business) return <EmptyState message="Business not found." />;
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !business) return;
+    const url = await uploadBusinessLogo(business.id, file);
+    if (url) {
+      await supabase.from("businesses").update({ logo_url: url }).eq("id", business.id);
+      if (profile) await insertAuditLog({ actor_id: profile.id, actor_email: profile.email, action: "business_logo_updated", target_type: "business", target_id: business.id });
+      showToast("Logo updated", "success"); load();
+    } else { showToast("Upload failed", "error"); }
+    if (logoRef.current) logoRef.current.value = "";
+  };
+
+  if (loading) return <Layout title="Business"><Loading /></Layout>;
+  if (!business) return <Layout title="Business"><ErrorState message="Business not found" /></Layout>;
 
   return (
-    <div>
-      <PageHeader
-        title={business.name}
-        subtitle={business.slug}
-        action={
-          !editing ? (
-            <button className="btn-secondary" onClick={startEditing}>Edit</button>
-          ) : undefined
-        }
-      />
-
-      <div className="mb-4">
-        <Link to="/businesses" className="text-sm text-primary-600 hover:text-primary-700">← Back to Businesses</Link>
-      </div>
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="rounded-lg border border-slate-200 bg-white p-5 lg:col-span-2">
-          {editing && form ? (
-            <form onSubmit={handleSave} className="space-y-4">
-              <div>
-                <label className="label">Name</label>
-                <input className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
-              </div>
-              <div>
-                <label className="label">Welcome Message</label>
-                <textarea className="input" rows={2} value={form.welcome_message} onChange={(e) => setForm({ ...form, welcome_message: e.target.value })} />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="label">Primary Color</label>
-                  <input type="color" className="input h-10 p-1" value={form.primary_color} onChange={(e) => setForm({ ...form, primary_color: e.target.value })} />
-                </div>
-                <div>
-                  <label className="label">Secondary Color</label>
-                  <input type="color" className="input h-10 p-1" value={form.secondary_color} onChange={(e) => setForm({ ...form, secondary_color: e.target.value })} />
-                </div>
-              </div>
-              <div>
-                <label className="label">Google Review URL</label>
-                <input className="input" value={form.google_review_url} onChange={(e) => setForm({ ...form, google_review_url: e.target.value })} />
-              </div>
-              <label className="flex items-center gap-2">
-                <input type="checkbox" checked={form.public_review_enabled} onChange={(e) => setForm({ ...form, public_review_enabled: e.target.checked })} />
-                <span className="text-sm text-slate-700">Public review enabled</span>
-              </label>
-              {saveError && <p className="text-sm text-red-600">{saveError}</p>}
-              <div className="flex gap-3">
-                <button type="submit" disabled={saving} className="btn-primary disabled:opacity-50">{saving ? "Saving..." : "Save"}</button>
-                <button type="button" className="btn-secondary" onClick={() => setEditing(false)}>Cancel</button>
-              </div>
-            </form>
+    <Layout title={business.name}>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="glass rounded-2xl p-6">
+          <div className="flex items-center gap-4 mb-4">
+            {business.logo_url ? <img src={business.logo_url} alt={business.name} className="w-14 h-14 rounded-xl object-cover" /> : <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center text-white font-bold text-xl">{business.name[0]}</div>}
+            <div><h2 className="text-lg font-bold text-white">{business.name}</h2><p className="text-sm text-slate-400">{business.status}</p></div>
+          </div>
+          {editing ? (
+            <div className="space-y-3">
+              <input value={editForm.name} onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))} className="w-full px-3 py-2 bg-slate-900/50 border border-white/10 rounded-lg text-white text-sm" />
+              <textarea value={editForm.welcome_message} onChange={(e) => setEditForm((f) => ({ ...f, welcome_message: e.target.value }))} className="w-full px-3 py-2 bg-slate-900/50 border border-white/10 rounded-lg text-white text-sm" rows={2} />
+              <input value={editForm.google_review_url} onChange={(e) => setEditForm((f) => ({ ...f, google_review_url: e.target.value }))} placeholder="Google Review URL" className="w-full px-3 py-2 bg-slate-900/50 border border-white/10 rounded-lg text-white text-sm" />
+              <label className="flex items-center gap-2 text-sm text-slate-300"><input type="checkbox" checked={editForm.public_review_enabled} onChange={(e) => setEditForm((f) => ({ ...f, public_review_enabled: e.target.checked }))} /> Public reviews enabled</label>
+              <div className="flex gap-2"><button onClick={saveEdit} className="flex-1 py-2 bg-primary-600 text-white text-sm rounded-lg">Save</button><button onClick={() => setEditing(false)} className="flex-1 py-2 glass text-white text-sm rounded-lg">Cancel</button></div>
+            </div>
           ) : (
-            <dl className="space-y-3">
-              <div><dt className="text-sm font-medium text-slate-500">Status</dt><dd><Badge status={business.status} /></dd></div>
-              <div><dt className="text-sm font-medium text-slate-500">Welcome Message</dt><dd className="text-slate-800">{business.welcome_message || "—"}</dd></div>
-              <div className="flex gap-8">
-                <div><dt className="text-sm font-medium text-slate-500">Primary Color</dt><dd className="flex items-center gap-2"><span className="inline-block h-5 w-5 rounded" style={{ backgroundColor: business.primary_color }} /><span className="text-slate-800">{business.primary_color}</span></dd></div>
-                <div><dt className="text-sm font-medium text-slate-500">Secondary Color</dt><dd className="flex items-center gap-2"><span className="inline-block h-5 w-5 rounded" style={{ backgroundColor: business.secondary_color }} /><span className="text-slate-800">{business.secondary_color}</span></dd></div>
-              </div>
-              <div><dt className="text-sm font-medium text-slate-500">Google Review URL</dt><dd className="text-slate-800">{business.google_review_url || "—"}</dd></div>
-              <div><dt className="text-sm font-medium text-slate-500">Public Review Enabled</dt><dd className="text-slate-800">{business.public_review_enabled ? "Yes" : "No"}</dd></div>
-              <div><dt className="text-sm font-medium text-slate-500">Created</dt><dd className="text-slate-800">{new Date(business.created_at).toLocaleDateString()}</dd></div>
-            </dl>
+            <div>
+              <dl className="space-y-2 text-sm">
+                <div><dt className="text-slate-500">Welcome Message</dt><dd className="text-white">{business.welcome_message}</dd></div>
+                <div><dt className="text-slate-500">Google Review URL</dt><dd className="text-white truncate">{business.google_review_url || "—"}</dd></div>
+                <div><dt className="text-slate-500">Public Reviews</dt><dd className="text-white">{business.public_review_enabled ? "Enabled" : "Disabled"}</dd></div>
+              </dl>
+              <button onClick={() => setEditing(true)} className="mt-4 w-full py-2 glass text-white text-sm font-medium rounded-lg hover:bg-white/10 transition-colors">Edit</button>
+            </div>
           )}
-        </div>
-
-        <div className="rounded-lg border border-slate-200 bg-white p-5">
-          <h2 className="mb-3 text-lg font-semibold text-slate-900">Stats</h2>
-          <div className="space-y-3">
-            <div className="flex justify-between"><span className="text-sm text-slate-500">Questions</span><span className="font-semibold text-slate-900">{questionsCount}</span></div>
-            <div className="flex justify-between"><span className="text-sm text-slate-500">Review Sessions</span><span className="font-semibold text-slate-900">{reviewSessions.length}</span></div>
+          <div className="mt-4">
+            <input ref={logoRef} type="file" accept="image/*" onChange={handleLogoUpload} className="block w-full text-sm text-slate-400 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-primary-600 file:text-white file:cursor-pointer" />
           </div>
         </div>
+        <div className="glass rounded-2xl p-6">
+          <h3 className="text-sm font-medium text-slate-400 mb-4">ReviewFlow QR</h3>
+          {qrUrl && <img src={qrUrl} alt="QR" className="w-48 h-48 rounded-xl mb-4" />}
+          <p className="text-xs text-slate-500 mb-3 break-all">{reviewUrl}</p>
+          {qrUrl && <button onClick={() => downloadQR(qrUrl, `${business.slug}-qr.png`)} className="w-full py-2 bg-primary-600 hover:bg-primary-500 text-white text-sm font-medium rounded-lg transition-colors">Download QR</button>}
+        </div>
+        <div className="glass rounded-2xl p-6">
+          <h3 className="text-sm font-medium text-slate-400 mb-4">Questions ({questions.length})</h3>
+          {questions.length === 0 ? <p className="text-slate-500 text-sm">No questions</p> : (
+            <div className="space-y-2">{questions.map((q) => <div key={q.id}><p className="text-sm text-white">{q.question_text}</p><p className="text-xs text-slate-500">{q.flow_type} • {q.options.length} options</p></div>)}</div>
+          )}
+        </div>
       </div>
-
-      <div className="mt-6 rounded-lg border border-slate-200 bg-white p-5">
-        <h2 className="mb-4 text-lg font-semibold text-slate-900">Recent Review Sessions</h2>
-        {reviewSessions.length === 0 ? (
-          <EmptyState message="No review sessions yet." />
-        ) : (
-          <ul className="divide-y divide-slate-100">
-            {reviewSessions.slice(0, 20).map((rs) => (
-              <li key={rs.id} className="py-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-slate-800">Rating: {rs.rating}★</p>
-                    <p className="text-xs text-slate-500">{new Date(rs.created_at).toLocaleString()}</p>
-                  </div>
-                  <Badge status={rs.ai_status} />
-                </div>
-                {rs.ai_generated_review && <p className="mt-1 text-sm text-slate-600 line-clamp-2">{rs.ai_generated_review}</p>}
-              </li>
-            ))}
-          </ul>
+      <div className="glass rounded-2xl p-6 mt-6">
+        <h3 className="text-sm font-medium text-slate-400 mb-4">Recent Reviews</h3>
+        {reviews.length === 0 ? <EmptyState title="No reviews yet" /> : (
+          <div className="space-y-3">{reviews.map((r) => (
+            <div key={r.id} className="flex items-start gap-4 border-b border-white/5 pb-3 last:border-0">
+              <div className="text-2xl">{"\u2B50".repeat(r.rating)}</div>
+              <div className="flex-1">{r.ai_generated_review && <p className="text-sm text-slate-300">{r.ai_generated_review.slice(0, 150)}...</p>}<p className="text-xs text-slate-500 mt-1">{formatDateTime(r.created_at)} • {r.ai_status}</p></div>
+            </div>
+          ))}</div>
         )}
       </div>
-    </div>
+    </Layout>
   );
 }

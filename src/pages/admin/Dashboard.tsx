@@ -1,70 +1,41 @@
 import { useEffect, useState } from "react";
+import Layout from "../../components/Layout";
 import { supabase } from "../../lib/supabase";
-import { LoadingSpinner, ErrorState, PageHeader } from "../../components/ui";
+import { Loading } from "../../components/States";
 
-interface Stats {
-  businesses: number;
-  organizations: number;
-  paymentsPending: number;
-  activeSubscriptions: number;
-}
-
-export default function Dashboard() {
-  const [stats, setStats] = useState<Stats | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+export default function AdminDashboard() {
+  const [stats, setStats] = useState<{ orgs: number; businesses: number; payments: number; reviews: number; } | null>(null);
 
   useEffect(() => {
-    async function load() {
-      setLoading(true);
-      setError(null);
-
-      const [biz, orgs, pay, subs] = await Promise.all([
-        supabase.from("businesses").select("*", { count: "exact", head: true }),
-        supabase.from("organizations").select("*", { count: "exact", head: true }),
-        supabase.from("payments").select("*", { count: "exact", head: true }).eq("status", "PENDING"),
-        supabase.from("subscriptions").select("*", { count: "exact", head: true }).eq("status", "ACTIVE"),
-      ]);
-
-      if (biz.error || orgs.error || pay.error || subs.error) {
-        setError("Failed to load dashboard stats");
-        setLoading(false);
-        return;
-      }
-
-      setStats({
-        businesses: biz.count ?? 0,
-        organizations: orgs.count ?? 0,
-        paymentsPending: pay.count ?? 0,
-        activeSubscriptions: subs.count ?? 0,
-      });
-      setLoading(false);
-    }
-    load();
+    Promise.all([
+      supabase.from("organizations").select("id", { count: "exact", head: true }),
+      supabase.from("businesses").select("id", { count: "exact", head: true }),
+      supabase.from("payments").select("id", { count: "exact", head: true }),
+      supabase.from("review_sessions").select("id", { count: "exact", head: true }),
+    ]).then(([o, b, p, r]) => {
+      setStats({ orgs: o.count || 0, businesses: b.count || 0, payments: p.count || 0, reviews: r.count || 0 });
+    });
   }, []);
 
-  if (loading) return <LoadingSpinner size={32} />;
-  if (error) return <ErrorState message={error} />;
-  if (!stats) return <ErrorState message="No data available" />;
+  if (!stats) return <Layout title="Dashboard"><Loading /></Layout>;
 
   const cards = [
-    { label: "Total Businesses", value: stats.businesses, color: "text-primary-600" },
-    { label: "Organizations", value: stats.organizations, color: "text-accent-600" },
-    { label: "Pending Payments", value: stats.paymentsPending, color: "text-yellow-600" },
-    { label: "Active Subscriptions", value: stats.activeSubscriptions, color: "text-green-600" },
+    { label: "Organizations", value: stats.orgs, color: "from-primary-500 to-primary-600" },
+    { label: "Businesses", value: stats.businesses, color: "from-accent-500 to-accent-600" },
+    { label: "Payments", value: stats.payments, color: "from-success-500 to-success-600" },
+    { label: "Review Sessions", value: stats.reviews, color: "from-warning-500 to-warning-600" },
   ];
 
   return (
-    <div>
-      <PageHeader title="Dashboard" subtitle="Platform overview and key metrics" />
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {cards.map((card) => (
-          <div key={card.label} className="card p-6">
-            <p className="text-sm font-medium text-slate-500">{card.label}</p>
-            <p className={`mt-2 text-3xl font-bold ${card.color}`}>{card.value}</p>
+    <Layout title="Dashboard">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {cards.map((c) => (
+          <div key={c.label} className="glass rounded-2xl p-6 animate-slide-up">
+            <p className="text-sm text-slate-400 mb-1">{c.label}</p>
+            <p className={`text-3xl font-bold bg-gradient-to-r ${c.color} bg-clip-text text-transparent`}>{c.value}</p>
           </div>
         ))}
       </div>
-    </div>
+    </Layout>
   );
 }

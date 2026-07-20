@@ -13,34 +13,19 @@ export async function uploadAvatar(userId: string, file: File): Promise<string |
   return uploadToBucket("avatars", `${userId}/avatar-${Date.now()}.${ext}`, file);
 }
 
-export async function uploadBusinessLogo(businessId: string, file: File): Promise<{ url: string | null; error: string | null }> {
-  try {
-    const ext = file.name.split(".").pop() || "png";
-    const url = await uploadToBucket("business-logos", `${businessId}/logo-${Date.now()}.${ext}`, file);
-    return { url, error: url ? null : "Upload failed" };
-  } catch (e) {
-    return { url: null, error: e instanceof Error ? e.message : "Upload failed" };
-  }
+export async function uploadBusinessLogo(businessId: string, file: File): Promise<string | null> {
+  const ext = file.name.split(".").pop() || "png";
+  return uploadToBucket("business-logos", `${businessId}/logo-${Date.now()}.${ext}`, file);
 }
 
-export async function uploadOrgLogo(orgId: string, file: File): Promise<{ url: string | null; error: string | null }> {
-  try {
-    const ext = file.name.split(".").pop() || "png";
-    const url = await uploadToBucket("platform-assets", `organizations/${orgId}/logo-${Date.now()}.${ext}`, file);
-    return { url, error: url ? null : "Upload failed" };
-  } catch (e) {
-    return { url: null, error: e instanceof Error ? e.message : "Upload failed" };
-  }
+export async function uploadOrgLogo(orgId: string, file: File): Promise<string | null> {
+  const ext = file.name.split(".").pop() || "png";
+  return uploadToBucket("platform-assets", `organizations/${orgId}/logo-${Date.now()}.${ext}`, file);
 }
 
-export async function uploadPlatformAsset(key: string, file: File): Promise<{ url: string | null; error: string | null }> {
-  try {
-    const ext = file.name.split(".").pop() || "png";
-    const url = await uploadToBucket("platform-assets", `branding/${key}-${Date.now()}.${ext}`, file);
-    return { url, error: url ? null : "Upload failed" };
-  } catch (e) {
-    return { url: null, error: e instanceof Error ? e.message : "Upload failed" };
-  }
+export async function uploadPlatformAsset(key: string, file: File): Promise<string | null> {
+  const ext = file.name.split(".").pop() || "png";
+  return uploadToBucket("platform-assets", `branding/${key}-${Date.now()}.${ext}`, file);
 }
 
 export async function uploadPaymentProof(paymentId: string, file: File): Promise<{ path: string | null; signedUrl: string | null }> {
@@ -63,10 +48,4 @@ export async function upsertPlatformAsset(key: string, label: string, assetType:
     key, label, asset_type: assetType, public_url: publicUrl, storage_path: storagePath, metadata: metadata ?? {}, is_active: true,
   }, { onConflict: "key" });
   if (error) console.error("Upsert platform asset failed:", error.message);
-}
-
-export async function getSignedPaymentProof(path: string): Promise<string | null> {
-  const { data, error } = await supabase.storage.from("payment-proofs").createSignedUrl(path, 3600);
-  if (error || !data) return null;
-  return data.signedUrl;
 }

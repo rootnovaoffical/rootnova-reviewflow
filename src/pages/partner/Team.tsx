@@ -4,7 +4,7 @@ import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../context/AuthContext";
 import type { OrganizationMember } from "../../lib/types";
 import Avatar from "../../components/Avatar";
-import { Loading, EmptyState, ErrorState } from "../../components/States";
+import { Loading, EmptyState } from "../../components/States";
 import { useToast } from "../../context/ToastContext";
 import { callManageAdmin, insertAuditLog } from "../../lib/auth";
 
@@ -14,20 +14,15 @@ export default function PartnerTeam() {
   const [members, setMembers] = useState<OrganizationMember[] | null>(null);
   const [orgId, setOrgId] = useState<string | null>(null);
   const [inviting, setInviting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const load = () => {
     if (!profile) return;
-    supabase.from("organization_members").select("*, profile:profiles!user_id(*)").eq("user_id", profile.id).maybeSingle()
-      .then(({ data: myMembership, error: memErr }) => {
-        if (memErr) { setError(memErr.message); setMembers([]); return; }
+    supabase.from("organization_members").select("*, profile:profiles!user_id(*)").eq("user_id", profile.id).single()
+      .then(({ data: myMembership }) => {
         if (myMembership?.organization_id) {
           setOrgId(myMembership.organization_id);
           supabase.from("organization_members").select("*, profile:profiles!user_id(*)").eq("organization_id", myMembership.organization_id)
-            .then(({ data, error: listErr }) => {
-              if (listErr) setError(listErr.message);
-              setMembers((data || []) as unknown as OrganizationMember[]);
-            });
+            .then(({ data }) => setMembers((data || []) as unknown as OrganizationMember[]));
         } else { setMembers([]); }
       });
   };
@@ -43,7 +38,6 @@ export default function PartnerTeam() {
   };
 
   const changeRole = async (member: OrganizationMember, newRole: string) => {
-    if (newRole === member.role) return;
     const { error } = await supabase.from("organization_members").update({ role: newRole }).eq("id", member.id);
     if (error) { showToast("Failed to change role", "error"); return; }
     if (profile) await insertAuditLog({ actor_id: profile.id, actor_email: profile.email, action: "team_member_role_changed", target_type: "organization_member", target_id: member.id, organization_id: orgId || undefined, metadata: { new_role: newRole } });
@@ -58,7 +52,6 @@ export default function PartnerTeam() {
   };
 
   if (!members) return <Layout title="Team"><Loading /></Layout>;
-  if (error) return <Layout title="Team Management"><ErrorState message={error} onRetry={load} /></Layout>;
 
   return (
     <Layout title="Team Management">

@@ -1,162 +1,71 @@
 import { useEffect, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
+import Layout from "../../components/Layout";
 import { supabase } from "../../lib/supabase";
-import { LoadingSpinner, ErrorState, EmptyState, Badge, PageHeader, Pagination } from "../../components/ui";
 import type { Organization } from "../../lib/types";
+import { Loading, EmptyState } from "../../components/States";
+import { formatDate } from "../../lib/utils";
 
 const PAGE_SIZE = 20;
 
-export default function Organizations() {
-  const [orgs, setOrgs] = useState<Organization[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [page, setPage] = useState(1);
+export default function AdminOrganizations() {
+  const [orgs, setOrgs] = useState<Organization[] | null>(null);
+  const [page, setPage] = useState(0);
   const [total, setTotal] = useState(0);
-  const [showCreate, setShowCreate] = useState(false);
-  const [creating, setCreating] = useState(false);
-  const [form, setForm] = useState({
-    name: "",
-    slug: "",
-    type: "PARTNER",
-    contact_email: "",
-    contact_phone: "",
-  });
+  const [loading, setLoading] = useState(true);
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
   const load = useCallback(async () => {
     setLoading(true);
-    setError(null);
-
-    const start = (page - 1) * PAGE_SIZE;
-    const end = start + PAGE_SIZE - 1;
-
-    const { data, error: err, count } = await supabase
-      .from("organizations")
+    const { data, count } = await supabase.from("organizations")
       .select("*", { count: "exact" })
       .order("created_at", { ascending: false })
-      .range(start, end);
-
-    if (err) {
-      setError(err.message);
-      setLoading(false);
-      return;
-    }
-
-    setOrgs((data ?? []) as Organization[]);
-    setTotal(count ?? 0);
+      .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
+    setOrgs(data as Organization[] || []);
+    setTotal(count || 0);
     setLoading(false);
   }, [page]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useEffect(() => { load(); }, [load]);
 
-  async function handleCreate(e: React.FormEvent) {
-    e.preventDefault();
-    setCreating(true);
-
-    const { error: err } = await supabase.from("organizations").insert({
-      name: form.name,
-      slug: form.slug,
-      type: form.type,
-      contact_email: form.contact_email || null,
-      contact_phone: form.contact_phone || null,
-      status: "ACTIVE",
-    });
-
-    setCreating(false);
-    if (err) {
-      setError(err.message);
-      return;
-    }
-
-    setShowCreate(false);
-    setForm({ name: "", slug: "", type: "PARTNER", contact_email: "", contact_phone: "" });
-    load();
-  }
+  if (loading && !orgs) return <Layout title="Organizations"><Loading /></Layout>;
 
   return (
-    <div>
-      <PageHeader
-        title="Organizations"
-        subtitle="Manage partner and platform organizations"
-        action={
-          <button className="btn-primary" onClick={() => setShowCreate(!showCreate)}>
-            {showCreate ? "Cancel" : "New Organization"}
-          </button>
-        }
-      />
-
-      {showCreate && (
-        <form onSubmit={handleCreate} className="card mb-6 space-y-4 p-6">
-          <h2 className="text-lg font-semibold text-slate-900">Create Organization</h2>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Name</label>
-              <input className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Slug</label>
-              <input className="input" value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value })} required />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Type</label>
-              <select className="input" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
-                <option value="PARTNER">PARTNER</option>
-                <option value="ROOTNOVA">ROOTNOVA</option>
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Contact Email</label>
-              <input className="input" type="email" value={form.contact_email} onChange={(e) => setForm({ ...form, contact_email: e.target.value })} />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Contact Phone</label>
-              <input className="input" value={form.contact_phone} onChange={(e) => setForm({ ...form, contact_phone: e.target.value })} />
-            </div>
-          </div>
-          <button type="submit" className="btn-primary" disabled={creating}>
-            {creating ? "Creating..." : "Create"}
-          </button>
-        </form>
-      )}
-
-      {loading ? (
-        <LoadingSpinner size={32} />
-      ) : error ? (
-        <ErrorState message={error} onRetry={load} />
-      ) : orgs.length === 0 ? (
-        <EmptyState message="No organizations found" />
-      ) : (
+    <Layout title="Organizations">
+      {orgs && orgs.length === 0 && page === 0 ? <EmptyState title="No organizations" subtitle="Organizations will appear here once partners sign up." /> : (
         <>
-          <div className="card overflow-hidden">
-            <table className="w-full text-left text-sm">
-              <thead className="border-b border-slate-200 bg-slate-50">
+          <div className="glass rounded-2xl overflow-hidden">
+            <table className="w-full">
+              <thead className="bg-white/5">
                 <tr>
-                  <th className="px-4 py-3 font-medium text-slate-600">Name</th>
-                  <th className="px-4 py-3 font-medium text-slate-600">Type</th>
-                  <th className="px-4 py-3 font-medium text-slate-600">Status</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">Name</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">Type</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">Status</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">Created</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
-                {orgs.map((o) => (
-                  <tr key={o.id} className="hover:bg-slate-50">
-                    <td className="px-4 py-3">
-                      <Link to={`/organizations/${o.id}`} className="text-primary-600 hover:underline">
-                        {o.name}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3 text-slate-500">{o.type}</td>
-                    <td className="px-4 py-3"><Badge status={o.status} /></td>
+              <tbody className="divide-y divide-white/5">
+                {orgs?.map((o) => (
+                  <tr key={o.id} className="hover:bg-white/5 transition-colors">
+                    <td className="px-6 py-4"><Link to={`/admin/organizations/${o.id}`} className="text-white font-medium hover:text-primary-300">{o.name}</Link></td>
+                    <td className="px-6 py-4 text-slate-400">{o.type}</td>
+                    <td className="px-6 py-4"><span className={`px-2 py-1 rounded-full text-xs ${o.status === "ACTIVE" ? "bg-success-500/20 text-success-400" : "bg-error-500/20 text-error-400"}`}>{o.status}</span></td>
+                    <td className="px-6 py-4 text-slate-400">{formatDate(o.created_at)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-4 mt-4">
+              <button disabled={page === 0} onClick={() => setPage(page - 1)} className="px-4 py-2 glass text-white text-sm rounded-lg disabled:opacity-40 hover:bg-white/10 transition-colors">Previous</button>
+              <span className="text-sm text-slate-400">Page {page + 1} of {totalPages}</span>
+              <button disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)} className="px-4 py-2 glass text-white text-sm rounded-lg disabled:opacity-40 hover:bg-white/10 transition-colors">Next</button>
+            </div>
+          )}
         </>
       )}
-    </div>
+    </Layout>
   );
 }

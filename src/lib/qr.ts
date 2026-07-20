@@ -12,18 +12,9 @@ export function useQRCode(text: string | null): string | null {
   return url;
 }
 
-export async function generateQRDataUrl(text: string, width = 512): Promise<string> {
-  return QRCode.toDataURL(text, { width, margin: 2, color: { dark: "#0a0a0f", light: "#ffffff" } });
-}
-
 export function downloadQR(url: string, filename: string) {
   const a = document.createElement("a");
   a.href = url;
   a.download = filename;
   a.click();
-}
-
-export async function downloadQRCode(text: string, filename: string, width = 1024): Promise<void> {
-  const dataUrl = await generateQRDataUrl(text, width);
-  downloadQR(dataUrl, filename);
 }

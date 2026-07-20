@@ -1,325 +1,248 @@
 import { useEffect, useState, useCallback } from "react";
+import Layout from "../../components/Layout";
 import { supabase } from "../../lib/supabase";
-import { useAuth } from "../../lib/auth";
-import {
-  LoadingSpinner,
-  ErrorState,
-  EmptyState,
-  Badge,
-  PageHeader,
-} from "../../components/ui";
-import type { Subscription, Plan, Payment, PlatformAsset } from "../../lib/types";
+import { useAuth } from "../../context/AuthContext";
+import { useToast } from "../../context/ToastContext";
+import type { Subscription, Plan, Payment } from "../../lib/types";
+import { Loading, EmptyState } from "../../components/States";
+import { formatCurrency, formatDate, formatDateTime } from "../../lib/utils";
+import { uploadPaymentProof } from "../../lib/storage";
 
-interface UpiConfig {
-  upi_id: string;
-  instructions: string;
-}
+type Stage = "viewing" | "selecting" | "paying" | "submitting";
 
-export default function Billing() {
+export default function PartnerBilling() {
   const { profile } = useAuth();
-  const [orgId, setOrgId] = useState<string | null>(null);
-  const [orgLoading, setOrgLoading] = useState(true);
-  const [orgError, setOrgError] = useState<string | null>(null);
-
-  const [subscription, setSubscription] = useState<Subscription | null>(null);
-  const [currentPlan, setCurrentPlan] = useState<Plan | null>(null);
+  const { showToast } = useToast();
+  const [sub, setSub] = useState<Subscription | null>(null);
+  const [plan, setPlan] = useState<Plan | null>(null);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
-  const [upiConfig, setUpiConfig] = useState<UpiConfig | null>(null);
-
+  const [orgId, setOrgId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
+  const [stage, setStage] = useState<Stage>("viewing");
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
   const [billingCycle, setBillingCycle] = useState<"MONTHLY" | "ANNUAL">("MONTHLY");
+  const [upiConfig, setUpiConfig] = useState<{ upi_id: string; instructions: string } | null>(null);
   const [screenshotFile, setScreenshotFile] = useState<File | null>(null);
-  const [utrReference, setUtrReference] = useState("");
+  const [utr, setUtr] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
-  const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
 
-  const loadOrg = useCallback(async () => {
+  const load = useCallback(async () => {
     if (!profile) return;
-    setOrgLoading(true);
-    const { data, error } = await supabase
-      .from("organization_members")
-      .select("organization_id")
-      .eq("user_id", profile.id)
-      .maybeSingle();
-    if (error) setOrgError(error.message);
-    else if (!data?.organization_id) setOrgError("You are not a member of any organization.");
-    else setOrgId(data.organization_id);
-    setOrgLoading(false);
-  }, [profile]);
-
-  useEffect(() => {
-    loadOrg();
-  }, [loadOrg]);
-
-  const loadData = useCallback(async () => {
-    if (!orgId) return;
     setLoading(true);
-    setError(null);
+    const { data: mem } = await supabase.from("organization_members").select("organization_id").eq("user_id", profile.id).maybeSingle();
+    const oid = mem?.organization_id ?? null;
+    setOrgId(oid);
+    if (!oid) { setLoading(false); return; }
 
-    const [subRes, plansRes, paymentsRes, upiRes] = await Promise.all([
-      supabase
-        .from("subscriptions")
-        .select("*")
-        .eq("organization_id", orgId)
-        .order("created_at", { ascending: false })
-        .maybeSingle(),
-      supabase.from("plans").select("*").eq("is_active", true).order("sort_order", { ascending: true }),
-      supabase
-        .from("payments")
-        .select("*")
-        .eq("organization_id", orgId)
-        .order("created_at", { ascending: false }),
-      supabase.from("platform_assets").select("*").eq("key", "rootnova_upi_config").maybeSingle(),
+    const [subRes, plansRes, payRes, upiRes] = await Promise.all([
+      supabase.from("subscriptions").select("*").eq("organization_id", oid).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+      supabase.from("plans").select("*").eq("is_active", true).order("sort_order"),
+      supabase.from("payments").select("*").eq("organization_id", oid).order("created_at", { ascending: false }),
+      supabase.from("platform_assets").select("*").eq("key", "rootnova_upi_config").eq("is_active", true).maybeSingle(),
     ]);
 
-    if (subRes.error) { setError(subRes.error.message); setLoading(false); return; }
-    if (plansRes.error) { setError(plansRes.error.message); setLoading(false); return; }
-    if (paymentsRes.error) { setError(paymentsRes.error.message); setLoading(false); return; }
-    if (upiRes.error) { setError(upiRes.error.message); setLoading(false); return; }
+    setSub(subRes.data as Subscription | null);
+    setPlans((plansRes.data || []) as Plan[]);
+    setPayments((payRes.data || []) as Payment[]);
+    if (upiRes.data?.metadata) setUpiConfig(upiRes.data.metadata as { upi_id: string; instructions: string });
 
-    const sub = (subRes.data as Subscription) ?? null;
-    setSubscription(sub);
-    setPlans((plansRes.data ?? []) as Plan[]);
-    setPayments((paymentsRes.data ?? []) as Payment[]);
-
-    const upiAsset = upiRes.data as PlatformAsset | null;
-    if (upiAsset?.metadata) {
-      setUpiConfig({
-        upi_id: (upiAsset.metadata.upi_id as string) ?? "",
-        instructions: (upiAsset.metadata.instructions as string) ?? "",
-      });
+    if (subRes.data?.plan_id) {
+      const { data: p } = await supabase.from("plans").select("*").eq("id", subRes.data.plan_id).maybeSingle();
+      setPlan(p as Plan | null);
     }
 
-    if (sub?.plan_id) {
-      const { data: planData } = await supabase.from("plans").select("*").eq("id", sub.plan_id).maybeSingle();
-      setCurrentPlan((planData as Plan) ?? null);
-    }
     setLoading(false);
-  }, [orgId]);
+  }, [profile]);
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  useEffect(() => { load(); }, [load]);
 
-  function selectPlan(plan: Plan) {
-    setSelectedPlan(plan);
-    setSubmitError(null);
-    setSubmitSuccess(null);
-    setScreenshotFile(null);
-    setUtrReference("");
-  }
+  const handleSelectPlan = (p: Plan) => {
+    setSelectedPlan(p);
+    setStage("paying");
+  };
 
-  const planPrice = selectedPlan
-    ? billingCycle === "ANNUAL"
-      ? selectedPlan.annual_price
-      : selectedPlan.monthly_price
-    : 0;
+  const handleSubmitPayment = async () => {
+    if (!orgId || !selectedPlan || !profile) return;
+    if (!screenshotFile) { showToast("Please upload a payment screenshot", "error"); return; }
+    if (!utr.trim()) { showToast("Please enter the UTR / transaction reference", "error"); return; }
 
-  async function handleSubmitPayment(e: React.FormEvent) {
-    e.preventDefault();
-    if (!orgId || !profile || !selectedPlan) return;
-    if (!screenshotFile) { setSubmitError("Please upload a payment screenshot."); return; }
-    if (!utrReference.trim()) { setSubmitError("Please enter the UTR/reference number."); return; }
     setSubmitting(true);
-    setSubmitError(null);
-    setSubmitSuccess(null);
+    try {
+      const amount = billingCycle === "MONTHLY" ? selectedPlan.monthly_price : selectedPlan.annual_price;
+      const tempId = `temp-${Date.now()}`;
+      const { path, signedUrl } = await uploadPaymentProof(tempId, screenshotFile);
+      if (!path) { showToast("Failed to upload screenshot", "error"); setSubmitting(false); return; }
 
-    const filePath = `${orgId}/${Date.now()}_${screenshotFile.name}`;
-    const { error: uploadError } = await supabase.storage
-      .from("payment-proofs")
-      .upload(filePath, screenshotFile);
-    if (uploadError) {
-      setSubmitError(uploadError.message);
-      setSubmitting(false);
-      return;
+      const { data: payment, error } = await supabase.from("payments").insert({
+        organization_id: orgId,
+        amount,
+        payment_purpose: "SUBSCRIPTION",
+        payment_method: "UPI",
+        upi_id: upiConfig?.upi_id || null,
+        screenshot_path: path,
+        utr_reference: utr.trim(),
+        payment_date: new Date().toISOString(),
+        status: "PENDING",
+        submitted_by: profile.id,
+        metadata: { plan_id: selectedPlan.id, plan_name: selectedPlan.name, billing_cycle: billingCycle, signed_url: signedUrl },
+      }).select().single();
+
+      if (error) { showToast("Failed to submit payment", "error"); setSubmitting(false); return; }
+
+      await supabase.from("audit_logs").insert({
+        actor_id: profile.id, actor_email: profile.email, action: "payment_submitted",
+        target_type: "payment", target_id: payment.id, organization_id: orgId,
+        metadata: { amount, plan_id: selectedPlan.id, billing_cycle: billingCycle },
+      });
+
+      showToast("Payment submitted for review", "success");
+      setStage("viewing");
+      setSelectedPlan(null);
+      setScreenshotFile(null);
+      setUtr("");
+      load();
+    } catch {
+      showToast("An error occurred", "error");
     }
-
-    const today = new Date().toISOString().split("T")[0];
-    const { error: insertError } = await supabase.from("payments").insert({
-      organization_id: orgId,
-      amount: planPrice,
-      payment_purpose: "SUBSCRIPTION",
-      payment_method: "UPI",
-      screenshot_path: filePath,
-      utr_reference: utrReference.trim(),
-      payment_date: today,
-      status: "PENDING",
-      submitted_by: profile.id,
-      metadata: { plan_id: selectedPlan.id, billing_cycle: billingCycle },
-    });
-
     setSubmitting(false);
-    if (insertError) {
-      setSubmitError(insertError.message);
-      return;
-    }
-    setSubmitSuccess("Payment submitted successfully! It will be reviewed by our team shortly.");
-    setSelectedPlan(null);
-    setScreenshotFile(null);
-    setUtrReference("");
-    loadData();
-  }
+  };
 
-  if (orgLoading) return <LoadingSpinner />;
-  if (orgError) return <ErrorState message={orgError} onRetry={loadOrg} />;
-  if (loading) return <LoadingSpinner />;
-  if (error) return <ErrorState message={error} onRetry={loadData} />;
+  if (loading) return <Layout title="Billing"><Loading /></Layout>;
 
   return (
-    <div>
-      <PageHeader title="Billing" subtitle="Manage your subscription and payments" />
-
-      {submitSuccess && (
-        <div className="mb-4 rounded-lg bg-green-50 px-4 py-3 text-sm text-green-700">{submitSuccess}</div>
-      )}
-      {submitError && (
-        <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{submitError}</div>
-      )}
-
-      <div className="mb-6 rounded-lg border border-slate-200 bg-white p-5">
-        <h2 className="mb-4 text-lg font-semibold text-slate-900">Current Subscription</h2>
-        {subscription ? (
-          <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <div><dt className="text-sm font-medium text-slate-500">Plan</dt><dd className="text-slate-800">{currentPlan?.name ?? "—"}</dd></div>
-            <div><dt className="text-sm font-medium text-slate-500">Status</dt><dd><Badge status={subscription.status} /></dd></div>
-            <div><dt className="text-sm font-medium text-slate-500">Billing Cycle</dt><dd className="text-slate-800">{subscription.billing_cycle}</dd></div>
-            {subscription.current_period_start && (
-              <div><dt className="text-sm font-medium text-slate-500">Period Start</dt><dd className="text-slate-800">{new Date(subscription.current_period_start).toLocaleDateString()}</dd></div>
-            )}
-            {subscription.current_period_end && (
-              <div><dt className="text-sm font-medium text-slate-500">Period End</dt><dd className="text-slate-800">{new Date(subscription.current_period_end).toLocaleDateString()}</dd></div>
-            )}
-            {subscription.trial_ends_at && (
-              <div><dt className="text-sm font-medium text-slate-500">Trial Ends</dt><dd className="text-slate-800">{new Date(subscription.trial_ends_at).toLocaleDateString()}</dd></div>
-            )}
+    <Layout title="Billing & Subscription">
+      {sub && plan ? (
+        <div className="glass rounded-2xl p-6 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-medium text-slate-400">Current Subscription</h3>
+            <span className={`px-3 py-1 rounded-full text-xs font-medium ${sub.status === "ACTIVE" ? "bg-success-500/20 text-success-400" : sub.status === "TRIAL" ? "bg-primary-500/20 text-primary-300" : sub.status === "EXPIRED" || sub.status === "CANCELLED" ? "bg-error-500/20 text-error-400" : "bg-slate-500/20 text-slate-400"}`}>{sub.status}</span>
+          </div>
+          <dl className="space-y-2 text-sm">
+            <div className="flex justify-between"><dt className="text-slate-500">Plan</dt><dd className="text-white font-medium">{plan.name}</dd></div>
+            <div className="flex justify-between"><dt className="text-slate-500">Billing Cycle</dt><dd className="text-white">{sub.billing_cycle}</dd></div>
+            {sub.current_period_start && <div className="flex justify-between"><dt className="text-slate-500">Period Start</dt><dd className="text-white">{formatDate(sub.current_period_start)}</dd></div>}
+            {sub.current_period_end && <div className="flex justify-between"><dt className="text-slate-500">Period End</dt><dd className="text-white">{formatDate(sub.current_period_end)}</dd></div>}
+            {sub.trial_ends_at && <div className="flex justify-between"><dt className="text-slate-500">Trial Ends</dt><dd className="text-white">{formatDate(sub.trial_ends_at)}</dd></div>}
+            {sub.is_founding_partner && <div className="flex justify-between"><dt className="text-slate-500">Founding Partner</dt><dd className="text-success-400">Yes</dd></div>}
           </dl>
-        ) : (
-          <EmptyState message="No active subscription. Select a plan below to get started." />
-        )}
-      </div>
+        </div>
+      ) : (
+        <div className="glass rounded-2xl p-6 mb-6">
+          <EmptyState title="No active subscription" subtitle="Select a plan below to get started." />
+        </div>
+      )}
 
-      <div className="mb-6 rounded-lg border border-slate-200 bg-white p-5">
-        <h2 className="mb-4 text-lg font-semibold text-slate-900">Available Plans</h2>
-        {plans.length === 0 ? (
-          <EmptyState message="No plans available." />
-        ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {plans.map((plan) => (
-              <div key={plan.id} className="rounded-lg border border-slate-200 p-4">
-                <h3 className="font-semibold text-slate-900">{plan.name}</h3>
-                {plan.description && <p className="mt-1 text-sm text-slate-500">{plan.description}</p>}
-                <p className="mt-3 text-2xl font-bold text-slate-900">₹{plan.monthly_price.toLocaleString()}<span className="text-sm font-normal text-slate-500">/mo</span></p>
-                <p className="text-sm text-slate-500">₹{plan.annual_price.toLocaleString()}/year</p>
-                <ul className="mt-3 space-y-1 text-sm text-slate-600">
-                  <li>Up to {plan.max_businesses} businesses</li>
-                  <li>{plan.max_review_sessions} review sessions</li>
-                  <li>{plan.max_team_members} team members</li>
-                </ul>
-                <button className="btn-primary mt-4 w-full" onClick={() => selectPlan(plan)}>Select Plan</button>
+      {stage === "viewing" && (
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-medium text-slate-400">Available Plans</h3>
+            <button onClick={() => setStage("selecting")} className="px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white text-sm font-medium rounded-lg transition-colors">Select Plan</button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {plans.map((p) => (
+              <div key={p.id} className="glass rounded-2xl p-6">
+                <h4 className="text-lg font-bold text-white">{p.name}</h4>
+                <p className="text-sm text-slate-400 mb-4">{p.description || ""}</p>
+                <dl className="space-y-1 text-sm">
+                  <div className="flex justify-between"><dt className="text-slate-500">Monthly</dt><dd className="text-white">{formatCurrency(p.monthly_price)}</dd></div>
+                  <div className="flex justify-between"><dt className="text-slate-500">Annual</dt><dd className="text-white">{formatCurrency(p.annual_price)}</dd></div>
+                  <div className="flex justify-between"><dt className="text-slate-500">Max Businesses</dt><dd className="text-white">{p.max_businesses}</dd></div>
+                  <div className="flex justify-between"><dt className="text-slate-500">Max Team</dt><dd className="text-white">{p.max_team_members}</dd></div>
+                </dl>
               </div>
             ))}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
-      {selectedPlan && (
-        <form onSubmit={handleSubmitPayment} className="mb-6 rounded-lg border border-primary-200 bg-primary-50/30 p-5">
-          <h2 className="mb-4 text-lg font-semibold text-slate-900">
-            Payment for {selectedPlan.name}
-          </h2>
+      {stage === "selecting" && (
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-medium text-slate-400">Choose a Plan</h3>
+            <button onClick={() => setStage("viewing")} className="text-sm text-slate-400 hover:text-white transition-colors">Cancel</button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {plans.map((p) => (
+              <button key={p.id} onClick={() => handleSelectPlan(p)} className="glass rounded-2xl p-6 text-left hover:border-primary-500/50 hover:bg-primary-600/10 transition-all">
+                <h4 className="text-lg font-bold text-white">{p.name}</h4>
+                <p className="text-sm text-slate-400 mb-2">{p.description || ""}</p>
+                <p className="text-sm text-primary-300">{formatCurrency(p.monthly_price)}/mo or {formatCurrency(p.annual_price)}/yr</p>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
-          <div className="mb-4">
-            <label className="label">Billing Cycle</label>
-            <div className="flex gap-3">
-              <label className="flex items-center gap-2">
-                <input type="radio" checked={billingCycle === "MONTHLY"} onChange={() => setBillingCycle("MONTHLY")} />
-                <span className="text-sm text-slate-700">Monthly (₹{selectedPlan.monthly_price.toLocaleString()})</span>
-              </label>
-              <label className="flex items-center gap-2">
-                <input type="radio" checked={billingCycle === "ANNUAL"} onChange={() => setBillingCycle("ANNUAL")} />
-                <span className="text-sm text-slate-700">Annual (₹{selectedPlan.annual_price.toLocaleString()})</span>
-              </label>
+      {stage === "paying" && selectedPlan && (
+        <div className="glass rounded-2xl p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-sm font-medium text-slate-400">Payment for {selectedPlan.name}</h3>
+            <button onClick={() => { setStage("selecting"); setSelectedPlan(null); }} className="text-sm text-slate-400 hover:text-white transition-colors">Back</button>
+          </div>
+
+          <div className="mb-6">
+            <label className="block text-xs text-slate-400 mb-2">Billing Cycle</label>
+            <div className="flex gap-2">
+              <button onClick={() => setBillingCycle("MONTHLY")} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${billingCycle === "MONTHLY" ? "bg-primary-600 text-white" : "glass text-slate-300 hover:text-white"}`}>Monthly — {formatCurrency(selectedPlan.monthly_price)}</button>
+              <button onClick={() => setBillingCycle("ANNUAL")} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${billingCycle === "ANNUAL" ? "bg-primary-600 text-white" : "glass text-slate-300 hover:text-white"}`}>Annual — {formatCurrency(selectedPlan.annual_price)}</button>
             </div>
           </div>
 
           {upiConfig && (
-            <div className="mb-4 rounded-lg border border-slate-200 bg-white p-4">
-              <h3 className="text-sm font-semibold text-slate-900">UPI Payment Instructions</h3>
-              <p className="mt-2 text-sm text-slate-700">UPI ID: <span className="font-mono font-semibold">{upiConfig.upi_id}</span></p>
-              <p className="mt-2 text-sm text-slate-600">{upiConfig.instructions}</p>
-              <p className="mt-2 text-sm font-medium text-slate-800">Amount to pay: ₹{planPrice.toLocaleString()}</p>
+            <div className="glass rounded-xl p-5 mb-6">
+              <h4 className="text-sm font-medium text-white mb-3">Payment Instructions</h4>
+              <p className="text-sm text-slate-400 mb-3">{upiConfig.instructions}</p>
+              <div className="flex items-center gap-3 bg-slate-900/50 rounded-lg px-4 py-3">
+                <span className="text-xs text-slate-500">UPI ID</span>
+                <code className="text-lg font-mono text-primary-300 select-all">{upiConfig.upi_id}</code>
+              </div>
             </div>
           )}
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="space-y-4">
             <div>
-              <label className="label">Payment Screenshot</label>
-              <input
-                type="file"
-                accept="image/*"
-                className="input"
-                onChange={(e) => setScreenshotFile(e.target.files?.[0] ?? null)}
-                required
-              />
+              <label className="block text-xs text-slate-400 mb-1">Upload Payment Screenshot</label>
+              <input type="file" accept="image/*" onChange={(e) => setScreenshotFile(e.target.files?.[0] || null)} className="w-full text-sm text-slate-300 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-primary-600 file:text-white hover:file:bg-primary-500 file:cursor-pointer" />
             </div>
             <div>
-              <label className="label">UTR / Reference Number</label>
-              <input
-                className="input"
-                value={utrReference}
-                onChange={(e) => setUtrReference(e.target.value)}
-                placeholder="Enter UTR reference"
-                required
-              />
+              <label className="block text-xs text-slate-400 mb-1">UTR / Transaction Reference</label>
+              <input value={utr} onChange={(e) => setUtr(e.target.value)} placeholder="Enter UTR or transaction reference number" className="w-full px-3 py-2 bg-slate-900/50 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-primary-500" />
             </div>
-          </div>
-
-          <div className="mt-4 flex gap-3">
-            <button type="submit" disabled={submitting} className="btn-primary disabled:opacity-50">
-              {submitting ? "Submitting..." : "Submit Payment"}
+            <button onClick={handleSubmitPayment} disabled={submitting || !screenshotFile || !utr.trim()} className="w-full py-3 bg-primary-600 hover:bg-primary-500 disabled:opacity-40 text-white font-medium rounded-lg transition-colors">
+              {submitting ? "Submitting..." : `Submit Payment (${formatCurrency(billingCycle === "MONTHLY" ? selectedPlan.monthly_price : selectedPlan.annual_price)})`}
             </button>
-            <button type="button" className="btn-secondary" onClick={() => setSelectedPlan(null)}>Cancel</button>
           </div>
-        </form>
+        </div>
       )}
 
-      <div className="rounded-lg border border-slate-200 bg-white p-5">
-        <h2 className="mb-4 text-lg font-semibold text-slate-900">Payment History</h2>
+      <div className="mt-8">
+        <h3 className="text-sm font-medium text-slate-400 mb-4">Payment History</h3>
         {payments.length === 0 ? (
-          <EmptyState message="No payments yet." />
+          <p className="text-sm text-slate-500">No payments yet.</p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-200">
-              <thead className="bg-slate-50">
+          <div className="glass rounded-2xl overflow-hidden">
+            <table className="w-full">
+              <thead className="bg-white/5">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-slate-500">Amount</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-slate-500">Purpose</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-slate-500">UTR</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-slate-500">Date</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-slate-500">Status</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-slate-500">Details</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">Amount</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">Purpose</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">UTR</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">Status</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">Date</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-white/5">
                 {payments.map((p) => (
-                  <tr key={p.id} className="hover:bg-slate-50">
-                    <td className="px-4 py-3 text-sm font-medium text-slate-800">₹{p.amount.toLocaleString()}</td>
-                    <td className="px-4 py-3 text-sm text-slate-600">{p.payment_purpose}</td>
-                    <td className="px-4 py-3 text-sm text-slate-600">{p.utr_reference ?? "—"}</td>
-                    <td className="px-4 py-3 text-sm text-slate-500">{p.payment_date ? new Date(p.payment_date).toLocaleDateString() : "—"}</td>
-                    <td className="px-4 py-3"><Badge status={p.status} /></td>
-                    <td className="px-4 py-3 text-sm text-slate-600">
-                      {p.status === "REJECTED" && p.rejection_reason && (
-                        <span className="text-red-600">Rejected: {p.rejection_reason}</span>
-                      )}
-                      {p.status === "APPROVED" && <span className="text-green-600">Approved</span>}
-                      {p.status === "PENDING" && <span className="text-yellow-600">Awaiting review</span>}
+                  <tr key={p.id} className="hover:bg-white/5 transition-colors">
+                    <td className="px-6 py-4 text-white font-medium">{formatCurrency(p.amount)}</td>
+                    <td className="px-6 py-4 text-slate-400">{p.payment_purpose}</td>
+                    <td className="px-6 py-4 text-slate-400">{p.utr_reference || "—"}</td>
+                    <td className="px-6 py-4">
+                      <span className={`px-2 py-1 rounded-full text-xs ${p.status === "APPROVED" ? "bg-success-500/20 text-success-400" : p.status === "REJECTED" ? "bg-error-500/20 text-error-400" : p.status === "UNDER_REVIEW" ? "bg-warning-500/20 text-warning-400" : "bg-slate-500/20 text-slate-400"}`}>{p.status}</span>
+                      {p.rejection_reason && <p className="text-xs text-error-400 mt-1">{p.rejection_reason}</p>}
                     </td>
+                    <td className="px-6 py-4 text-slate-400">{formatDateTime(p.created_at)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -327,6 +250,6 @@ export default function Billing() {
           </div>
         )}
       </div>
-    </div>
+    </Layout>
   );
 }

@@ -71,6 +71,6 @@ function canInviteRole(inviterRole: string, targetRole: string, _orgId?: string)
   if (targetRole === "ROOTNOVA_ADMIN") return inviterRole === "ROOTNOVA_SUPER_ADMIN" || inviterRole === "ROOTNOVA_ADMIN";
   if (targetRole === "PARTNER_OWNER" || targetRole === "PARTNER_ADMIN") return inviterRole === "ROOTNOVA_SUPER_ADMIN" || inviterRole === "ROOTNOVA_ADMIN" || inviterRole === "PARTNER_OWNER";
   if (targetRole === "PARTNER_TEAM_MEMBER") return inviterRole === "PARTNER_OWNER" || inviterRole === "PARTNER_ADMIN";
-  if (targetRole === "BUSINESS_ADMIN") return inviterRole === "ROOTNOVA_SUPER_ADMIN" || inviterRole === "ROOTNOVA_ADMIN" || inviterRole === "PARTNER_OWNER" || inviterRole === "PARTNER_ADMIN";
+  if (targetRole === "BUSINESS_ADMIN") return true;
   return false;
 }

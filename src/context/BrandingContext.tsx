@@ -8,7 +8,6 @@ interface BrandingContextValue {
   flags: Record<string, FeatureFlag>;
   upiId: string | null;
   upiQrUrl: string | null;
-  logoPrimary: string | null;
   refresh: () => Promise<void>;
 }
 
@@ -45,11 +44,12 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
     return () => { sub.unsubscribe(); };
   }, [refresh]);
 
-  const upiId = assets["upi_id"]?.metadata?.upi_id as string | null ?? assets["upi_id"]?.public_url ?? null;
+  const upiConfig = assets["rootnova_upi_config"];
+  const upiId = (upiConfig?.metadata?.upi_id as string | null) ?? (assets["upi_id"]?.metadata?.upi_id as string | null) ?? null;
   const upiQrUrl = assets["upi_qr"]?.public_url ?? null;
 
   return (
-    <BrandingContext.Provider value={{ assets, flags, upiId, upiQrUrl, logoPrimary: assets["logo_primary"]?.public_url ?? null, refresh }}>
+    <BrandingContext.Provider value={{ assets, flags, upiId, upiQrUrl, refresh }}>
       {children}
     </BrandingContext.Provider>
   );

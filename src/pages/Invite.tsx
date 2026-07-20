@@ -7,7 +7,7 @@ export default function Invite() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const token = params.get("token");
-  const [invitation, setInvitation] = useState<{ email: string; role: string } | null>(null);
+  const [invitation, setInvitation] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [fullName, setFullName] = useState("");
   const [password, setPassword] = useState("");
@@ -16,55 +16,43 @@ export default function Invite() {
 
   useEffect(() => {
     if (!token) { setError("Missing invitation token"); setLoading(false); return; }
-
-    // Fetch invitation via edge function to bypass RLS (anon key can't read admin_invitations)
-    fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/accept-invitation`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", apikey: import.meta.env.VITE_SUPABASE_ANON_KEY },
-      body: JSON.stringify({ token, action: "lookup" }),
-    })
-      .then(async (res) => {
-        const data = await res.json();
-        if (!res.ok || data.error) { setError(data.error || "Invalid or expired invitation"); setLoading(false); return; }
-        setInvitation({ email: data.email, role: data.role });
+    supabase.from("admin_invitations").select("*").eq("id", token).eq("status", "INVITED").maybeSingle()
+      .then(({ data, error }) => {
+        if (error || !data) { setError("Invalid or expired invitation"); setLoading(false); return; }
+        setInvitation(data);
         setLoading(false);
-      })
-      .catch(() => { setError("Failed to load invitation"); setLoading(false); });
+      });
   }, [token]);
 
   const handleAccept = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!invitation || !token) return;
+    if (!invitation) return;
     setSubmitting(true);
     setError(null);
-
-    try {
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/accept-invitation`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", apikey: import.meta.env.VITE_SUPABASE_ANON_KEY },
-        body: JSON.stringify({ token, password, fullName }),
-      });
-      const data = await res.json();
-      if (!res.ok || data.error) { setError(data.error || "Failed to create account"); setSubmitting(false); return; }
-
-      // If the edge function returned a session, set it in the client
-      if (data.session?.access_token && data.session?.refresh_token) {
-        await supabase.auth.setSession({
-          access_token: data.session.access_token,
-          refresh_token: data.session.refresh_token,
+    const { data, error: signUpError } = await supabase.auth.signUp({
+      email: invitation.email, password,
+      options: { data: { full_name: fullName } },
+    });
+    if (signUpError) { setError(signUpError.message); setSubmitting(false); return; }
+    if (data.user) {
+      await supabase.from("profiles").upsert({
+        id: data.user.id, email: invitation.email, full_name: fullName, role: invitation.role, account_status: "ACTIVE",
+      }, { onConflict: "id" });
+      if (invitation.role.startsWith("PARTNER")) {
+        await supabase.from("organization_members").insert({
+          organization_id: (await supabase.from("admin_invitations").select("organization_id").eq("id", token).single()).data?.organization_id || null,
+          user_id: data.user.id,
+          role: invitation.role === "PARTNER_OWNER" ? "OWNER" : invitation.role === "PARTNER_ADMIN" ? "ADMIN" : "TEAM_MEMBER",
+          status: "ACTIVE",
         });
       }
-
-      // Navigate to the role-appropriate page
-      const role = data.role || invitation.role;
-      const dest = role === "BUSINESS_ADMIN" ? "/business"
-        : role.startsWith("PARTNER") ? "/partner"
-        : "/admin";
-      navigate(dest);
-    } catch {
-      setError("Network error. Please try again.");
-      setSubmitting(false);
+      if (invitation.role === "BUSINESS_ADMIN" && invitation.business_id) {
+        await supabase.from("business_admins").insert({ business_id: invitation.business_id, user_id: data.user.id });
+      }
+      await supabase.from("admin_invitations").update({ status: "ACCEPTED", updated_at: new Date().toISOString() }).eq("id", token);
     }
+    setSubmitting(false);
+    navigate("/login");
   };
 
   if (loading) return (

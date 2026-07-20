@@ -2,22 +2,19 @@ import { useEffect, useState } from "react";
 import Layout from "../../components/Layout";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../context/AuthContext";
-import { Loading, EmptyState, ErrorState } from "../../components/States";
+import { Loading, EmptyState } from "../../components/States";
 
 export default function BusinessAnalytics() {
   const { profile } = useAuth();
   const [events, setEvents] = useState<Record<string, number> | null>(null);
   const [dailyData, setDailyData] = useState<{ date: string; count: number }[]>([]);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!profile) return;
-    supabase.from("business_admins").select("business_id").eq("user_id", profile.id).maybeSingle()
-      .then(({ data, error: baErr }) => {
-        if (baErr) { setError(baErr.message); setEvents({}); return; }
+    supabase.from("business_admins").select("business_id").eq("user_id", profile.id).single()
+      .then(({ data }) => {
         if (!data?.business_id) { setEvents({}); return; }
-        supabase.from("analytics_events").select("event_type, created_at").eq("business_id", data.business_id).order("created_at", { ascending: false }).limit(500).then(({ data: rows, error: evErr }) => {
-          if (evErr) setError(evErr.message);
+        supabase.from("analytics_events").select("event_type, created_at").eq("business_id", data.business_id).order("created_at", { ascending: false }).limit(500).then(({ data: rows }) => {
           const counts: Record<string, number> = {};
           (rows || []).forEach((r) => { counts[r.event_type] = (counts[r.event_type] || 0) + 1; });
           setEvents(counts);
@@ -33,7 +30,6 @@ export default function BusinessAnalytics() {
   }, [profile]);
 
   if (!events) return <Layout title="Analytics"><Loading /></Layout>;
-  if (error) return <Layout title="Analytics"><ErrorState message={error} /></Layout>;
 
   const maxCount = Math.max(...dailyData.map((d) => d.count), 1);
   const eventTypes = ["page_view", "review_start", "rating_submitted", "questions_submitted", "ai_completion", "copy_event", "google_click"];
@@ -54,7 +50,7 @@ export default function BusinessAnalytics() {
           <div className="flex items-end gap-1 h-48">
             {dailyData.map((d) => (
               <div key={d.date} className="flex-1 flex flex-col items-center gap-1">
-                <div className="w-full bg-gradient-to-t from-primary-600 to-primary-400 rounded-t transition-all" style={{ height: `${(d.count / maxCount) * 100}%`, minHeight: d.count > 0 ? "4px" : "0" }} />
+                <div className="w-full bg-gradient-to-t from-primary-600 to-primary-400 rounded-t    transition-all" style={{ height: `${(d.count / maxCount) * 100}%`, minHeight: d.count > 0 ? "4px" : "0" }} />
                 <span className="text-xs text-slate-500">{d.date.slice(5)}</span>
               </div>
             ))}

@@ -1,112 +1,70 @@
 import { useEffect, useState, useCallback } from "react";
+import Layout from "../../components/Layout";
 import { supabase } from "../../lib/supabase";
-import { LoadingSpinner, ErrorState, EmptyState, PageHeader, Pagination } from "../../components/ui";
 import type { AuditLog } from "../../lib/types";
+import { Loading, EmptyState } from "../../components/States";
+import { formatDateTime } from "../../lib/utils";
 
 const PAGE_SIZE = 50;
 
-export default function Audit() {
-  const [logs, setLogs] = useState<AuditLog[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [page, setPage] = useState(1);
+export default function AdminAudit() {
+  const [logs, setLogs] = useState<AuditLog[] | null>(null);
+  const [page, setPage] = useState(0);
   const [total, setTotal] = useState(0);
-  const [actionFilter, setActionFilter] = useState("ALL");
+  const [loading, setLoading] = useState(true);
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
   const load = useCallback(async () => {
     setLoading(true);
-    setError(null);
-
-    const start = (page - 1) * PAGE_SIZE;
-    const end = start + PAGE_SIZE - 1;
-
-    let query = supabase
-      .from("audit_logs")
+    const { data, count } = await supabase.from("audit_logs")
       .select("*", { count: "exact" })
       .order("created_at", { ascending: false })
-      .range(start, end);
-
-    if (actionFilter !== "ALL") {
-      query = query.eq("action", actionFilter);
-    }
-
-    const { data, error: err, count } = await query;
-
-    if (err) {
-      setError(err.message);
-      setLoading(false);
-      return;
-    }
-
-    setLogs((data ?? []) as AuditLog[]);
-    setTotal(count ?? 0);
+      .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
+    setLogs(data as AuditLog[] || []);
+    setTotal(count || 0);
     setLoading(false);
-  }, [page, actionFilter]);
+  }, [page]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useEffect(() => { load(); }, [load]);
 
-  useEffect(() => {
-    setPage(1);
-  }, [actionFilter]);
+  if (loading && !logs) return <Layout title="Audit Log"><Loading /></Layout>;
 
   return (
-    <div>
-      <PageHeader title="Audit Logs" subtitle="Track all administrative actions" />
-
-      <div className="mb-4 flex items-center gap-3">
-        <label className="text-sm font-medium text-slate-700">Filter by action:</label>
-        <select className="input max-w-[240px]" value={actionFilter} onChange={(e) => setActionFilter(e.target.value)}>
-          <option value="ALL">All Actions</option>
-          <option value="payment.approve">payment.approve</option>
-          <option value="payment.reject">payment.reject</option>
-          <option value="business.update">business.update</option>
-          <option value="organization.create">organization.create</option>
-          <option value="organization.update">organization.update</option>
-          <option value="subscription.create">subscription.create</option>
-          <option value="plan.create">plan.create</option>
-          <option value="plan.update">plan.update</option>
-          <option value="admin.invite">admin.invite</option>
-          <option value="admin.revoke">admin.revoke</option>
-        </select>
-      </div>
-
-      {loading ? (
-        <LoadingSpinner size={32} />
-      ) : error ? (
-        <ErrorState message={error} onRetry={load} />
-      ) : logs.length === 0 ? (
-        <EmptyState message="No audit logs found" />
-      ) : (
+    <Layout title="Audit Log">
+      {logs && logs.length === 0 && page === 0 ? <EmptyState title="No audit logs" /> : (
         <>
-          <div className="card overflow-hidden">
-            <table className="w-full text-left text-sm">
-              <thead className="border-b border-slate-200 bg-slate-50">
+          <div className="glass rounded-2xl overflow-hidden">
+            <table className="w-full">
+              <thead className="bg-white/5">
                 <tr>
-                  <th className="px-4 py-3 font-medium text-slate-600">Actor</th>
-                  <th className="px-4 py-3 font-medium text-slate-600">Action</th>
-                  <th className="px-4 py-3 font-medium text-slate-600">Target Type</th>
-                  <th className="px-4 py-3 font-medium text-slate-600">Date</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">Actor</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">Action</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">Target</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">Date</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
-                {logs.map((l) => (
-                  <tr key={l.id} className="hover:bg-slate-50">
-                    <td className="px-4 py-3 text-slate-700">{l.actor_email ?? "—"}</td>
-                    <td className="px-4 py-3 font-medium text-slate-900">{l.action}</td>
-                    <td className="px-4 py-3 text-slate-500">{l.target_type ?? "—"}</td>
-                    <td className="px-4 py-3 text-slate-500">{new Date(l.created_at).toLocaleString()}</td>
+              <tbody className="divide-y divide-white/5">
+                {logs?.map((l) => (
+                  <tr key={l.id} className="hover:bg-white/5 transition-colors">
+                    <td className="px-6 py-4 text-sm text-white">{l.actor_email || "—"}</td>
+                    <td className="px-6 py-4 text-sm text-primary-300">{l.action}</td>
+                    <td className="px-6 py-4 text-sm text-slate-400">{l.target_type || "—"}{l.target_id ? ` (${l.target_id.slice(0, 8)})` : ""}</td>
+                    <td className="px-6 py-4 text-sm text-slate-400">{formatDateTime(l.created_at)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-4 mt-4">
+              <button disabled={page === 0} onClick={() => setPage(page - 1)} className="px-4 py-2 glass text-white text-sm rounded-lg disabled:opacity-40 hover:bg-white/10 transition-colors">Previous</button>
+              <span className="text-sm text-slate-400">Page {page + 1} of {totalPages}</span>
+              <button disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)} className="px-4 py-2 glass text-white text-sm rounded-lg disabled:opacity-40 hover:bg-white/10 transition-colors">Next</button>
+            </div>
+          )}
         </>
       )}
-    </div>
+    </Layout>
   );
 }

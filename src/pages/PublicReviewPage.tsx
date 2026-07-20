@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import type { Business, Question } from "../lib/types";
+import { googleReviewUrl } from "../lib/utils";
 import SpatialBackground from "../components/SpatialBackground";
 import StarRating3D from "../components/StarRating3D";
 import { Confetti, Shockwave, FloatingEmojis, AuroraGlow } from "../components/Effects";
@@ -38,6 +39,7 @@ export default function PublicReviewPage() {
   const [shockwaveTrigger, setShockwaveTrigger] = useState(false);
   const [emojisTrigger, setEmojisTrigger] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const genTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const genMsgTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -214,16 +216,19 @@ export default function PublicReviewPage() {
 
   const googleDestination = (() => {
     if (!business) return null;
-    if (business.google_review_url) return business.google_review_url;
-    if (business.google_maps_url) return business.google_maps_url;
-    return null;
+    const url = googleReviewUrl(business);
+    return url || (business.google_maps_url || null);
   })();
 
   const handleGoogleClick = () => {
-    if (!googleDestination) return;
+    if (!googleDestination || googleLoading) return;
+    setGoogleLoading(true);
     supabase.from("analytics_events").insert({ business_id: business?.id, session_id: sessionId, event_type: "google_click", metadata: { destination: googleDestination } }).then();
-    window.open(googleDestination, "_blank");
-    setStage("google");
+    setTimeout(() => {
+      window.open(googleDestination, "_blank");
+      setGoogleLoading(false);
+      setStage("google");
+    }, 400);
   };
 
   useEffect(() => {
@@ -368,10 +373,16 @@ export default function PublicReviewPage() {
           )}
 
           {stage === "result" && (
-            <div className="glass-strong rounded-3xl p-8 sm:p-10 animate-review-reveal">
-              <h2 className="text-2xl font-bold text-white mb-4 text-center">Your Review</h2>
+            <div className="animate-review-reveal">
+              <div className="text-center mb-6">
+                <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full glass mb-4">
+                  <span className="text-sm text-primary-300 font-medium">✨ Your experience is ready to be shared</span>
+                </div>
+                <p className="text-slate-400 text-sm">Let the world know what made your visit special.</p>
+              </div>
+
               {editingReview ? (
-                <div className="mb-6">
+                <div className="glass-strong rounded-3xl p-8 mb-6">
                   <textarea
                     value={editText}
                     onChange={(e) => setEditText(e.target.value)}
@@ -385,30 +396,54 @@ export default function PublicReviewPage() {
                   </div>
                 </div>
               ) : (
-                <div className="glass rounded-2xl p-6 mb-6">
-                  <p className="text-slate-200 leading-relaxed">{aiReview}</p>
+                <div className="glass-strong rounded-3xl p-8 sm:p-10 mb-6 relative overflow-hidden">
+                  <div className="absolute inset-0 bg-gradient-to-br from-primary-500/5 via-transparent to-accent-500/5 pointer-events-none" />
+                  <div className="relative">
+                    <div className="flex items-center gap-1 mb-4">
+                      {[1,2,3,4,5].map((s) => (
+                        <span key={s} className={`text-lg ${s <= rating ? "text-amber-400" : "text-slate-700"}`}>★</span>
+                      ))}
+                    </div>
+                    <p className="text-slate-100 leading-relaxed text-base sm:text-lg">{aiReview}</p>
+                  </div>
                 </div>
               )}
 
               {!editingReview && (
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <button onClick={() => setEditingReview(true)} className="choice3d flex-1 py-3 glass text-white font-medium rounded-xl hover:bg-white/10 transition-all">
-                    Edit
-                  </button>
-                  <button onClick={handleRegenerate} disabled={generating} className="choice3d flex-1 py-3 glass text-white font-medium rounded-xl hover:bg-white/10 transition-all disabled:opacity-50">
-                    Regenerate
-                  </button>
-                  <button onClick={handleCopyReview} className="choice3d flex-1 py-3 glass text-white font-medium rounded-xl hover:bg-white/10 transition-all">
-                    {copied ? "Copied!" : "Copy"}
-                  </button>
+                <>
                   {googleDestination ? (
-                    <button onClick={handleGoogleClick} className="choice3d flex-1 py-3 bg-gradient-to-r from-success-600 to-success-500 text-white font-semibold rounded-xl shadow-lg shadow-success-500/30 transition-all hover:scale-105">
-                      Continue to Google Review
+                    <button
+                      onClick={handleGoogleClick}
+                      disabled={googleLoading}
+                      className="choice3d w-full py-4 bg-gradient-to-r from-success-600 to-success-500 text-white text-lg font-semibold rounded-2xl shadow-xl shadow-success-500/30 transition-all hover:scale-[1.02] active:scale-[0.99] disabled:opacity-70 disabled:hover:scale-100 mb-3"
+                    >
+                      {googleLoading ? (
+                        <span className="flex items-center justify-center gap-2">
+                          <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          Opening Google...
+                        </span>
+                      ) : (
+                        "🌟 Continue to Google Review"
+                      )}
                     </button>
                   ) : (
-                    <p className="flex-1 text-center text-xs text-amber-400 py-3">Google review destination not configured for this business.</p>
+                    <div className="glass rounded-2xl p-4 mb-3 text-center border border-amber-500/20">
+                      <p className="text-sm text-amber-400">Google review destination not configured for this business.</p>
+                    </div>
                   )}
-                </div>
+
+                  <div className="flex gap-3">
+                    <button onClick={handleCopyReview} className="choice3d flex-1 py-3 glass text-white font-medium rounded-xl hover:bg-white/10 transition-all">
+                      {copied ? "Copied ✨" : "📋 Copy Review"}
+                    </button>
+                    <button onClick={handleRegenerate} disabled={generating} className="choice3d flex-1 py-3 glass text-white font-medium rounded-xl hover:bg-white/10 transition-all disabled:opacity-50">
+                      ↻ Regenerate
+                    </button>
+                    <button onClick={() => setEditingReview(true)} className="choice3d flex-1 py-3 glass text-white font-medium rounded-xl hover:bg-white/10 transition-all">
+                      ✏️ Edit
+                    </button>
+                  </div>
+                </>
               )}
 
               {!editingReview && rating < 4 && (

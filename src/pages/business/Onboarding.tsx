@@ -15,7 +15,7 @@ const CATEGORIES = [
   "Legal Services", "Other",
 ];
 
-const STEPS = ["Business", "Branding", "Google", "Questions", "Review"];
+const STEPS = ["Identity", "Branding", "Google", "Questions", "Review"];
 
 export default function BusinessOnboarding() {
   const { profile } = useAuth();
@@ -25,7 +25,10 @@ export default function BusinessOnboarding() {
   const [existingBusiness, setExistingBusiness] = useState<Business | null>(null);
   const [checking, setChecking] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [slugOk, setSlugOk] = useState<boolean | null>(null);
+  const [checkingSlug, setCheckingSlug] = useState(false);
   const logoRef = useRef<HTMLInputElement>(null);
+  const slugTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [form, setForm] = useState({
     name: "",
@@ -36,7 +39,7 @@ export default function BusinessOnboarding() {
     contact_phone: "",
     welcome_message: "We'd love to hear about your experience!",
     primary_color: "#6366f1",
-    secondary_color: "#a855f7",
+    secondary_color: "#22d3ee",
     google_review_url: "",
     google_place_id: "",
     logo_url: "",
@@ -64,7 +67,7 @@ export default function BusinessOnboarding() {
               contact_phone: biz.contact_phone || "",
               welcome_message: biz.welcome_message || "We'd love to hear about your experience!",
               primary_color: biz.primary_color || "#6366f1",
-              secondary_color: biz.secondary_color || "#a855f7",
+              secondary_color: biz.secondary_color || "#22d3ee",
               google_review_url: biz.google_review_url || "",
               google_place_id: biz.google_place_id || "",
               logo_url: biz.logo_url || "",
@@ -74,6 +77,20 @@ export default function BusinessOnboarding() {
         });
       });
   }, [profile]);
+
+  // Debounced slug check
+  useEffect(() => {
+    if (!form.slug || form.slug.length < 2) { setSlugOk(null); return; }
+    if (existingBusiness && form.slug === existingBusiness.slug) { setSlugOk(true); return; }
+    setCheckingSlug(true);
+    if (slugTimer.current) clearTimeout(slugTimer.current);
+    slugTimer.current = setTimeout(async () => {
+      const { data } = await supabase.from("businesses").select("id").eq("slug", form.slug).maybeSingle();
+      setSlugOk(!data);
+      setCheckingSlug(false);
+    }, 400);
+    return () => { if (slugTimer.current) clearTimeout(slugTimer.current); };
+  }, [form.slug, existingBusiness]);
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -92,21 +109,10 @@ export default function BusinessOnboarding() {
     if (logoRef.current) logoRef.current.value = "";
   };
 
-  const slugAvailable = async (slug: string): Promise<boolean> => {
-    if (!slug || slug.length < 2) return false;
-    const { data } = await supabase.from("businesses").select("id").eq("slug", slug).maybeSingle();
-    if (!data) return true;
-    if (existingBusiness && data.id === existingBusiness.id) return true;
-    return false;
-  };
-
   const saveBusiness = async (): Promise<Business | null> => {
     if (!profile) return null;
     const slug = form.slug || slugify(form.name);
     if (!form.name || !slug) { showToast("Business name is required", "error"); return null; }
-
-    const available = await slugAvailable(slug);
-    if (!available) { showToast("This URL slug is already taken", "error"); return null; }
 
     const payload = {
       name: form.name,
@@ -163,6 +169,7 @@ export default function BusinessOnboarding() {
 
   const handleNext = async () => {
     if (step === 0 && (!form.name || form.name.length < 2)) { showToast("Enter a business name", "error"); return; }
+    if (step === 0 && slugOk === false) { showToast("This URL slug is already taken", "error"); return; }
     if (step < STEPS.length - 1) {
       if (step === 0) {
         setSaving(true);
@@ -181,7 +188,7 @@ export default function BusinessOnboarding() {
     await supabase.from("businesses").update({ onboarding_completed: true }).eq("id", existingBusiness.id);
     await insertAuditLog({ actor_id: profile.id, actor_email: profile.email, action: "onboarding_completed", target_type: "business", target_id: existingBusiness.id });
     setSaving(false);
-    showToast("Onboarding complete!", "success");
+    showToast("Onboarding complete! Your ReviewFlow is live.", "success");
     navigate("/business");
   };
 
@@ -197,6 +204,7 @@ export default function BusinessOnboarding() {
   }
 
   const reviewUrl = form.slug ? `${window.location.origin}/r/${form.slug}` : null;
+  const googleDest = form.google_review_url || (form.google_place_id ? `https://search.google.com/local/writereview?placeid=${form.google_place_id}` : null);
 
   return (
     <>
@@ -212,43 +220,46 @@ export default function BusinessOnboarding() {
             </p>
           </div>
 
+          {/* Progress bar */}
           <div className="flex items-center gap-2 mb-6">
             {STEPS.map((s, i) => (
               <div key={s} className="flex-1">
-                <div
-                  className={`h-1.5 rounded-full transition-all ${i <= step ? "bg-gradient-to-r from-primary-500 to-accent-400" : "bg-white/10"}`}
-                />
-                <p className={`text-xs mt-1.5 text-center transition-colors ${i <= step ? "text-primary-300" : "text-slate-600"}`}>
-                  {s}
-                </p>
+                <div className={`h-1.5 rounded-full transition-all duration-500 ${i <= step ? "bg-gradient-to-r from-primary-500 to-accent-400" : "bg-white/10"}`} />
+                <p className={`text-xs mt-1.5 text-center transition-colors ${i <= step ? "text-primary-300" : "text-slate-600"}`}>{s}</p>
               </div>
             ))}
           </div>
 
-          <div className="glass-strong rounded-3xl p-8">
+          <div className="glass-strong rounded-3xl p-8 page-enter" key={step}>
+            {/* Step 0: Identity */}
             {step === 0 && (
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1.5">Business Name *</label>
+                  <label className="block text-sm font-medium text-slate-300 mb-1.5">Business Name <span className="text-error-400">*</span></label>
                   <input
                     value={form.name}
                     onChange={(e) => setForm((f) => ({ ...f, name: e.target.value, slug: f.slug || slugify(e.target.value) }))}
-                    className="w-full px-4 py-3 bg-slate-900/50 border border-white/10 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-primary-500 transition-colors"
+                    className="input-field w-full px-4 py-3 bg-slate-900/50 border border-white/10 rounded-lg text-white placeholder-slate-500 focus:outline-none"
                     placeholder="e.g. Sunrise Cafe"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1.5">Review URL Slug</label>
+                  <label className="block text-sm font-medium text-slate-300 mb-1.5">Your Review Link</label>
                   <div className="flex items-center gap-2">
-                    <span className="text-slate-500 text-sm whitespace-nowrap">/r/</span>
+                    <span className="text-slate-500 text-sm whitespace-nowrap">rootnova.app/r/</span>
                     <input
                       value={form.slug}
                       onChange={(e) => setForm((f) => ({ ...f, slug: slugify(e.target.value) }))}
-                      className="flex-1 px-4 py-3 bg-slate-900/50 border border-white/10 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-primary-500 transition-colors"
+                      className="input-field flex-1 px-4 py-3 bg-slate-900/50 border border-white/10 rounded-lg text-white placeholder-slate-500 focus:outline-none"
                       placeholder="sunrise-cafe"
                     />
                   </div>
-                  {form.slug && <p className="text-xs text-slate-500 mt-1">Your review link: {reviewUrl}</p>}
+                  <div className="mt-1.5">
+                    {checkingSlug && <p className="text-xs text-slate-500">Checking...</p>}
+                    {!checkingSlug && slugOk === true && <p className="text-xs text-success-400">{"\u2713"} Available — your link: {reviewUrl}</p>}
+                    {!checkingSlug && slugOk === false && <p className="text-xs text-error-400">{"\u2717"} This slug is already taken</p>}
+                    {slugOk === null && form.slug && <p className="text-xs text-slate-500">Your review link: {reviewUrl}</p>}
+                  </div>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
@@ -256,7 +267,7 @@ export default function BusinessOnboarding() {
                     <select
                       value={form.business_category}
                       onChange={(e) => setForm((f) => ({ ...f, business_category: e.target.value }))}
-                      className="w-full px-4 py-3 bg-slate-900/50 border border-white/10 rounded-lg text-white focus:outline-none focus:border-primary-500 transition-colors"
+                      className="input-field w-full px-4 py-3 bg-slate-900/50 border border-white/10 rounded-lg text-white focus:outline-none"
                     >
                       <option value="">Select category</option>
                       {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
@@ -267,7 +278,7 @@ export default function BusinessOnboarding() {
                     <input
                       value={form.location_city}
                       onChange={(e) => setForm((f) => ({ ...f, location_city: e.target.value }))}
-                      className="w-full px-4 py-3 bg-slate-900/50 border border-white/10 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-primary-500 transition-colors"
+                      className="input-field w-full px-4 py-3 bg-slate-900/50 border border-white/10 rounded-lg text-white placeholder-slate-500 focus:outline-none"
                       placeholder="e.g. Mumbai"
                     />
                   </div>
@@ -279,7 +290,7 @@ export default function BusinessOnboarding() {
                       type="email"
                       value={form.contact_email}
                       onChange={(e) => setForm((f) => ({ ...f, contact_email: e.target.value }))}
-                      className="w-full px-4 py-3 bg-slate-900/50 border border-white/10 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-primary-500 transition-colors"
+                      className="input-field w-full px-4 py-3 bg-slate-900/50 border border-white/10 rounded-lg text-white placeholder-slate-500 focus:outline-none"
                       placeholder="contact@business.com"
                     />
                   </div>
@@ -288,7 +299,7 @@ export default function BusinessOnboarding() {
                     <input
                       value={form.contact_phone}
                       onChange={(e) => setForm((f) => ({ ...f, contact_phone: e.target.value }))}
-                      className="w-full px-4 py-3 bg-slate-900/50 border border-white/10 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-primary-500 transition-colors"
+                      className="input-field w-full px-4 py-3 bg-slate-900/50 border border-white/10 rounded-lg text-white placeholder-slate-500 focus:outline-none"
                       placeholder="+91 ..."
                     />
                   </div>
@@ -296,36 +307,30 @@ export default function BusinessOnboarding() {
               </div>
             )}
 
+            {/* Step 1: Branding with live preview */}
             {step === 1 && (
-              <div className="space-y-4">
+              <div className="space-y-6">
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-1.5">Welcome Message</label>
                   <textarea
                     value={form.welcome_message}
                     onChange={(e) => setForm((f) => ({ ...f, welcome_message: e.target.value }))}
-                    className="w-full px-4 py-3 bg-slate-900/50 border border-white/10 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-primary-500 transition-colors"
+                    className="input-field w-full px-4 py-3 bg-slate-900/50 border border-white/10 rounded-lg text-white placeholder-slate-500 focus:outline-none"
                     rows={2}
                     placeholder="We'd love to hear about your experience!"
                   />
                 </div>
-                <div className="flex gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-1.5">Primary Color</label>
-                    <input
-                      type="color"
-                      value={form.primary_color}
-                      onChange={(e) => setForm((f) => ({ ...f, primary_color: e.target.value }))}
-                      className="w-16 h-10 rounded-lg cursor-pointer"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-1.5">Secondary Color</label>
-                    <input
-                      type="color"
-                      value={form.secondary_color}
-                      onChange={(e) => setForm((f) => ({ ...f, secondary_color: e.target.value }))}
-                      className="w-16 h-10 rounded-lg cursor-pointer"
-                    />
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">Brand Colors</label>
+                  <div className="flex gap-4">
+                    <div className="flex-1">
+                      <label className="block text-xs text-slate-400 mb-1">Primary</label>
+                      <input type="color" value={form.primary_color} onChange={(e) => setForm((f) => ({ ...f, primary_color: e.target.value }))} className="w-full h-12 rounded-lg cursor-pointer bg-transparent border border-white/10" />
+                    </div>
+                    <div className="flex-1">
+                      <label className="block text-xs text-slate-400 mb-1">Accent</label>
+                      <input type="color" value={form.secondary_color} onChange={(e) => setForm((f) => ({ ...f, secondary_color: e.target.value }))} className="w-full h-12 rounded-lg cursor-pointer bg-transparent border border-white/10" />
+                    </div>
                   </div>
                 </div>
                 {existingBusiness && (
@@ -343,56 +348,104 @@ export default function BusinessOnboarding() {
                     </div>
                   </div>
                 )}
+                {/* Live preview */}
+                <div>
+                  <p className="text-xs text-slate-500 mb-2 uppercase tracking-wide">Live Preview</p>
+                  <div className="rounded-2xl p-6 border border-white/10" style={{ background: `linear-gradient(135deg, ${form.primary_color}15, ${form.secondary_color}10)` }}>
+                    <div className="flex justify-center mb-4">
+                      {form.logo_url ? (
+                        <img src={form.logo_url} alt="Logo" className="w-16 h-16 rounded-2xl object-cover border border-white/10" />
+                      ) : (
+                        <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-white font-bold text-xl" style={{ background: `linear-gradient(135deg, ${form.primary_color}, ${form.secondary_color})` }}>
+                          {form.name[0] || "?"}
+                        </div>
+                      )}
+                    </div>
+                    <h3 className="text-center text-lg font-bold text-white mb-1">{form.name || "Your Business"}</h3>
+                    <p className="text-center text-sm text-slate-300 mb-4">{form.welcome_message || "We'd love to hear about your experience!"}</p>
+                    <div className="flex justify-center">
+                      <button className="px-6 py-2.5 text-white text-sm font-semibold rounded-xl" style={{ background: `linear-gradient(135deg, ${form.primary_color}, ${form.secondary_color})` }}>
+                        Share Your Experience
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
 
+            {/* Step 2: Google */}
             {step === 2 && (
               <div className="space-y-4">
+                <div className="glass rounded-xl p-4 border border-primary-500/20">
+                  <p className="text-sm text-slate-300">
+                    {"\u2139\uFE0F"} When customers rate 4+ stars, they'll be guided to post their review on Google. This drives your Google rating up with authentic reviews.
+                  </p>
+                </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-1.5">Google Review URL</label>
                   <input
                     value={form.google_review_url}
                     onChange={(e) => setForm((f) => ({ ...f, google_review_url: e.target.value }))}
-                    className="w-full px-4 py-3 bg-slate-900/50 border border-white/10 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-primary-500 transition-colors"
+                    className="input-field w-full px-4 py-3 bg-slate-900/50 border border-white/10 rounded-lg text-white placeholder-slate-500 focus:outline-none"
                     placeholder="https://search.google.com/local/writereview?placeid=..."
                   />
-                  <p className="text-xs text-slate-500 mt-1">
-                    Customers with 4+ stars will be directed here to post their review on Google.
-                  </p>
+                  <p className="text-xs text-slate-500 mt-1">The direct link where customers will post their review on Google.</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 h-px bg-white/10" />
+                  <span className="text-xs text-slate-600">or</span>
+                  <div className="flex-1 h-px bg-white/10" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-1.5">Google Place ID (optional)</label>
                   <input
                     value={form.google_place_id}
                     onChange={(e) => setForm((f) => ({ ...f, google_place_id: e.target.value }))}
-                    className="w-full px-4 py-3 bg-slate-900/50 border border-white/10 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-primary-500 transition-colors"
+                    className="input-field w-full px-4 py-3 bg-slate-900/50 border border-white/10 rounded-lg text-white placeholder-slate-500 focus:outline-none"
                     placeholder="ChIJ..."
                   />
-                  <p className="text-xs text-slate-500 mt-1">
-                    If you don't have a direct review URL, we can derive one from your Place ID.
-                  </p>
+                  <p className="text-xs text-slate-500 mt-1">If you don't have a direct URL, we'll create one from your Place ID.</p>
                 </div>
+                {/* Google handoff preview */}
+                {googleDest && (
+                  <div className="glass rounded-xl p-4">
+                    <p className="text-xs text-slate-500 mb-2 uppercase tracking-wide">Preview: Google Handoff</p>
+                    <div className="flex items-center gap-3">
+                      <div className="text-2xl">{"\u2B50"}</div>
+                      <div className="flex-1">
+                        <p className="text-sm text-white">Happy customer (4+ stars)</p>
+                        <p className="text-xs text-slate-400">{"\u2193"} Directed to Google Reviews</p>
+                      </div>
+                      <div className="text-2xl">{"\uD83D\uDD17"}</div>
+                    </div>
+                    <p className="text-xs text-primary-300 mt-2 break-all">{googleDest}</p>
+                  </div>
+                )}
               </div>
             )}
 
+            {/* Step 3: Questions */}
             {step === 3 && (
               <div className="space-y-4">
-                <p className="text-sm text-slate-400 mb-2">
-                  Add questions customers will answer after rating. These help the AI craft better reviews.
-                </p>
+                <div className="glass rounded-xl p-4 border border-primary-500/20">
+                  <p className="text-sm text-slate-300">
+                    Add quick questions customers answer after rating. Their answers help the AI craft a personalized, authentic review.
+                  </p>
+                </div>
                 {questions.map((q, i) => (
                   <div key={i} className="glass rounded-xl p-4 space-y-3">
                     <div className="flex items-center gap-2">
+                      <span className="text-xs text-slate-500 shrink-0">Q{i + 1}</span>
                       <input
                         value={q.question_text}
                         onChange={(e) => setQuestions((qs) => qs.map((x, j) => j === i ? { ...x, question_text: e.target.value } : x))}
-                        className="flex-1 px-3 py-2 bg-slate-900/50 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-primary-500 transition-colors"
-                        placeholder="Question text"
+                        className="input-field flex-1 px-3 py-2 bg-slate-900/50 border border-white/10 rounded-lg text-white text-sm focus:outline-none"
+                        placeholder="What did you enjoy most?"
                       />
                       {questions.length > 1 && (
                         <button
                           onClick={() => setQuestions((qs) => qs.filter((_, j) => j !== i))}
-                          className="px-2 py-2 text-error-400 hover:bg-error-500/10 rounded-lg transition-colors text-sm"
+                          className="px-2 py-2 text-error-400 hover:bg-error-500/10 rounded-lg transition-colors text-sm shrink-0"
                         >
                           Remove
                         </button>
@@ -401,7 +454,7 @@ export default function BusinessOnboarding() {
                     <textarea
                       value={q.options}
                       onChange={(e) => setQuestions((qs) => qs.map((x, j) => j === i ? { ...x, options: e.target.value } : x))}
-                      className="w-full px-3 py-2 bg-slate-900/50 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-primary-500 transition-colors"
+                      className="input-field w-full px-3 py-2 bg-slate-900/50 border border-white/10 rounded-lg text-white text-sm focus:outline-none"
                       rows={3}
                       placeholder="One option per line"
                     />
@@ -409,13 +462,14 @@ export default function BusinessOnboarding() {
                 ))}
                 <button
                   onClick={() => setQuestions((qs) => [...qs, { question_text: "", options: "" }])}
-                  className="w-full py-2 glass text-white text-sm font-medium rounded-lg hover:bg-white/10 transition-colors"
+                  className="btn-ghost w-full py-2.5 text-white text-sm font-medium rounded-lg"
                 >
                   + Add Question
                 </button>
               </div>
             )}
 
+            {/* Step 4: Review */}
             {step === 4 && (
               <div className="space-y-4">
                 <div className="glass rounded-2xl p-6">
@@ -425,7 +479,7 @@ export default function BusinessOnboarding() {
                     <div className="flex justify-between"><dt className="text-slate-500">Category</dt><dd className="text-white">{form.business_category || "—"}</dd></div>
                     <div className="flex justify-between"><dt className="text-slate-500">City</dt><dd className="text-white">{form.location_city || "—"}</dd></div>
                     <div className="flex justify-between"><dt className="text-slate-500">Review Link</dt><dd className="text-primary-300 break-all">{reviewUrl || "—"}</dd></div>
-                    <div className="flex justify-between"><dt className="text-slate-500">Google Review</dt><dd className="text-white truncate max-w-xs">{form.google_review_url ? "Configured" : "Not set"}</dd></div>
+                    <div className="flex justify-between"><dt className="text-slate-500">Google Review</dt><dd className="text-white">{googleDest ? "Configured" : "Not set"}</dd></div>
                     <div className="flex justify-between"><dt className="text-slate-500">Questions</dt><dd className="text-white">{questions.filter((q) => q.question_text.trim()).length} configured</dd></div>
                     <div className="flex justify-between items-center"><dt className="text-slate-500">Colors</dt><dd className="flex gap-2"><div className="w-5 h-5 rounded" style={{ background: form.primary_color }} /><div className="w-5 h-5 rounded" style={{ background: form.secondary_color }} /></dd></div>
                   </dl>
@@ -436,11 +490,12 @@ export default function BusinessOnboarding() {
               </div>
             )}
 
+            {/* Navigation */}
             <div className="flex gap-3 mt-6">
               {step > 0 && (
                 <button
                   onClick={() => setStep((s) => s - 1)}
-                  className="px-6 py-3 glass text-white font-medium rounded-xl hover:bg-white/10 transition-colors"
+                  className="btn-ghost px-6 py-3 text-white font-medium rounded-xl"
                 >
                   Back
                 </button>
@@ -449,7 +504,7 @@ export default function BusinessOnboarding() {
                 <button
                   onClick={handleNext}
                   disabled={saving}
-                  className="flex-1 py-3 bg-gradient-to-r from-primary-600 to-primary-500 hover:from-primary-500 hover:to-primary-400 disabled:opacity-50 text-white font-semibold rounded-xl transition-all"
+                  className="btn-primary flex-1 py-3 text-white font-semibold rounded-xl disabled:opacity-50"
                 >
                   {saving ? "Saving..." : "Continue"}
                 </button>
@@ -457,7 +512,8 @@ export default function BusinessOnboarding() {
                 <button
                   onClick={handleFinish}
                   disabled={saving}
-                  className="flex-1 py-3 bg-gradient-to-r from-success-600 to-success-500 hover:from-success-500 hover:to-success-400 disabled:opacity-50 text-white font-semibold rounded-xl transition-all"
+                  className="btn-primary flex-1 py-3 text-white font-semibold rounded-xl disabled:opacity-50"
+                  style={{ background: "linear-gradient(135deg, #16a34a, #22c55e)" }}
                 >
                   {saving ? "Completing..." : "Complete Setup"}
                 </button>

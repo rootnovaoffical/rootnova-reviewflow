@@ -168,8 +168,8 @@ body { margin: 0; font-family: "Inter", system-ui, sans-serif; -webkit-font-smoo
   animation: stageTransition 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 @keyframes stageTransition {
-  0% { opacity: 0; transform: translateY(12px); }
-  100% { opacity: 1; transform: translateY(0); }
+  0% { opacity: 0; }
+  100% { opacity: 1; }
 }
 
 .action-primary {

@@ -39,6 +39,7 @@ import BusinessQuestions from "./pages/business/Questions";
 import BusinessReviews from "./pages/business/Reviews";
 import BusinessAnalytics from "./pages/business/Analytics";
 import BusinessSettings from "./pages/business/Settings";
+import BusinessAIChat from "./pages/business/AIChat";
 
 const ADMIN_ROLES = ["ROOTNOVA_SUPER_ADMIN", "ROOTNOVA_ADMIN"] as const;
 const PARTNER_ROLES = ["PARTNER_OWNER", "PARTNER_ADMIN", "PARTNER_TEAM_MEMBER"] as const;
@@ -95,6 +96,7 @@ export default function App() {
                 <Route path="/business/reviews" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><BusinessReviews /></ProtectedRoute>} />
                 <Route path="/business/analytics" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><BusinessAnalytics /></ProtectedRoute>} />
                 <Route path="/business/settings" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><BusinessSettings /></ProtectedRoute>} />
+                <Route path="/business/ai-chat" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><BusinessAIChat /></ProtectedRoute>} />
 
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>

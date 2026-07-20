@@ -18,6 +18,7 @@ export default {
         "float": "float 6s ease-in-out infinite",
         "aurora": "aurora 8s ease-in-out infinite alternate",
         "pulse-glow": "pulseGlow 2s ease-in-out infinite",
+        "fade-up": "fadeUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards",
       },
       keyframes: {
         fadeIn: { "0%": { opacity: "0" }, "100%": { opacity: "1" } },
@@ -27,6 +28,7 @@ export default {
         float: { "0%,100%": { transform: "translateY(0)" }, "50%": { transform: "translateY(-20px)" } },
         aurora: { "0%": { opacity: "0.3", transform: "scale(1) rotate(0deg)" }, "100%": { opacity: "0.6", transform: "scale(1.2) rotate(5deg)" } },
         pulseGlow: { "0%,100%": { boxShadow: "0 0 20px rgba(99,102,241,0.3)" }, "50%": { boxShadow: "0 0 40px rgba(99,102,241,0.6)" } },
+        fadeUp: { "0%": { opacity: "0", transform: "translateY(15px)" }, "100%": { opacity: "1", transform: "translateY(0)" } },
       },
     },
   },

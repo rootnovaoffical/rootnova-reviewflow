@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import Layout from "../../components/Layout";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../context/AuthContext";
@@ -10,47 +10,28 @@ import { insertAuditLog } from "../../lib/auth";
 import { uploadPaymentProof } from "../../lib/storage";
 import { formatCurrency, formatDate } from "../../lib/utils";
 
-const PAGE_SIZE = 20;
-
 export default function PartnerPayments() {
   const { profile } = useAuth();
   const { showToast } = useToast();
   const { upiId, upiQrUrl } = useBranding();
   const [payments, setPayments] = useState<Payment[] | null>(null);
   const [orgId, setOrgId] = useState<string | null>(null);
-  const [page, setPage] = useState(0);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
   const [showSubmit, setShowSubmit] = useState(false);
   const [utr, setUtr] = useState("");
   const [amount, setAmount] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const totalPages = Math.ceil(total / PAGE_SIZE);
-
-  const load = useCallback(async () => {
-    if (!profile || !orgId) return;
-    setLoading(true);
-    const { data, count } = await supabase.from("payments")
-      .select("*", { count: "exact" })
-      .eq("organization_id", orgId)
-      .order("created_at", { ascending: false })
-      .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
-    setPayments(data as Payment[] || []);
-    setTotal(count || 0);
-    setLoading(false);
-  }, [profile, orgId, page]);
-
-  useEffect(() => {
+  const load = () => {
     if (!profile) return;
-    supabase.from("organization_members").select("organization_id").eq("user_id", profile.id).maybeSingle()
+    supabase.from("organization_members").select("organization_id").eq("user_id", profile.id).single()
       .then(({ data: mem }) => {
-        setOrgId(mem?.organization_id ?? null);
-        if (!mem?.organization_id) { setPayments([]); setLoading(false); }
+        if (mem?.organization_id) {
+          setOrgId(mem.organization_id);
+          supabase.from("payments").select("*").eq("organization_id", mem.organization_id).order("created_at", { ascending: false }).then(({ data }) => setPayments(data as Payment[] || []));
+        } else { setPayments([]); }
       });
-  }, [profile]);
-
-  useEffect(() => { load(); }, [load]);
+  };
+  useEffect(() => { load(); }, [profile]);
 
   const submitPayment = async () => {
     if (!profile || !orgId || !utr || !amount) return;
@@ -68,7 +49,7 @@ export default function PartnerPayments() {
     setShowSubmit(false); setUtr(""); setAmount(""); load();
   };
 
-  if (loading && !payments) return <Layout title="Payments"><Loading /></Layout>;
+  if (!payments) return <Layout title="Payments"><Loading /></Layout>;
 
   return (
     <Layout title="Payments">
@@ -79,36 +60,27 @@ export default function PartnerPayments() {
         {!upiId && !upiQrUrl && <p className="text-slate-500 text-sm">UPI not configured. Contact support.</p>}
         <button onClick={() => setShowSubmit(true)} className="mt-4 px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white text-sm font-medium rounded-lg transition-colors">Submit Payment Proof</button>
       </div>
-      {payments && payments.length === 0 && page === 0 ? <EmptyState title="No payments yet" /> : (
-        <>
-          <div className="glass rounded-2xl overflow-hidden">
-            <table className="w-full">
-              <thead className="bg-white/5"><tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">Amount</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">UTR</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">Date</th>
-              </tr></thead>
-              <tbody className="divide-y divide-white/5">
-                {payments?.map((p) => (
-                  <tr key={p.id} className="hover:bg-white/5 transition-colors">
-                    <td className="px-6 py-4 text-white">{formatCurrency(p.amount)}</td>
-                    <td className="px-6 py-4 text-slate-400">{p.utr_reference || "—"}</td>
-                    <td className="px-6 py-4"><span className={`px-2 py-1 rounded-full text-xs ${p.status === "APPROVED" ? "bg-success-500/20 text-success-400" : p.status === "REJECTED" ? "bg-error-500/20 text-error-400" : p.status === "UNDER_REVIEW" ? "bg-warning-500/20 text-warning-400" : "bg-slate-500/20 text-slate-400"}`}>{p.status}</span>{p.rejection_reason && <p className="text-xs text-error-400 mt-1">{p.rejection_reason}</p>}</td>
-                    <td className="px-6 py-4 text-slate-400">{formatDate(p.created_at)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {totalPages > 1 && (
-            <div className="flex items-center justify-center gap-4 mt-4">
-              <button disabled={page === 0} onClick={() => setPage(page - 1)} className="px-4 py-2 glass text-white text-sm rounded-lg disabled:opacity-40 hover:bg-white/10 transition-colors">Previous</button>
-              <span className="text-sm text-slate-400">Page {page + 1} of {totalPages}</span>
-              <button disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)} className="px-4 py-2 glass text-white text-sm rounded-lg disabled:opacity-40 hover:bg-white/10 transition-colors">Next</button>
-            </div>
-          )}
-        </>
+      {payments.length === 0 ? <EmptyState title="No payments yet" /> : (
+        <div className="glass rounded-2xl overflow-hidden">
+          <table className="w-full">
+            <thead className="bg-white/5"><tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">Amount</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">UTR</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">Status</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">Date</th>
+            </tr></thead>
+            <tbody className="divide-y divide-white/5">
+              {payments.map((p) => (
+                <tr key={p.id} className="hover:bg-white/5 transition-colors">
+                  <td className="px-6 py-4 text-white">{formatCurrency(p.amount)}</td>
+                  <td className="px-6 py-4 text-slate-400">{p.utr_reference || "—"}</td>
+                  <td className="px-6 py-4"><span className={`px-2 py-1 rounded-full text-xs ${p.status === "APPROVED" ? "bg-success-500/20 text-success-400" : p.status === "REJECTED" ? "bg-error-500/20 text-error-400" : p.status === "UNDER_REVIEW" ? "bg-warning-500/20 text-warning-400" : "bg-slate-500/20 text-slate-400"}`}>{p.status}</span></td>
+                  <td className="px-6 py-4 text-slate-400">{formatDate(p.created_at)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
       {showSubmit && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowSubmit(false)}>

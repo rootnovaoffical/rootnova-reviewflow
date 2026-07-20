@@ -44,8 +44,7 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
     return () => { sub.unsubscribe(); };
   }, [refresh]);
 
-  const upiConfig = assets["rootnova_upi_config"];
-  const upiId = (upiConfig?.metadata?.upi_id as string | null) ?? (assets["upi_id"]?.metadata?.upi_id as string | null) ?? null;
+  const upiId = assets["upi_id"]?.metadata?.upi_id as string | null ?? assets["upi_id"]?.public_url ?? null;
   const upiQrUrl = assets["upi_qr"]?.public_url ?? null;
 
   return (

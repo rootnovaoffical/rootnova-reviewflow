@@ -4,7 +4,7 @@ import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../context/AuthContext";
 import { useBranding } from "../../context/BrandingContext";
 import type { Payment } from "../../lib/types";
-import { Loading, EmptyState } from "../../components/States";
+import { Loading, EmptyState, ErrorState } from "../../components/States";
 import { useToast } from "../../context/ToastContext";
 import { insertAuditLog } from "../../lib/auth";
 import { uploadPaymentProof } from "../../lib/storage";
@@ -19,15 +19,20 @@ export default function PartnerPayments() {
   const [showSubmit, setShowSubmit] = useState(false);
   const [utr, setUtr] = useState("");
   const [amount, setAmount] = useState("");
+  const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const load = () => {
     if (!profile) return;
-    supabase.from("organization_members").select("organization_id").eq("user_id", profile.id).single()
-      .then(({ data: mem }) => {
+    supabase.from("organization_members").select("organization_id").eq("user_id", profile.id).maybeSingle()
+      .then(({ data: mem, error: memErr }) => {
+        if (memErr) { setError(memErr.message); setPayments([]); return; }
         if (mem?.organization_id) {
           setOrgId(mem.organization_id);
-          supabase.from("payments").select("*").eq("organization_id", mem.organization_id).order("created_at", { ascending: false }).then(({ data }) => setPayments(data as Payment[] || []));
+          supabase.from("payments").select("*").eq("organization_id", mem.organization_id).order("created_at", { ascending: false }).then(({ data, error: payErr }) => {
+            if (payErr) setError(payErr.message);
+            setPayments(data as Payment[] || []);
+          });
         } else { setPayments([]); }
       });
   };
@@ -50,6 +55,7 @@ export default function PartnerPayments() {
   };
 
   if (!payments) return <Layout title="Payments"><Loading /></Layout>;
+  if (error) return <Layout title="Payments"><ErrorState message={error} onRetry={load} /></Layout>;
 
   return (
     <Layout title="Payments">

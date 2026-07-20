@@ -15,6 +15,7 @@ export default function BusinessMyBusiness() {
   const [business, setBusiness] = useState<Business | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ name: "", welcome_message: "", google_review_url: "", primary_color: "#6366f1", secondary_color: "#a855f7", public_review_enabled: true });
   const logoRef = useRef<HTMLInputElement>(null);
   const reviewUrl = business ? `${window.location.origin}/r/${business.slug}` : null;
@@ -22,10 +23,12 @@ export default function BusinessMyBusiness() {
 
   useEffect(() => {
     if (!profile) return;
-    supabase.from("business_admins").select("business_id").eq("user_id", profile.id).single()
-      .then(({ data }) => {
+    supabase.from("business_admins").select("business_id").eq("user_id", profile.id).maybeSingle()
+      .then(({ data, error: baErr }) => {
+        if (baErr) { setError(baErr.message); setLoading(false); return; }
         if (!data?.business_id) { setLoading(false); return; }
-        supabase.from("businesses").select("*").eq("id", data.business_id).single().then(({ data: b }) => {
+        supabase.from("businesses").select("*").eq("id", data.business_id).maybeSingle().then(({ data: b, error: bErr }) => {
+          if (bErr) { setError(bErr.message); setLoading(false); return; }
           setBusiness(b as Business);
           setEditForm({ name: (b as Business).name, welcome_message: (b as Business).welcome_message, google_review_url: (b as Business).google_review_url || "", primary_color: (b as Business).primary_color, secondary_color: (b as Business).secondary_color, public_review_enabled: (b as Business).public_review_enabled });
           setLoading(false);
@@ -43,7 +46,7 @@ export default function BusinessMyBusiness() {
     await insertAuditLog({ actor_id: profile.id, actor_email: profile.email, action: "business_updated", target_type: "business", target_id: business.id });
     showToast("Business updated", "success");
     setEditing(false);
-    supabase.from("businesses").select("*").eq("id", business.id).single().then(({ data }) => setBusiness(data as Business));
+    supabase.from("businesses").select("*").eq("id", business.id).maybeSingle().then(({ data }) => setBusiness(data as Business));
   };
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -54,12 +57,13 @@ export default function BusinessMyBusiness() {
       await supabase.from("businesses").update({ logo_url: url }).eq("id", business.id);
       if (profile) await insertAuditLog({ actor_id: profile.id, actor_email: profile.email, action: "business_logo_updated", target_type: "business", target_id: business.id });
       showToast("Logo updated", "success");
-      supabase.from("businesses").select("*").eq("id", business.id).single().then(({ data }) => setBusiness(data as Business));
+      supabase.from("businesses").select("*").eq("id", business.id).maybeSingle().then(({ data }) => setBusiness(data as Business));
     } else { showToast(uploadError || "Upload failed", "error"); }
     if (logoRef.current) logoRef.current.value = "";
   };
 
   if (loading) return <Layout title="My Business"><Loading /></Layout>;
+  if (error) return <Layout title="My Business"><ErrorState message={error} /></Layout>;
   if (!business) return <Layout title="My Business"><ErrorState message="No business assigned to your account." /></Layout>;
 
   return (

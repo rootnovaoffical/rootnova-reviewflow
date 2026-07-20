@@ -13,14 +13,18 @@ export default function AdminOrganizationDetail() {
   const [members, setMembers] = useState<OrganizationMember[]>([]);
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
     Promise.all([
-      supabase.from("organizations").select("*").eq("id", id).single(),
+      supabase.from("organizations").select("*").eq("id", id).maybeSingle(),
       supabase.from("organization_members").select("*, profile:profiles!user_id(*)").eq("organization_id", id),
       supabase.from("businesses").select("*").eq("organization_id", id),
     ]).then(([o, m, b]) => {
+      if (o.error) setError(o.error.message);
+      if (m.error) setError(m.error.message);
+      if (b.error) setError(b.error.message);
       setOrg(o.data as Organization);
       setMembers((m.data || []) as unknown as OrganizationMember[]);
       setBusinesses((b.data || []) as Business[]);
@@ -29,6 +33,7 @@ export default function AdminOrganizationDetail() {
   }, [id]);
 
   if (loading) return <Layout title="Organization"><Loading /></Layout>;
+  if (error) return <Layout title="Organization"><ErrorState message={error} /></Layout>;
   if (!org) return <Layout title="Organization"><ErrorState message="Organization not found" /></Layout>;
 
   return (

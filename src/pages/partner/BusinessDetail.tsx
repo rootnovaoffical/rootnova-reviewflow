@@ -28,8 +28,8 @@ export default function PartnerBusinessDetail() {
   const load = () => {
     if (!id || !profile) return;
     Promise.all([
-      supabase.from("organization_members").select("organization_id").eq("user_id", profile.id).single(),
-      supabase.from("businesses").select("*").eq("id", id).single(),
+      supabase.from("organization_members").select("organization_id").eq("user_id", profile.id).maybeSingle(),
+      supabase.from("businesses").select("*").eq("id", id).maybeSingle(),
       supabase.from("questions").select("*").eq("business_id", id).order("sort_order"),
       supabase.from("review_sessions").select("*").eq("business_id", id).order("created_at", { ascending: false }).limit(20),
     ]).then(([mem, b, q, r]) => {

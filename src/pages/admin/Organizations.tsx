@@ -3,17 +3,22 @@ import { Link } from "react-router-dom";
 import Layout from "../../components/Layout";
 import { supabase } from "../../lib/supabase";
 import type { Organization } from "../../lib/types";
-import { Loading, EmptyState } from "../../components/States";
+import { Loading, EmptyState, ErrorState } from "../../components/States";
 import { formatDate } from "../../lib/utils";
 
 export default function AdminOrganizations() {
   const [orgs, setOrgs] = useState<Organization[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    supabase.from("organizations").select("*").order("created_at", { ascending: false }).then(({ data }) => setOrgs(data as Organization[] || []));
+    supabase.from("organizations").select("*").order("created_at", { ascending: false }).then(({ data, error: err }) => {
+      if (err) setError(err.message);
+      setOrgs(data as Organization[] || []);
+    });
   }, []);
 
   if (!orgs) return <Layout title="Organizations"><Loading /></Layout>;
+  if (error) return <Layout title="Organizations"><ErrorState message={error} /></Layout>;
 
   return (
     <Layout title="Organizations">

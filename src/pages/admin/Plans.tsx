@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import Layout from "../../components/Layout";
 import { supabase } from "../../lib/supabase";
 import type { Plan } from "../../lib/types";
-import { Loading, EmptyState } from "../../components/States";
+import { Loading, EmptyState, ErrorState } from "../../components/States";
 import { formatCurrency } from "../../lib/utils";
 import { useToast } from "../../context/ToastContext";
 import { useAuth } from "../../context/AuthContext";
@@ -14,8 +14,12 @@ export default function AdminPlans() {
   const [plans, setPlans] = useState<Plan[] | null>(null);
   const [editing, setEditing] = useState<Plan | null>(null);
   const [creating, setCreating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const load = () => supabase.from("plans").select("*").order("sort_order").then(({ data }) => setPlans(data as Plan[] || []));
+  const load = () => supabase.from("plans").select("*").order("sort_order").then(({ data, error: err }) => {
+    if (err) setError(err.message);
+    setPlans(data as Plan[] || []);
+  });
   useEffect(() => { load(); }, []);
 
   const save = async (plan: Partial<Plan> & { id?: string }) => {
@@ -35,6 +39,7 @@ export default function AdminPlans() {
   };
 
   if (!plans) return <Layout title="Plans"><Loading /></Layout>;
+  if (error) return <Layout title="Plans"><ErrorState message={error} onRetry={load} /></Layout>;
 
   return (
     <Layout title="Plans">

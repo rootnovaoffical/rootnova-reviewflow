@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import Layout from "../../components/Layout";
 import { supabase } from "../../lib/supabase";
 import type { FeatureFlag } from "../../lib/types";
-import { Loading, EmptyState } from "../../components/States";
+import { Loading, EmptyState, ErrorState } from "../../components/States";
 import { useToast } from "../../context/ToastContext";
 import { useAuth } from "../../context/AuthContext";
 import { insertAuditLog } from "../../lib/auth";
@@ -12,8 +12,12 @@ export default function AdminFeatureFlags() {
   const { showToast } = useToast();
   const [flags, setFlags] = useState<FeatureFlag[] | null>(null);
   const [creating, setCreating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const load = () => supabase.from("feature_flags").select("*").order("category").then(({ data }) => setFlags(data as FeatureFlag[] || []));
+  const load = () => supabase.from("feature_flags").select("*").order("category").then(({ data, error: err }) => {
+    if (err) setError(err.message);
+    setFlags(data as FeatureFlag[] || []);
+  });
   useEffect(() => { load(); }, []);
 
   const toggle = async (flag: FeatureFlag) => {
@@ -32,6 +36,7 @@ export default function AdminFeatureFlags() {
   };
 
   if (!flags) return <Layout title="Feature Flags"><Loading /></Layout>;
+  if (error) return <Layout title="Feature Flags"><ErrorState message={error} onRetry={load} /></Layout>;
 
   return (
     <Layout title="Feature Flags">

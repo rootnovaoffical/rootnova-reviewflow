@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import Layout from "../../components/Layout";
 import { supabase } from "../../lib/supabase";
 import type { PlatformAsset } from "../../lib/types";
-import { Loading } from "../../components/States";
+import { Loading, ErrorState } from "../../components/States";
 import { useToast } from "../../context/ToastContext";
 import { useAuth } from "../../context/AuthContext";
 import { useBranding } from "../../context/BrandingContext";
@@ -17,8 +17,12 @@ export default function AdminBranding() {
   const [upiId, setUpiId] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploadKey, setUploadKey] = useState<string>("");
+  const [error, setError] = useState<string | null>(null);
 
-  const load = () => supabase.from("platform_assets").select("*").order("key").then(({ data }) => setAssets(data as PlatformAsset[] || []));
+  const load = () => supabase.from("platform_assets").select("*").order("key").then(({ data, error: err }) => {
+    if (err) setError(err.message);
+    setAssets(data as PlatformAsset[] || []);
+  });
   useEffect(() => { load(); }, []);
 
   const saveUpi = async () => {
@@ -42,6 +46,7 @@ export default function AdminBranding() {
   };
 
   if (!assets) return <Layout title="Branding"><Loading /></Layout>;
+  if (error) return <Layout title="Branding"><ErrorState message={error} onRetry={load} /></Layout>;
 
   return (
     <Layout title="Platform Branding">

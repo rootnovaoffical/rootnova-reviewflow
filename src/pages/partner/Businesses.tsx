@@ -4,24 +4,30 @@ import Layout from "../../components/Layout";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../context/AuthContext";
 import type { Business } from "../../lib/types";
-import { Loading, EmptyState } from "../../components/States";
+import { Loading, EmptyState, ErrorState } from "../../components/States";
 
 export default function PartnerBusinesses() {
   const { profile } = useAuth();
   const [businesses, setBusinesses] = useState<Business[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!profile) return;
-    supabase.from("organization_members").select("organization_id").eq("user_id", profile.id).single()
-      .then(({ data: mem }) => {
+    supabase.from("organization_members").select("organization_id").eq("user_id", profile.id).maybeSingle()
+      .then(({ data: mem, error: memErr }) => {
+        if (memErr) { setError(memErr.message); setBusinesses([]); return; }
         if (mem?.organization_id) {
           supabase.from("businesses").select("*").eq("organization_id", mem.organization_id).order("created_at", { ascending: false })
-            .then(({ data }) => setBusinesses(data as Business[] || []));
+            .then(({ data, error: bizErr }) => {
+              if (bizErr) setError(bizErr.message);
+              setBusinesses(data as Business[] || []);
+            });
         } else { setBusinesses([]); }
       });
   }, [profile]);
 
   if (!businesses) return <Layout title="Businesses"><Loading /></Layout>;
+  if (error) return <Layout title="Businesses"><ErrorState message={error} /></Layout>;
 
   return (
     <Layout title="Businesses">

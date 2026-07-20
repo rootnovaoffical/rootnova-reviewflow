@@ -3,17 +3,22 @@ import { Link } from "react-router-dom";
 import Layout from "../../components/Layout";
 import { supabase } from "../../lib/supabase";
 import type { Payment } from "../../lib/types";
-import { Loading, EmptyState } from "../../components/States";
+import { Loading, EmptyState, ErrorState } from "../../components/States";
 import { formatCurrency, formatDate } from "../../lib/utils";
 
 export default function AdminPayments() {
   const [payments, setPayments] = useState<Payment[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    supabase.from("payments").select("*").order("created_at", { ascending: false }).then(({ data }) => setPayments(data as Payment[] || []));
+    supabase.from("payments").select("*").order("created_at", { ascending: false }).then(({ data, error: err }) => {
+      if (err) setError(err.message);
+      setPayments(data as Payment[] || []);
+    });
   }, []);
 
   if (!payments) return <Layout title="Payments"><Loading /></Layout>;
+  if (error) return <Layout title="Payments"><ErrorState message={error} /></Layout>;
 
   return (
     <Layout title="Payments">

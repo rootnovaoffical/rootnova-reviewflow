@@ -3,17 +3,22 @@ import { Link } from "react-router-dom";
 import Layout from "../../components/Layout";
 import { supabase } from "../../lib/supabase";
 import type { Business } from "../../lib/types";
-import { Loading, EmptyState } from "../../components/States";
+import { Loading, EmptyState, ErrorState } from "../../components/States";
 import { formatDate } from "../../lib/utils";
 
 export default function AdminBusinesses() {
   const [businesses, setBusinesses] = useState<(Business & { organization: { name: string; type: string } | null })[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    supabase.from("businesses").select("*, organization:organizations(name,type)").order("created_at", { ascending: false }).then(({ data }) => setBusinesses((data as (Business & { organization: { name: string; type: string } | null })[]) || []));
+    supabase.from("businesses").select("*, organization:organizations(name,type)").order("created_at", { ascending: false }).then(({ data, error: err }) => {
+      if (err) setError(err.message);
+      setBusinesses((data as (Business & { organization: { name: string; type: string } | null })[]) || []);
+    });
   }, []);
 
   if (!businesses) return <Layout title="Businesses"><Loading /></Layout>;
+  if (error) return <Layout title="Businesses"><ErrorState message={error} /></Layout>;
 
   return (
     <Layout title="Businesses">

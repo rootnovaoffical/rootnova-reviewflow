@@ -3,7 +3,7 @@ import Layout from "../../components/Layout";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../context/AuthContext";
 import type { Organization } from "../../lib/types";
-import { Loading } from "../../components/States";
+import { Loading, ErrorState } from "../../components/States";
 import { useToast } from "../../context/ToastContext";
 import { updateProfile, insertAuditLog } from "../../lib/auth";
 import { uploadOrgLogo, uploadAvatar } from "../../lib/storage";
@@ -16,16 +16,19 @@ export default function PartnerSettings() {
   const [orgForm, setOrgForm] = useState({ name: "", contact_email: "", contact_phone: "" });
   const [profileForm, setProfileForm] = useState({ full_name: "" });
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const logoRef = useRef<HTMLInputElement>(null);
   const avatarRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!profile) return;
     setProfileForm({ full_name: profile.full_name });
-    supabase.from("organization_members").select("organization_id").eq("user_id", profile.id).single()
-      .then(({ data: mem }) => {
+    supabase.from("organization_members").select("organization_id").eq("user_id", profile.id).maybeSingle()
+      .then(({ data: mem, error: memErr }) => {
+        if (memErr) { setError(memErr.message); setLoading(false); return; }
         if (mem?.organization_id) {
-          supabase.from("organizations").select("*").eq("id", mem.organization_id).single().then(({ data }) => {
+          supabase.from("organizations").select("*").eq("id", mem.organization_id).maybeSingle().then(({ data, error: orgErr }) => {
+            if (orgErr) { setError(orgErr.message); setLoading(false); return; }
             setOrg(data as Organization);
             setOrgForm({ name: (data as Organization).name, contact_email: (data as Organization).contact_email || "", contact_phone: (data as Organization).contact_phone || "" });
             setLoading(false);
@@ -76,6 +79,7 @@ export default function PartnerSettings() {
   };
 
   if (loading) return <Layout title="Settings"><Loading /></Layout>;
+  if (error) return <Layout title="Settings"><ErrorState message={error} /></Layout>;
 
   return (
     <Layout title="Settings">

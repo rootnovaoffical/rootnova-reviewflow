@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import Layout from "../../components/Layout";
 import { supabase } from "../../lib/supabase";
 import type { Profile } from "../../lib/types";
-import { Loading, EmptyState } from "../../components/States";
+import { Loading, EmptyState, ErrorState } from "../../components/States";
 import Avatar from "../../components/Avatar";
 import { useToast } from "../../context/ToastContext";
 import { useAuth } from "../../context/AuthContext";
@@ -13,11 +13,18 @@ export default function AdminAdmins() {
   const { showToast } = useToast();
   const [admins, setAdmins] = useState<Profile[] | null>(null);
   const [inviting, setInviting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const load = () => supabase.from("profiles").select("*").in("role", ["ROOTNOVA_SUPER_ADMIN", "ROOTNOVA_ADMIN"]).order("created_at", { ascending: false }).then(({ data }) => setAdmins(data as Profile[] || []));
+  const load = () => supabase.from("profiles").select("*").in("role", ["ROOTNOVA_SUPER_ADMIN", "ROOTNOVA_ADMIN"]).order("created_at", { ascending: false }).then(({ data, error: err }) => {
+    if (err) setError(err.message);
+    setAdmins(data as Profile[] || []);
+  });
   useEffect(() => { load(); }, []);
 
   const toggleStatus = async (admin: Profile) => {
+    if (me?.role !== "ROOTNOVA_SUPER_ADMIN" && admin.role === "ROOTNOVA_SUPER_ADMIN") {
+      showToast("Only Super Admin can manage other Super Admins", "error"); return;
+    }
     const newStatus = admin.account_status === "ACTIVE" ? "SUSPENDED" : "ACTIVE";
     const { error } = await supabase.from("profiles").update({ account_status: newStatus }).eq("id", admin.id);
     if (error) { showToast("Failed to update status", "error"); return; }
@@ -27,6 +34,9 @@ export default function AdminAdmins() {
   };
 
   const invite = async (email: string, role: string) => {
+    if (me?.role !== "ROOTNOVA_SUPER_ADMIN" && role === "ROOTNOVA_SUPER_ADMIN") {
+      showToast("Only Super Admin can invite Super Admins", "error"); return;
+    }
     const result = await callManageAdmin("invite", { email, role });
     if (!result.ok) { showToast(result.error || "Failed to invite", "error"); return; }
     if (me) await insertAuditLog({ actor_id: me.id, actor_email: me.email, action: "admin_invited", target_type: "admin_invitation", metadata: { email, role } });
@@ -35,6 +45,7 @@ export default function AdminAdmins() {
   };
 
   if (!admins) return <Layout title="Admins"><Loading /></Layout>;
+  if (error) return <Layout title="Admins"><ErrorState message={error} onRetry={load} /></Layout>;
 
   return (
     <Layout title="Admin Management">
@@ -61,12 +72,12 @@ export default function AdminAdmins() {
           ))}
         </div>
       )}
-      {inviting && <InviteModal onClose={() => setInviting(false)} onInvite={invite} />}
+      {inviting && <InviteModal onClose={() => setInviting(false)} onInvite={invite} canInviteSuperAdmin={me?.role === "ROOTNOVA_SUPER_ADMIN"} />}
     </Layout>
   );
 }
 
-function InviteModal({ onClose, onInvite }: { onClose: () => void; onInvite: (email: string, role: string) => void }) {
+function InviteModal({ onClose, onInvite, canInviteSuperAdmin }: { onClose: () => void; onInvite: (email: string, role: string) => void; canInviteSuperAdmin: boolean }) {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("ROOTNOVA_ADMIN");
   return (
@@ -81,7 +92,7 @@ function InviteModal({ onClose, onInvite }: { onClose: () => void; onInvite: (em
           <label className="block text-xs text-slate-400 mb-1">Role</label>
           <select value={role} onChange={(e) => setRole(e.target.value)} className="w-full px-3 py-2 bg-slate-900/50 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-primary-500">
             <option value="ROOTNOVA_ADMIN">RootNova Admin</option>
-            <option value="ROOTNOVA_SUPER_ADMIN">RootNova Super Admin</option>
+            {canInviteSuperAdmin && <option value="ROOTNOVA_SUPER_ADMIN">RootNova Super Admin</option>}
           </select>
         </div>
         <div className="flex gap-3">

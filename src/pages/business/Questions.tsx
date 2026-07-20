@@ -3,7 +3,7 @@ import Layout from "../../components/Layout";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../context/AuthContext";
 import type { Question } from "../../lib/types";
-import { Loading, EmptyState } from "../../components/States";
+import { Loading, EmptyState, ErrorState } from "../../components/States";
 import { useToast } from "../../context/ToastContext";
 import { insertAuditLog } from "../../lib/auth";
 
@@ -14,14 +14,19 @@ export default function BusinessQuestions() {
   const [businessId, setBusinessId] = useState<string | null>(null);
   const [editing, setEditing] = useState<Question | null>(null);
   const [creating, setCreating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const load = () => {
     if (!profile) return;
-    supabase.from("business_admins").select("business_id").eq("user_id", profile.id).single()
-      .then(({ data }) => {
+    supabase.from("business_admins").select("business_id").eq("user_id", profile.id).maybeSingle()
+      .then(({ data, error: baErr }) => {
+        if (baErr) { setError(baErr.message); setQuestions([]); return; }
         if (!data?.business_id) { setQuestions([]); return; }
         setBusinessId(data.business_id);
-        supabase.from("questions").select("*").eq("business_id", data.business_id).order("sort_order").then(({ data: q }) => setQuestions(q as Question[] || []));
+        supabase.from("questions").select("*").eq("business_id", data.business_id).order("sort_order").then(({ data: q, error: qErr }) => {
+          if (qErr) setError(qErr.message);
+          setQuestions(q as Question[] || []);
+        });
       });
   };
   useEffect(() => { load(); }, [profile]);
@@ -73,6 +78,7 @@ export default function BusinessQuestions() {
   const minNotMet = activeCount < 4;
 
   if (!questions) return <Layout title="Questions"><Loading /></Layout>;
+  if (error) return <Layout title="Questions"><ErrorState message={error} onRetry={load} /></Layout>;
 
   return (
     <Layout title="Questions">

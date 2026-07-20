@@ -2,17 +2,21 @@ import { useEffect, useState } from "react";
 import Layout from "../../components/Layout";
 import { supabase } from "../../lib/supabase";
 import type { AuditLog } from "../../lib/types";
-import { Loading, EmptyState } from "../../components/States";
+import { Loading, EmptyState, ErrorState } from "../../components/States";
 import { formatDateTime } from "../../lib/utils";
 
 export default function AdminAudit() {
   const [logs, setLogs] = useState<AuditLog[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    supabase.from("audit_logs").select("*").order("created_at", { ascending: false }).limit(100).then(({ data }) => setLogs(data as AuditLog[] || []));
-  }, []);
+  const load = () => supabase.from("audit_logs").select("*").order("created_at", { ascending: false }).limit(100).then(({ data, error: err }) => {
+    if (err) setError(err.message);
+    setLogs(data as AuditLog[] || []);
+  });
+  useEffect(() => { load(); }, []);
 
   if (!logs) return <Layout title="Audit Log"><Loading /></Layout>;
+  if (error) return <Layout title="Audit Log"><ErrorState message={error} onRetry={load} /></Layout>;
 
   return (
     <Layout title="Audit Log">

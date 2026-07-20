@@ -22,7 +22,8 @@ export default function AdminPaymentDetail() {
 
   const load = () => {
     if (!id) return;
-    supabase.from("payments").select("*").eq("id", id).single().then(({ data }) => {
+    supabase.from("payments").select("*").eq("id", id).maybeSingle().then(({ data, error: err }) => {
+      if (err) { setPayment(null); setLoading(false); return; }
       setPayment(data as Payment);
       setLoading(false);
       if (data?.screenshot_path) getSignedUrl(data.screenshot_path).then(setProofUrl);

@@ -13,16 +13,20 @@ export default function AdminBusinessDetail() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [reviews, setReviews] = useState<ReviewSession[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const reviewUrl = business ? `${window.location.origin}/r/${business.slug}` : null;
   const qrUrl = useQRCode(reviewUrl);
 
   useEffect(() => {
     if (!id) return;
     Promise.all([
-      supabase.from("businesses").select("*, organization:organizations(name,type)").eq("id", id).single(),
+      supabase.from("businesses").select("*, organization:organizations(name,type)").eq("id", id).maybeSingle(),
       supabase.from("questions").select("*").eq("business_id", id).order("sort_order"),
       supabase.from("review_sessions").select("*").eq("business_id", id).order("created_at", { ascending: false }).limit(20),
     ]).then(([b, q, r]) => {
+      if (b.error) setError(b.error.message);
+      if (q.error) setError(q.error.message);
+      if (r.error) setError(r.error.message);
       setBusiness(b.data as Business);
       setQuestions((q.data || []) as Question[]);
       setReviews((r.data || []) as ReviewSession[]);
@@ -31,6 +35,7 @@ export default function AdminBusinessDetail() {
   }, [id]);
 
   if (loading) return <Layout title="Business"><Loading /></Layout>;
+  if (error) return <Layout title="Business"><ErrorState message={error} /></Layout>;
   if (!business) return <Layout title="Business"><ErrorState message="Business not found" /></Layout>;
 
   return (

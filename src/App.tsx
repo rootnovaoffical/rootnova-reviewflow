@@ -77,6 +77,10 @@ import EnterpriseRoles from "./pages/business/EnterpriseRoles";
 import EnterpriseEvents from "./pages/business/EnterpriseEvents";
 import EnterpriseBranchManagers from "./pages/business/EnterpriseBranchManagers";
 
+import BusinessReports from "./pages/business/Reports";
+import BusinessReportBuilder from "./pages/business/ReportBuilder";
+import BusinessScheduledReports from "./pages/business/ScheduledReports";
+
 import MobileDashboard from "./pages/mobile/Dashboard";
 import MobileReviews from "./pages/mobile/Reviews";
 import MobileAIAssistant from "./pages/mobile/AIAssistant";
@@ -186,6 +190,10 @@ export default function App() {
                 <Route path="/business/enterprise/roles" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><EnterpriseRoles /></ProtectedRoute>} />
                 <Route path="/business/enterprise/events" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><EnterpriseEvents /></ProtectedRoute>} />
                 <Route path="/business/enterprise/managers" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><EnterpriseBranchManagers /></ProtectedRoute>} />
+
+                <Route path="/business/reports" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><BusinessReports /></ProtectedRoute>} />
+                <Route path="/business/reports/builder" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><BusinessReportBuilder /></ProtectedRoute>} />
+                <Route path="/business/reports/scheduled" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><BusinessScheduledReports /></ProtectedRoute>} />
 
                 <Route path="/mobile" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><MobileDashboard /></ProtectedRoute>} />
                 <Route path="/mobile/reviews" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><MobileReviews /></ProtectedRoute>} />

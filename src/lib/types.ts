@@ -1110,3 +1110,138 @@ export type LoyaltyProgramType =
   | "review_based"
   | "birthday"
   | "festival";
+
+// ---- Module 15: Enterprise Reporting & Automation ----
+export type ReportType =
+  | "executive"
+  | "business_health"
+  | "ai_performance"
+  | "customer"
+  | "review_performance"
+  | "reputation"
+  | "staff_performance"
+  | "qr_analytics"
+  | "campaign"
+  | "communication"
+  | "workflow"
+  | "loyalty"
+  | "enterprise_multi_location"
+  | "ai_executive_summary"
+  | "custom";
+
+export type ExportFormat = "pdf" | "excel" | "csv" | "json" | "print";
+
+export type ReportFrequency = "daily" | "weekly" | "monthly" | "quarterly" | "yearly" | "custom";
+
+export type ReportSnapshotStatus = "generating" | "generated" | "failed" | "expired";
+
+export type DeliveryChannel = "email" | "whatsapp" | "download";
+
+export type DeliveryStatus = "pending" | "sent" | "failed" | "retrying";
+
+export interface ReportTemplate {
+  id: string;
+  business_id: string;
+  user_id: string;
+  name: string;
+  description: string | null;
+  report_type: ReportType;
+  selected_kpis: string[];
+  selected_charts: string[];
+  date_range_preset: string;
+  custom_date_start: string | null;
+  custom_date_end: string | null;
+  branch_ids: string[];
+  employee_ids: string[];
+  customer_segments: string[];
+  branding_config: Record<string, unknown> | null;
+  layout_config: Record<string, unknown> | null;
+  is_system_template: boolean;
+  is_active: boolean;
+  cloned_from: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ScheduledReport {
+  id: string;
+  business_id: string;
+  user_id: string;
+  template_id: string | null;
+  name: string;
+  frequency: ReportFrequency;
+  custom_cron: string | null;
+  delivery_channels: DeliveryChannel[];
+  delivery_emails: string[];
+  delivery_phones: string[];
+  next_run_at: string | null;
+  last_run_at: string | null;
+  is_active: boolean;
+  retry_count: number;
+  max_retries: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ReportSnapshot {
+  id: string;
+  business_id: string;
+  user_id: string;
+  template_id: string | null;
+  scheduled_report_id: string | null;
+  report_type: ReportType;
+  title: string;
+  date_range_start: string | null;
+  date_range_end: string | null;
+  metrics: Record<string, unknown>;
+  chart_data: Record<string, unknown>;
+  ai_summary: Record<string, unknown> | null;
+  ai_recommendations: Record<string, unknown> | null;
+  ai_confidence: number | null;
+  export_formats: ExportFormat[];
+  file_urls: Record<string, string> | null;
+  status: ReportSnapshotStatus;
+  generated_at: string;
+  created_at: string;
+}
+
+export interface ReportDelivery {
+  id: string;
+  business_id: string;
+  user_id: string;
+  scheduled_report_id: string;
+  snapshot_id: string | null;
+  channel: DeliveryChannel;
+  recipient: string | null;
+  status: DeliveryStatus;
+  error_message: string | null;
+  delivered_at: string | null;
+  created_at: string;
+}
+
+export interface ReportAuditLog {
+  id: string;
+  business_id: string;
+  user_id: string;
+  action: string;
+  entity_type: string | null;
+  entity_id: string | null;
+  details: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export interface ReportData {
+  reportType: ReportType;
+  title: string;
+  dateRange: { start: string; end: string };
+  metrics: Record<string, unknown>;
+  charts: Record<string, unknown>;
+  aiSummary: {
+    summary: string;
+    insights: string[];
+    recommendations: string[];
+    riskAlerts: string[];
+    forecast: string;
+    confidence: number;
+  } | null;
+}

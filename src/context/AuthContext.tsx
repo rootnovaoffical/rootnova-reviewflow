@@ -32,27 +32,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     supabase.auth.getSession().then(({ data: { session: s } }) => {
       setSession(s);
       setUser(s?.user ?? null);
-      if (s?.user) {
-        loadUserData(s.user.id);
-      } else {
-        setLoading(false);
-      }
+      if (s?.user) loadUserData(s.user.id);
+      else setLoading(false);
     });
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
       setSession(s);
       setUser(s?.user ?? null);
-      if (s?.user) {
-        loadUserData(s.user.id);
-      } else {
-        setBusiness(null);
-        setBusinesses([]);
-        setOrganization(null);
-        setRole('business_admin');
-        setLoading(false);
-      }
+      if (s?.user) loadUserData(s.user.id);
+      else { setBusiness(null); setBusinesses([]); setOrganization(null); setRole('business_admin'); setLoading(false); }
     });
-
     return () => subscription.unsubscribe();
   }, []);
 
@@ -62,9 +50,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       let mappedRole: AdminRole = 'business_admin';
       if (profile) {
         const dbRole = (profile as { role?: string }).role;
-        mappedRole = dbRole === 'ROOTNOVA_SUPER_ADMIN' ? 'super_admin'
-          : dbRole === 'ROOTNOVA_PARTNER_ADMIN' ? 'partner_admin'
-          : 'business_admin';
+        mappedRole = dbRole === 'ROOTNOVA_SUPER_ADMIN' ? 'super_admin' : dbRole === 'ROOTNOVA_PARTNER_ADMIN' ? 'partner_admin' : 'business_admin';
         setRole(mappedRole);
       }
 
@@ -108,11 +94,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
         }
       }
-    } catch {
-      // Profile or business may not exist yet
-    } finally {
-      setLoading(false);
-    }
+    } catch { /* ignore */ } finally { setLoading(false); }
   }
 
   function switchBusiness(businessId: string) {
@@ -120,12 +102,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (biz) {
       setBusiness(biz);
       if (biz.organization_id) {
-        supabase.from('organizations').select('*').eq('id', biz.organization_id).single().then(({ data: org }) => {
-          setOrganization(org as Organization | null);
-        });
-      } else {
-        setOrganization(null);
-      }
+        supabase.from('organizations').select('*').eq('id', biz.organization_id).single().then(({ data: org }) => setOrganization(org as Organization | null));
+      } else setOrganization(null);
     }
   }
 
@@ -137,19 +115,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function signUp(email: string, password: string, fullName?: string) {
     const { data, error } = await supabase.auth.signUp({ email, password });
     if (error) return { error: error.message };
-    if (data.user) {
-      await supabase.from('profiles').upsert({ id: data.user.id, email, full_name: fullName || null, role: 'ROOTNOVA_BUSINESS_ADMIN' });
-    }
+    if (data.user) await supabase.from('profiles').upsert({ id: data.user.id, email, full_name: fullName || null, role: 'ROOTNOVA_BUSINESS_ADMIN' });
     return { error: null };
   }
 
   async function signOut() {
     await supabase.auth.signOut();
-    setBusiness(null);
-    setBusinesses([]);
-    setOrganization(null);
-    setUser(null);
-    setSession(null);
+    setBusiness(null); setBusinesses([]); setOrganization(null); setUser(null); setSession(null);
   }
 
   return (

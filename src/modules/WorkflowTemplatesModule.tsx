@@ -21,7 +21,7 @@ export default function WorkflowTemplatesModule({ businessId }: Props) {
 
   async function instantiateTemplate(tpl: Template) {
     try {
-      const { error } = await supabase.from('workflows').insert({ business_id: businessId, name: `${tpl.name} (from template)`, description: tpl.description, status: 'draft', trigger_type: tpl.trigger_type });
+      const { error } = await supabase.from('workflows').insert({ business_id: businessId, name: `${tpl.name} (from template)`, description: tpl.description, status: 'draft', trigger_type: tpl.trigger_type, variables: {}, canvas_data: {}, version: 1, execution_count: 0, success_count: 0, failure_count: 0 });
       if (error) throw error;
       await supabase.from('workflow_templates').update({ use_count: tpl.use_count + 1 }).eq('id', tpl.id);
       showToast('success', 'Workflow created from template');

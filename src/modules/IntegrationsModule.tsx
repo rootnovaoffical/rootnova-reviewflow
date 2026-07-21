@@ -5,15 +5,20 @@ import { Plus, Plug, Check } from 'lucide-react';
 import DataManager from '../components/DataManager';
 import type { ColumnDef } from '../components/DataManager';
 
+// installed_integrations: id, business_id, provider_id, status, config, sync_frequency, last_sync_at, last_sync_status, last_error, health_score, enabled_features, installed_by, created_at, updated_at
 const installedColumns: ColumnDef[] = [
   { key: 'status', label: 'Status', type: 'select', options: ['connected', 'disconnected', 'error'], required: true, showInTable: true },
+  { key: 'sync_frequency', label: 'Sync Frequency', type: 'select', options: ['realtime', 'hourly', 'daily', 'weekly'], showInTable: true },
+  { key: 'last_sync_at', label: 'Last Sync', type: 'date', showInTable: true, editable: false },
+  { key: 'health_score', label: 'Health', type: 'number', showInTable: true, editable: false },
   { key: 'config', label: 'Config (JSON)', type: 'json', showInTable: false },
 ];
 
-interface Provider { id: string; name: string; slug: string; category: string; description: string | null; logo_url: string | null; is_active: boolean; }
+// integration_providers: id, provider_key, name, category, description, logo_url, auth_type, auth_config, supported_features, api_base_url, webhook_url_template, rate_limit_per_minute, is_active, is_featured, sort_order, created_at, updated_at
+interface Provider { id: string; name: string; provider_key: string; category: string; description: string | null; logo_url: string | null; is_active: boolean; }
 interface Props { businessId: string; }
 
-export function InstalledIntegrationsModule({ businessId }: Props) { return <DataManager table="installed_integrations" businessId={businessId} columns={installedColumns} defaultValues={{ status: 'connected', config: {} }} />; }
+export function InstalledIntegrationsModule({ businessId }: Props) { return <DataManager table="installed_integrations" businessId={businessId} columns={installedColumns} defaultValues={{ status: 'connected', config: {}, sync_frequency: 'daily', health_score: 100, enabled_features: [] }} />; }
 
 export function IntegrationProvidersModule({ businessId }: Props) {
   const { showToast } = useToast();
@@ -45,7 +50,7 @@ export function IntegrationProvidersModule({ businessId }: Props) {
         setInstalled((prev) => { const n = { ...prev }; delete n[prov.id]; return n; });
         showToast('success', `${prov.name} disconnected`);
       } else {
-        const { data, error } = await supabase.from('installed_integrations').insert({ business_id: businessId, provider_id: prov.id, status: 'connected', config: {} }).select().single();
+        const { data, error } = await supabase.from('installed_integrations').insert({ business_id: businessId, provider_id: prov.id, status: 'connected', config: {}, sync_frequency: 'daily', health_score: 100, enabled_features: [] }).select().single();
         if (error) throw error;
         setInstalled((prev) => ({ ...prev, [prov.id]: data.id }));
         showToast('success', `${prov.name} connected`);

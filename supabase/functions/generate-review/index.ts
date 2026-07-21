@@ -1,4 +1,4 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "npm:@supabase/supabase-js@2.39.7";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -12,94 +12,130 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { sessionId, rating, answers, businessId, businessName, regenerate } = await req.json();
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(supabaseUrl, serviceKey);
 
-    let name = businessName || "the business";
-
-    if (!businessName && businessId) {
-      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-      const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-      const res = await fetch(`${supabaseUrl}/rest/v1/businesses?id=eq.${businessId}&select=name`, {
-        headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` },
-      });
-      const data = await res.json();
-      if (data && data.length > 0) name = data[0].name;
-    }
-
-    const r = Number(rating) || 5;
-    const answerTexts = answers ? Object.values(answers).filter((v: unknown) => v && String(v).trim()) : [];
-
-    const variants: string[][] = [
-      [
-        `I had an absolutely wonderful experience at ${name}! From the moment I walked in, I felt welcomed and well taken care of.`,
-        `My visit to ${name} exceeded all expectations. The team was professional, attentive, and genuinely cared about making sure everything was perfect.`,
-        `I can't say enough good things about ${name}. The quality of service was outstanding and I left feeling completely satisfied.`,
-      ],
-      [
-        `My experience at ${name} was pretty good overall. The service was solid and I appreciated the attention to detail.`,
-        `I had a positive visit to ${name}. Things were handled professionally and I was happy with the results.`,
-        `${name} delivered a good experience. The staff was helpful and I'd recommend them to others looking for quality service.`,
-      ],
-      [
-        `My visit to ${name} was okay. Some things were handled well, though there's definitely room for improvement in a few areas.`,
-        `The experience at ${name} was average. Not bad, but I've had better. With a few tweaks it could be much better.`,
-        `${name} was decent. The service worked but didn't particularly stand out. It gets the job done.`,
-      ],
-      [
-        `Unfortunately, my experience at ${name} fell short of what I expected. There were a few issues that impacted my visit.`,
-        `I was somewhat disappointed with my visit to ${name}. The service didn't quite meet the standard I was hoping for.`,
-        `${name} has potential but my experience was lacking. A few key areas need attention to improve the overall service.`,
-      ],
-      [
-        `I'm sorry to say my experience at ${name} was quite disappointing. The service fell well below my expectations.`,
-        `Unfortunately, my visit to ${name} was not a good experience. There were significant issues that need to be addressed.`,
-        `I had a poor experience at ${name}. The level of service was unacceptable and I hope they take steps to improve.`,
-      ],
-    ];
-
-    const tier = r >= 5 ? 0 : r === 4 ? 1 : r === 3 ? 2 : r === 2 ? 3 : 4;
-    const pool = variants[tier];
-    const pick = pool[regenerate ? Math.floor(Math.random() * pool.length) : 0];
-
-    let review = pick;
-    if (answerTexts.length > 0) {
-      const detail = answerTexts.slice(0, 2).map((v) => String(v)).join(". ");
-      review += " " + detail + ".";
-    }
-
-    if (r >= 4) {
-      review += ` I would definitely recommend ${name} to friends and family.`;
-    } else if (r <= 2) {
-      review += ` I hope ${name} can address these concerns and improve going forward.`;
-    }
-
-    if (sessionId) {
-      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-      const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-      await fetch(`${supabaseUrl}/rest/v1/review_sessions?id=eq.${sessionId}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: supabaseKey,
-          Authorization: `Bearer ${supabaseKey}`,
-          Prefer: "return=minimal",
-        },
-        body: JSON.stringify({
-          rating: r,
-          ai_generated_review: review,
-          answers: answers || {},
-          ai_status: "completed",
-        }),
+    const { sessionId } = await req.json();
+    if (!sessionId) {
+      return new Response(JSON.stringify({ error: "sessionId is required" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    return new Response(JSON.stringify({ review, rating: r }), {
+    const { data: session, error: sessionErr } = await supabase
+      .from("review_sessions")
+      .select("*")
+      .eq("id", sessionId)
+      .single();
+
+    if (sessionErr || !session) {
+      return new Response(JSON.stringify({ error: "Session not found" }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const rating = session.rating as number;
+    const answers = (session.answers as Record<string, string>) || {};
+
+    // Fetch business name for context
+    const { data: business } = await supabase
+      .from("businesses")
+      .select("name")
+      .eq("id", session.business_id)
+      .single();
+
+    const businessName = (business as { name?: string })?.name || "this business";
+
+    // Fetch questions to map answers to question text
+    const { data: questions } = await supabase
+      .from("questions")
+      .select("id, question_text")
+      .eq("business_id", session.business_id);
+
+    const questionMap = new Map<string, string>();
+    for (const q of (questions as { id: string; question_text: string }[] || [])) {
+      questionMap.set(q.id, q.question_text);
+    }
+
+    const answerParts: string[] = [];
+    for (const [qId, ans] of Object.entries(answers)) {
+      const qText = questionMap.get(qId);
+      if (qText && ans) answerParts.push(`${qText}: ${ans}`);
+    }
+
+    // Generate review based on rating tier
+    let review = "";
+    const positiveHighlights: string[] = [];
+
+    if (rating >= 4) {
+      const openers = [
+        `I had a fantastic experience at ${businessName}!`,
+        `Absolutely loved my visit to ${businessName}.`,
+        `${businessName} exceeded all my expectations.`,
+        `What a wonderful experience at ${businessName}!`,
+      ];
+      review = openers[Math.floor(Math.random() * openers.length)];
+
+      if (answerParts.length > 0) {
+        review += " " + answerParts.slice(0, 2).map((a) => {
+          const [q, ans] = a.split(": ");
+          if (ans && ans.length > 2) {
+            positiveHighlights.push(`The ${q.toLowerCase()} was outstanding — ${ans}.`);
+            return null;
+          }
+          return null;
+        }).filter(Boolean).join(" ");
+      }
+
+      const closers = [
+        `The staff was friendly and attentive, and the overall atmosphere was welcoming.`,
+        `Everything was handled professionally and with great care.`,
+        `I would definitely recommend ${businessName} to friends and family.`,
+        `I'll be coming back for sure. Five stars well deserved!`,
+      ];
+      review += " " + closers[Math.floor(Math.random() * closers.length)];
+
+      if (positiveHighlights.length > 0) {
+        review += " " + positiveHighlights.join(" ");
+      }
+
+      review += ` Overall, I'd rate my experience ${rating} out of 5 stars. Highly recommended!`;
+    } else if (rating === 3) {
+      review = `My experience at ${businessName} was decent but had room for improvement.`;
+      if (answerParts.length > 0) {
+        review += " " + answerParts.slice(0, 2).map((a) => {
+          const [q, ans] = a.split(": ");
+          return ans && ans.length > 2 ? `Regarding ${q.toLowerCase()}, ${ans}.` : null;
+        }).filter(Boolean).join(" ");
+      }
+      review += ` The service was okay, but I think a few things could be refined to make the experience better. I'd give it ${rating} out of 5 stars.`;
+    } else {
+      review = `I had some concerns about my visit to ${businessName}.`;
+      if (answerParts.length > 0) {
+        review += " " + answerParts.slice(0, 2).map((a) => {
+          const [q, ans] = a.split(": ");
+          return ans && ans.length > 2 ? `Regarding ${q.toLowerCase()}, ${ans}.` : null;
+        }).filter(Boolean).join(" ");
+      }
+      review += ` While I appreciate the effort, there are areas that need attention. I hope the team takes this feedback constructively. Rating: ${rating} out of 5 stars.`;
+    }
+
+    // Update session with generated review
+    await supabase
+      .from("review_sessions")
+      .update({ ai_generated_review: review, ai_status: "completed" })
+      .eq("id", sessionId);
+
+    return new Response(JSON.stringify({ review, sessionId }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (e) {
-    return new Response(JSON.stringify({ error: (e as Error).message }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+  } catch (err) {
+    return new Response(
+      JSON.stringify({ error: (err as Error).message }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
   }
 });

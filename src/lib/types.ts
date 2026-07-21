@@ -1,25 +1,12 @@
 export type AdminRole = 'super_admin' | 'partner_admin' | 'business_admin';
 
-export interface Profile {
-  id: string;
-  email: string;
-  full_name: string | null;
-  role: AdminRole;
-  created_at: string;
-}
-
 export interface Business {
   id: string;
   name: string;
   slug: string;
   logo_url: string | null;
-  primary_color: string | null;
-  secondary_color: string | null;
   welcome_message: string | null;
-  google_place_id: string | null;
-  google_maps_url: string | null;
   google_review_url: string | null;
-  google_review_url_derived: string | null;
   public_review_enabled: boolean;
   status: string;
   organization_id: string | null;
@@ -40,5 +27,6 @@ export interface Organization {
   contact_email: string | null;
   contact_phone: string | null;
   status: string | null;
+  logo_url: string | null;
   created_at: string;
 }

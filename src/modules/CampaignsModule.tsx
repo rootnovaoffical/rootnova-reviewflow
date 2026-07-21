@@ -1,6 +1,7 @@
 import DataManager from '../components/DataManager';
 import type { ColumnDef } from '../components/DataManager';
 
+// campaigns: id, business_id, name, description, campaign_type, audience_segment, status, schedule_start, schedule_end, reach_count, response_count, conversion_count, metadata, created_at, updated_at
 const columns: ColumnDef[] = [
   { key: 'name', label: 'Campaign Name', type: 'text', required: true, showInTable: true },
   { key: 'campaign_type', label: 'Type', type: 'select', options: ['review_request', 'loyalty', 'winback', 'promotion', 'announcement'], required: true, showInTable: true },

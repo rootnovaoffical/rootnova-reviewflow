@@ -1,6 +1,7 @@
 import DataManager from '../components/DataManager';
 import type { ColumnDef } from '../components/DataManager';
 
+// business_goals: id, business_id, goal_type, title, description, target_value, current_value, unit, status, deadline, ai_strategy, progress_history, achieved_at, created_at, updated_at
 const columns: ColumnDef[] = [
   { key: 'title', label: 'Goal Title', type: 'text', required: true, showInTable: true },
   { key: 'goal_type', label: 'Type', type: 'select', options: ['rating', 'reviews', 'customers', 'revenue', 'engagement'], required: true, showInTable: true },
@@ -13,4 +14,4 @@ const columns: ColumnDef[] = [
   { key: 'ai_strategy', label: 'AI Strategy', type: 'textarea', showInTable: false },
 ];
 interface Props { businessId: string; }
-export default function GoalsModule({ businessId }: Props) { return <DataManager table="business_goals" businessId={businessId} columns={columns} defaultValues={{ goal_type: 'rating', status: 'active', current_value: 0, unit: 'stars' }} />; }
+export default function GoalsModule({ businessId }: Props) { return <DataManager table="business_goals" businessId={businessId} columns={columns} defaultValues={{ goal_type: 'rating', status: 'active', current_value: 0, unit: 'stars', progress_history: {} }} />; }

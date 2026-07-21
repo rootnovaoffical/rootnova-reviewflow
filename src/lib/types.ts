@@ -403,3 +403,171 @@ export interface EngagementNotification {
   read_at: string | null;
   created_at: string;
 }
+
+// =========================================================
+// Module 7: Communication Hub & Omnichannel Messaging
+// =========================================================
+
+export type CommunicationChannel = "whatsapp" | "sms" | "email" | "push" | "in_app";
+
+export type MessageStatus =
+  | "created"
+  | "queued"
+  | "scheduled"
+  | "sending"
+  | "delivered"
+  | "read"
+  | "clicked"
+  | "failed"
+  | "retrying"
+  | "archived";
+
+export type ScheduleType = "immediate" | "scheduled" | "recurring" | "delayed";
+
+export type TemplateCategory =
+  | "review_request"
+  | "thank_you"
+  | "recovery"
+  | "festival"
+  | "birthday"
+  | "coupon"
+  | "follow_up"
+  | "reminder"
+  | "general";
+
+export interface CommunicationProvider {
+  id: string;
+  provider_key: string;
+  display_name: string;
+  channel: CommunicationChannel;
+  is_active: boolean;
+  capabilities: Record<string, unknown>;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProviderConfig {
+  id: string;
+  business_id: string;
+  provider_id: string;
+  config: Record<string, unknown>;
+  is_enabled: boolean;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MessageTemplate {
+  id: string;
+  business_id: string;
+  name: string;
+  category: TemplateCategory;
+  channel: CommunicationChannel;
+  subject: string | null;
+  body: string;
+  variables: string[];
+  locale: string;
+  version: number;
+  ai_optimized: boolean;
+  ai_optimization_score: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Message {
+  id: string;
+  business_id: string;
+  customer_id: string | null;
+  template_id: string | null;
+  campaign_id: string | null;
+  automation_rule_id: string | null;
+  channel: CommunicationChannel;
+  provider_id: string | null;
+  recipient_identifier: string;
+  recipient_name: string | null;
+  subject: string | null;
+  body: string;
+  status: MessageStatus;
+  priority: number;
+  scheduled_for: string | null;
+  sent_at: string | null;
+  delivered_at: string | null;
+  read_at: string | null;
+  clicked_at: string | null;
+  failed_at: string | null;
+  retry_count: number;
+  max_retries: number;
+  next_retry_at: string | null;
+  provider_message_id: string | null;
+  provider_response: Record<string, unknown>;
+  error_message: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MessageEvent {
+  id: string;
+  business_id: string;
+  message_id: string;
+  event_type: string;
+  event_data: Record<string, unknown>;
+  provider_response: Record<string, unknown> | null;
+  latency_ms: number | null;
+  created_at: string;
+}
+
+export interface CommunicationAuditLog {
+  id: string;
+  business_id: string;
+  message_id: string | null;
+  actor_id: string | null;
+  actor_type: string;
+  action: string;
+  channel: string | null;
+  provider_id: string | null;
+  trigger_source: string | null;
+  automation_rule_id: string | null;
+  campaign_id: string | null;
+  ai_involved: boolean;
+  retry_count: number | null;
+  execution_duration_ms: number | null;
+  outcome: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface ScheduledMessage {
+  id: string;
+  business_id: string;
+  message_id: string | null;
+  schedule_type: ScheduleType;
+  scheduled_for: string;
+  recurrence_rule: Record<string, unknown> | null;
+  timezone: string;
+  business_hours_only: boolean;
+  quiet_hours_start: string | null;
+  quiet_hours_end: string | null;
+  expiry_at: string | null;
+  is_processed: boolean;
+  processed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DeliveryLog {
+  id: string;
+  business_id: string;
+  message_id: string;
+  provider_id: string | null;
+  attempt_number: number;
+  status: string;
+  provider_message_id: string | null;
+  provider_response: Record<string, unknown>;
+  latency_ms: number | null;
+  error_code: string | null;
+  error_message: string | null;
+  created_at: string;
+}

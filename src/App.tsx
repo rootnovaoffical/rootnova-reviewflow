@@ -47,6 +47,9 @@ import BusinessCustomers from "./pages/business/Customers";
 import BusinessAutomations from "./pages/business/Automations";
 import BusinessCampaigns from "./pages/business/Campaigns";
 import BusinessLoyalty from "./pages/business/Loyalty";
+import BusinessCommunicationHub from "./pages/business/CommunicationHub";
+import BusinessCommunicationTemplates from "./pages/business/CommunicationTemplates";
+import BusinessCommunicationAnalytics from "./pages/business/CommunicationAnalytics";
 
 const ADMIN_ROLES = ["ROOTNOVA_SUPER_ADMIN", "ROOTNOVA_ADMIN"] as const;
 const PARTNER_ROLES = ["PARTNER_OWNER", "PARTNER_ADMIN", "PARTNER_TEAM_MEMBER"] as const;
@@ -111,6 +114,9 @@ export default function App() {
                 <Route path="/business/engagement/automations" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><BusinessAutomations /></ProtectedRoute>} />
                 <Route path="/business/engagement/campaigns" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><BusinessCampaigns /></ProtectedRoute>} />
                 <Route path="/business/engagement/loyalty" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><BusinessLoyalty /></ProtectedRoute>} />
+                <Route path="/business/communication" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><BusinessCommunicationHub /></ProtectedRoute>} />
+                <Route path="/business/communication/templates" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><BusinessCommunicationTemplates /></ProtectedRoute>} />
+                <Route path="/business/communication/analytics" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><BusinessCommunicationAnalytics /></ProtectedRoute>} />
 
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>

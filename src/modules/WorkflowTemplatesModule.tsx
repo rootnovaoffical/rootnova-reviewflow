@@ -1,13 +1,12 @@
-import { useEffect, useState } from 'react';
-import { Layers, Sparkles, TrendingUp } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { FileStack, Sparkles } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { useToast } from '../context/ToastContext';
 import { LoadingSpinner, EmptyState, PageHeader, Card, Badge } from '../components/UI';
 
 interface WorkflowTemplate {
   id: string;
   name: string;
-  description: string | null;
+  description: string;
   category: string;
   trigger_type: string;
   use_count: number;
@@ -16,13 +15,11 @@ interface WorkflowTemplate {
 }
 
 export default function WorkflowTemplatesModule({ businessId }: { businessId: string }) {
-  const { showToast } = useToast();
   const [loading, setLoading] = useState(true);
   const [templates, setTemplates] = useState<WorkflowTemplate[]>([]);
 
   useEffect(() => {
     fetchTemplates();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [businessId]);
 
   async function fetchTemplates() {
@@ -34,74 +31,45 @@ export default function WorkflowTemplatesModule({ businessId }: { businessId: st
         .order('use_count', { ascending: false });
 
       if (error) throw error;
-      setTemplates(data || []);
-    } catch (err) {
-      console.error('Error fetching workflow templates:', err);
-      showToast('error', 'Failed to load workflow templates');
+      setTemplates((data as WorkflowTemplate[]) ?? []);
+    } catch {
+      setTemplates([]);
     } finally {
       setLoading(false);
     }
-  }
-
-  function categoryColor(category: string): string {
-    const map: Record<string, string> = {
-      general: 'blue',
-      marketing: 'purple',
-      support: 'green',
-      feedback: 'yellow',
-      engagement: 'blue',
-      retention: 'green',
-    };
-    return map[category] || 'gray';
   }
 
   if (loading) return <LoadingSpinner label="Loading templates..." />;
 
   return (
     <div>
-      <PageHeader
-        title="Workflow Templates"
-        description="Pre-built workflow templates you can use as a starting point"
-      />
+      <PageHeader title="Workflow Templates" description="Pre-built workflow templates you can use" />
 
       {templates.length === 0 ? (
-        <EmptyState
-          icon={Layers}
-          title="No templates available"
-          description="Workflow templates will appear here once they are published."
-        />
+        <EmptyState icon={FileStack} title="No templates available" description="Workflow templates will appear here once they are published." />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {templates.map((tpl) => (
-            <Card key={tpl.id} className="p-5 flex flex-col">
-              <div className="flex items-start justify-between mb-3">
-                <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
-                  <Layers className="w-5 h-5 text-blue-400" />
-                </div>
-                <div className="flex items-center gap-1.5">
-                  {tpl.is_ai_generated && (
-                    <Badge color="purple">
-                      <Sparkles className="w-3 h-3 mr-0.5" />
-                      AI
-                    </Badge>
-                  )}
-                  <Badge color={tpl.is_active ? 'green' : 'gray'}>
-                    {tpl.is_active ? 'active' : 'inactive'}
-                  </Badge>
+          {templates.map((t) => (
+            <Card key={t.id} className="p-4 hover:border-blue-400/30 transition-colors">
+              <div className="flex items-start justify-between gap-2 mb-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <h3 className="font-semibold text-white truncate">{t.name}</h3>
+                    {t.is_ai_generated && <Sparkles className="w-3.5 h-3.5 text-violet-400 shrink-0" />}
+                  </div>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <Badge color="blue">{t.category}</Badge>
+                    <Badge color="purple">{t.trigger_type}</Badge>
+                    {t.is_active ? <Badge color="green">Active</Badge> : <Badge color="gray">Inactive</Badge>}
+                  </div>
                 </div>
               </div>
-
-              <h3 className="text-sm font-semibold text-white mb-1">{tpl.name}</h3>
-              <p className="text-xs text-zinc-400 line-clamp-3 flex-1 mb-3">
-                {tpl.description || 'No description available.'}
+              <p className="text-sm text-zinc-400 line-clamp-3 mb-3 min-h-[3.75rem]">
+                {t.description || <span className="text-zinc-600 italic">No description</span>}
               </p>
-
-              <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-white/10">
-                <Badge color={categoryColor(tpl.category)}>{tpl.category}</Badge>
-                <Badge color="blue">{tpl.trigger_type}</Badge>
-                <span className="flex items-center gap-1 text-xs text-zinc-500 ml-auto">
-                  <TrendingUp className="w-3 h-3" />
-                  {tpl.use_count} uses
+              <div className="flex items-center justify-between pt-3 border-t border-white/10">
+                <span className="text-xs text-zinc-500">
+                  Used <span className="text-zinc-300 font-medium">{t.use_count}</span> times
                 </span>
               </div>
             </Card>

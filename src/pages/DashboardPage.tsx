@@ -218,7 +218,6 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen relative">
-      {/* Sidebar */}
       <aside className={`fixed top-0 left-0 z-40 h-full w-64 bg-zinc-950/95 backdrop-blur-xl border-r border-white/10 transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
         <div className="flex items-center gap-2 px-5 h-16 border-b border-white/10">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center">
@@ -250,9 +249,7 @@ export default function DashboardPage() {
 
       {sidebarOpen && <div className="fixed inset-0 z-30 bg-black/50 lg:hidden" onClick={() => setSidebarOpen(false)} />}
 
-      {/* Main */}
       <div className="lg:ml-64">
-        {/* Header */}
         <header className="sticky top-0 z-20 h-16 bg-zinc-950/80 backdrop-blur-xl border-b border-white/10 flex items-center justify-between px-4 sm:px-6">
           <div className="flex items-center gap-3">
             <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-2 rounded-lg hover:bg-white/5 text-zinc-400">
@@ -261,7 +258,6 @@ export default function DashboardPage() {
             <h1 className="text-base font-semibold text-white">{activeLabel}</h1>
           </div>
           <div className="flex items-center gap-3">
-            {/* Business selector */}
             {businesses.length > 0 && (
               <div className="relative">
                 <button onClick={() => setBizDropdown(!bizDropdown)} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-sm text-zinc-200 hover:bg-white/10 transition-colors">
@@ -301,7 +297,6 @@ export default function DashboardPage() {
           </div>
         </header>
 
-        {/* Content */}
         <main className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
           {renderModule()}
         </main>

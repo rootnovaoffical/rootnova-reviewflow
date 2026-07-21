@@ -1,55 +1,44 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { useToast } from '../context/ToastContext';
-import {
-  LoadingSpinner,
-  EmptyState,
-  PageHeader,
-  Card,
-  Badge,
-  Button,
-  Input,
-  TextArea,
-  Select,
-  Modal,
-} from '../components/UI';
-import type { BusinessGoal } from '../lib/types';
+import { LoadingSpinner, EmptyState, PageHeader, Card, Badge, Button, Input, TextArea, Select, Modal } from '../components/UI';
 import { Target, Plus, Pencil, Trash2 } from 'lucide-react';
 
-const goalStatusColor = (status: string): string => {
-  switch ((status || '').toLowerCase()) {
-    case 'active':
-      return 'blue';
-    case 'achieved':
-      return 'green';
-    case 'failed':
-      return 'red';
-    case 'paused':
-      return 'yellow';
-    default:
-      return 'gray';
-  }
+interface BusinessGoal {
+  id: string;
+  business_id: string;
+  goal_type: string | null;
+  title: string;
+  description: string | null;
+  target_value: number | null;
+  current_value: number | null;
+  unit: string | null;
+  status: string | null;
+  deadline: string | null;
+  created_at: string;
+}
+
+const emptyForm = {
+  goal_type: 'revenue',
+  title: '',
+  description: '',
+  target_value: 100,
+  current_value: 0,
+  unit: '',
+  status: 'active',
+  deadline: '',
 };
 
 export function GoalsModule({ businessId }: { businessId: string }) {
   const { showToast } = useToast();
-  const [items, setItems] = useState<BusinessGoal[]>([]);
+  const [goals, setGoals] = useState<BusinessGoal[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<BusinessGoal | null>(null);
   const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({ ...emptyForm });
 
-  // form state
-  const [fGoalType, setFGoalType] = useState('reviews');
-  const [fTitle, setFTitle] = useState('');
-  const [fDescription, setFDescription] = useState('');
-  const [fTargetValue, setFTargetValue] = useState('100');
-  const [fCurrentValue, setFCurrentValue] = useState('0');
-  const [fUnit, setFUnit] = useState('');
-  const [fStatus, setFStatus] = useState('active');
-  const [fDeadline, setFDeadline] = useState('');
-
-  const fetchItems = useCallback(async () => {
+  const fetchGoals = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase
       .from('business_goals')
@@ -57,59 +46,54 @@ export function GoalsModule({ businessId }: { businessId: string }) {
       .eq('business_id', businessId)
       .order('created_at', { ascending: false });
     if (error) {
-      showToast('error', `Failed to load goals: ${error.message}`);
+      showToast('error', 'Failed to load goals');
     } else {
-      setItems(data as BusinessGoal[]);
+      setGoals(data || []);
     }
     setLoading(false);
   }, [businessId, showToast]);
 
   useEffect(() => {
-    fetchItems();
-  }, [fetchItems]);
+    fetchGoals();
+  }, [fetchGoals]);
 
   const openCreate = () => {
     setEditing(null);
-    setFGoalType('reviews');
-    setFTitle('');
-    setFDescription('');
-    setFTargetValue('100');
-    setFCurrentValue('0');
-    setFUnit('');
-    setFStatus('active');
-    setFDeadline('');
-    setShowModal(true);
+    setForm({ ...emptyForm });
+    setModalOpen(true);
   };
 
   const openEdit = (g: BusinessGoal) => {
     setEditing(g);
-    setFGoalType(g.goal_type || 'reviews');
-    setFTitle(g.title);
-    setFDescription(g.description || '');
-    setFTargetValue(String(g.target_value ?? 0));
-    setFCurrentValue(String(g.current_value ?? 0));
-    setFUnit(g.unit || '');
-    setFStatus(g.status || 'active');
-    setFDeadline(g.deadline ? g.deadline.slice(0, 10) : '');
-    setShowModal(true);
+    setForm({
+      goal_type: g.goal_type || 'revenue',
+      title: g.title || '',
+      description: g.description || '',
+      target_value: g.target_value ?? 100,
+      current_value: g.current_value ?? 0,
+      unit: g.unit || '',
+      status: g.status || 'active',
+      deadline: g.deadline ? g.deadline.slice(0, 16) : '',
+    });
+    setModalOpen(true);
   };
 
   const handleSave = async () => {
-    if (!fTitle.trim()) {
+    if (!form.title.trim()) {
       showToast('error', 'Title is required');
       return;
     }
     setSaving(true);
     const payload = {
       business_id: businessId,
-      goal_type: fGoalType,
-      title: fTitle,
-      description: fDescription || null,
-      target_value: Number(fTargetValue) || 0,
-      current_value: Number(fCurrentValue) || 0,
-      unit: fUnit || null,
-      status: fStatus,
-      deadline: fDeadline ? new Date(fDeadline).toISOString() : null,
+      goal_type: form.goal_type,
+      title: form.title,
+      description: form.description || null,
+      target_value: Number(form.target_value),
+      current_value: Number(form.current_value),
+      unit: form.unit || null,
+      status: form.status,
+      deadline: form.deadline ? new Date(form.deadline).toISOString() : null,
     };
     let error;
     if (editing) {
@@ -119,23 +103,36 @@ export function GoalsModule({ businessId }: { businessId: string }) {
     }
     setSaving(false);
     if (error) {
-      showToast('error', `Failed to save goal: ${error.message}`);
+      showToast('error', 'Failed to save goal');
       return;
     }
     showToast('success', editing ? 'Goal updated' : 'Goal created');
-    setShowModal(false);
-    fetchItems();
+    setModalOpen(false);
+    fetchGoals();
   };
 
-  const handleDelete = async (g: BusinessGoal) => {
-    if (!confirm(`Delete goal "${g.title}"?`)) return;
-    const { error } = await supabase.from('business_goals').delete().eq('id', g.id);
+  const handleDelete = async (id: string) => {
+    if (!confirm('Delete this goal?')) return;
+    const { error } = await supabase.from('business_goals').delete().eq('id', id);
     if (error) {
-      showToast('error', `Delete failed: ${error.message}`);
+      showToast('error', 'Failed to delete goal');
       return;
     }
     showToast('success', 'Goal deleted');
-    fetchItems();
+    fetchGoals();
+  };
+
+  const statusColor = (s: string | null) => {
+    if (s === 'active') return 'green';
+    if (s === 'completed') return 'blue';
+    if (s === 'paused') return 'yellow';
+    if (s === 'failed') return 'red';
+    return 'gray';
+  };
+
+  const progressPct = (current: number | null, target: number | null) => {
+    if (!target || target === 0) return 0;
+    return Math.min(100, Math.round(((current ?? 0) / target) * 100));
   };
 
   if (loading) return <LoadingSpinner label="Loading goals…" />;
@@ -144,7 +141,7 @@ export function GoalsModule({ businessId }: { businessId: string }) {
     <div>
       <PageHeader
         title="Business Goals"
-        description="Track and manage your business goals"
+        description="Track progress toward your business objectives"
         action={
           <Button onClick={openCreate}>
             <Plus className="w-4 h-4" /> New Goal
@@ -152,139 +149,122 @@ export function GoalsModule({ businessId }: { businessId: string }) {
         }
       />
 
-      {items.length === 0 ? (
+      {goals.length === 0 ? (
         <EmptyState
           icon={Target}
           title="No goals yet"
-          description="Create a business goal to track progress."
+          description="Set business goals to track your progress."
+          action={<Button onClick={openCreate}><Plus className="w-4 h-4" /> New Goal</Button>}
         />
       ) : (
-        <div className="grid gap-3">
-          {items.map((g) => {
-            const target = g.target_value || 0;
-            const current = g.current_value || 0;
-            const pct = target > 0 ? Math.min(100, Math.round((current / target) * 100)) : 0;
+        <div className="space-y-4">
+          {goals.map((g) => {
+            const pct = progressPct(g.current_value, g.target_value);
             return (
               <Card key={g.id} className="p-4">
-                <div className="flex items-start justify-between gap-3 mb-3">
+                <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
                       <span className="text-sm font-semibold text-white">{g.title}</span>
-                      <Badge color="blue">{g.goal_type}</Badge>
-                      <Badge color={goalStatusColor(g.status)}>{g.status}</Badge>
+                      {g.goal_type && <Badge color="purple">{g.goal_type}</Badge>}
+                      {g.status && <Badge color={statusColor(g.status)}>{g.status}</Badge>}
                     </div>
-                    {g.description && (
-                      <p className="text-sm text-zinc-400 mb-2">{g.description}</p>
+                    {g.description && <p className="text-sm text-zinc-400 mb-3">{g.description}</p>}
+
+                    <div className="mb-2 flex items-baseline justify-between">
+                      <span className="text-sm text-zinc-300">
+                        {g.current_value ?? 0} / {g.target_value ?? 0}
+                        {g.unit && <span className="text-zinc-500 ml-1">{g.unit}</span>}
+                      </span>
+                      <span className="text-sm font-medium text-blue-300">{pct}%</span>
+                    </div>
+                    <div className="w-full h-2.5 rounded-full bg-white/5 overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 transition-all"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+
+                    {g.deadline && (
+                      <p className="text-xs text-zinc-500 mt-2">
+                        Deadline: {new Date(g.deadline).toLocaleDateString()}
+                      </p>
                     )}
                   </div>
-                  <div className="flex items-center gap-1 shrink-0">
+                  <div className="flex gap-1">
                     <Button variant="ghost" size="sm" onClick={() => openEdit(g)}>
-                      <Pencil className="w-3.5 h-3.5" />
+                      <Pencil className="w-4 h-4" />
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => handleDelete(g)}>
-                      <Trash2 className="w-3.5 h-3.5" />
+                    <Button variant="ghost" size="sm" onClick={() => handleDelete(g.id)}>
+                      <Trash2 className="w-4 h-4" />
                     </Button>
                   </div>
                 </div>
-
-                {/* Progress bar */}
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-zinc-400">
-                      {current} / {target}
-                      {g.unit ? ` ${g.unit}` : ''}
-                    </span>
-                    <span className="text-zinc-300 font-medium">{pct}%</span>
-                  </div>
-                  <div className="h-2 rounded-full bg-white/5 overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all ${
-                        pct >= 100
-                          ? 'bg-emerald-500'
-                          : pct >= 75
-                            ? 'bg-blue-500'
-                            : pct >= 50
-                              ? 'bg-blue-400'
-                              : 'bg-amber-500'
-                      }`}
-                      style={{ width: `${pct}%` }}
-                    />
-                  </div>
-                </div>
-
-                {g.deadline && (
-                  <p className="text-xs text-zinc-600 mt-2">
-                    Deadline: {new Date(g.deadline).toLocaleDateString()}
-                  </p>
-                )}
               </Card>
             );
           })}
         </div>
       )}
 
-      <Modal open={showModal} onClose={() => setShowModal(false)} title={editing ? 'Edit Goal' : 'New Goal'}>
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editing ? 'Edit Goal' : 'New Goal'}>
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-sm text-zinc-400 mb-1.5">Title *</label>
+            <Input value={form.title} onChange={(v) => setForm({ ...form, title: v })} placeholder="Goal title" />
+          </div>
+          <div>
+            <label className="block text-sm text-zinc-400 mb-1.5">Goal Type</label>
+            <Select value={form.goal_type} onChange={(v) => setForm({ ...form, goal_type: v })}>
+              <option value="revenue">Revenue</option>
+              <option value="reviews">Reviews</option>
+              <option value="rating">Rating</option>
+              <option value="visits">Visits</option>
+              <option value="customers">Customers</option>
+              <option value="custom">Custom</option>
+            </Select>
+          </div>
+          <div>
+            <label className="block text-sm text-zinc-400 mb-1.5">Description</label>
+            <TextArea value={form.description} onChange={(v) => setForm({ ...form, description: v })} placeholder="Goal description" rows={3} />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-medium text-zinc-400 mb-1.5">Goal Type</label>
-              <Select value={fGoalType} onChange={setFGoalType}>
-                <option value="reviews">Reviews</option>
-                <option value="rating">Rating</option>
-                <option value="revenue">Revenue</option>
-                <option value="customers">Customers</option>
-                <option value="visits">Visits</option>
-                <option value="loyalty">Loyalty</option>
-                <option value="custom">Custom</option>
-              </Select>
+              <label className="block text-sm text-zinc-400 mb-1.5">Target Value</label>
+              <Input type="number" value={String(form.target_value)} onChange={(v) => setForm({ ...form, target_value: Number(v) || 0 })} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-zinc-400 mb-1.5">Status</label>
-              <Select value={fStatus} onChange={setFStatus}>
+              <label className="block text-sm text-zinc-400 mb-1.5">Current Value</label>
+              <Input type="number" value={String(form.current_value)} onChange={(v) => setForm({ ...form, current_value: Number(v) || 0 })} />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm text-zinc-400 mb-1.5">Unit</label>
+              <Input value={form.unit} onChange={(v) => setForm({ ...form, unit: v })} placeholder="e.g. $, visits" />
+            </div>
+            <div>
+              <label className="block text-sm text-zinc-400 mb-1.5">Status</label>
+              <Select value={form.status} onChange={(v) => setForm({ ...form, status: v })}>
                 <option value="active">Active</option>
                 <option value="paused">Paused</option>
-                <option value="achieved">Achieved</option>
+                <option value="completed">Completed</option>
                 <option value="failed">Failed</option>
               </Select>
             </div>
           </div>
           <div>
-            <label className="block text-xs font-medium text-zinc-400 mb-1.5">Title *</label>
-            <Input value={fTitle} onChange={setFTitle} placeholder="Goal title" />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-zinc-400 mb-1.5">Description</label>
-            <TextArea
-              value={fDescription}
-              onChange={setFDescription}
-              placeholder="Goal description"
-              rows={3}
+            <label className="block text-sm text-zinc-400 mb-1.5">Deadline</label>
+            <input
+              type="datetime-local"
+              value={form.deadline}
+              onChange={(e) => setForm({ ...form, deadline: e.target.value })}
+              className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:border-blue-400/50 transition-colors"
             />
           </div>
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-zinc-400 mb-1.5">Target</label>
-              <Input type="number" value={fTargetValue} onChange={setFTargetValue} />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-zinc-400 mb-1.5">Current</label>
-              <Input type="number" value={fCurrentValue} onChange={setFCurrentValue} />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-zinc-400 mb-1.5">Unit</label>
-              <Input value={fUnit} onChange={setFUnit} placeholder="e.g. reviews" />
-            </div>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-zinc-400 mb-1.5">Deadline</label>
-            <Input type="date" value={fDeadline} onChange={setFDeadline} />
-          </div>
           <div className="flex justify-end gap-2 pt-2">
-            <Button variant="secondary" onClick={() => setShowModal(false)}>
-              Cancel
-            </Button>
+            <Button variant="secondary" onClick={() => setModalOpen(false)}>Cancel</Button>
             <Button onClick={handleSave} disabled={saving}>
-              {saving ? 'Saving…' : 'Save Goal'}
+              {saving ? 'Saving…' : editing ? 'Update' : 'Create'}
             </Button>
           </div>
         </div>

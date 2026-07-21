@@ -33,18 +33,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let businessList: Business[] = [];
 
     if (p.role === 'ROOTNOVA_SUPER_ADMIN' || p.role === 'ROOTNOVA_ADMIN') {
-      const { data } = await supabase.from('businesses').select('*').order('name');
+      const { data, error } = await supabase.from('businesses').select('*').order('name');
+      if (error) { setBusinesses([]); setBusiness(null); return; }
       businessList = (data as Business[]) || [];
     } else {
-      const { data } = await supabase
+      // Step 1: fetch business_admins rows for this user (RLS allows user_id = auth.uid())
+      const { data: adminRows, error: adminErr } = await supabase
         .from('business_admins')
-        .select('business_id, businesses(*)')
+        .select('business_id')
         .eq('user_id', p.id);
-      if (data) {
-        businessList = data
-          .map((row) => (row as unknown as { businesses: Business }).businesses)
-          .filter((b): b is Business => b !== null);
+      if (adminErr || !adminRows || adminRows.length === 0) {
+        setBusinesses([]);
+        setBusiness(null);
+        return;
       }
+      // Step 2: fetch businesses by those IDs (RLS allows via is_business_admin(id))
+      const businessIds = adminRows.map((r) => (r as { business_id: string }).business_id);
+      const { data: bizData, error: bizErr } = await supabase
+        .from('businesses')
+        .select('*')
+        .in('id', businessIds)
+        .order('name');
+      if (bizErr || !bizData) {
+        setBusinesses([]);
+        setBusiness(null);
+        return;
+      }
+      businessList = bizData as Business[];
     }
 
     setBusinesses(businessList);
@@ -58,7 +73,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .from('organizations')
         .select('*')
         .eq('id', target.organization_id)
-        .single();
+        .maybeSingle();
       setOrganization(org as Organization | null);
     } else {
       setOrganization(null);
@@ -70,7 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .from('profiles')
       .select('*')
       .eq('id', uid)
-      .single();
+      .maybeSingle();
     if (error || !data) return null;
     return data as Profile;
   }, []);
@@ -124,7 +139,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           .from('organizations')
           .select('*')
           .eq('id', b.organization_id)
-          .single();
+          .maybeSingle();
         setOrganization(org as Organization | null);
       } else {
         setOrganization(null);

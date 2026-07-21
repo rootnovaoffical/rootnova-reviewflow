@@ -2,40 +2,21 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { useToast } from '../context/ToastContext';
 import {
-  LoadingSpinner,
-  EmptyState,
-  PageHeader,
-  Card,
-  Badge,
-  Button,
-  Select,
-  Modal,
+  LoadingSpinner, EmptyState, PageHeader, Card, Badge, Button, Select, Modal,
 } from '../components/UI';
-import {
-  Plug,
-  Plus,
-  Pencil,
-  Trash2,
-  Layers,
-  Star,
-  CheckCircle2,
-  XCircle,
-  Activity,
-} from 'lucide-react';
+import { Plug, Plus, Trash2, Pencil, Activity, Star } from 'lucide-react';
 
 /* ============================================================
- * InstalledIntegrationsModule
- * CRUD for installed_integrations filtered by business_id
+ * InstalledIntegrationsModule — CRUD for installed_integrations
  * ============================================================ */
 
 interface IntegrationProvider {
   id: string;
   name: string;
   category: string | null;
-  description: string | null;
   auth_type: string | null;
-  is_active: boolean | null;
-  is_featured: boolean | null;
+  is_active: boolean;
+  is_featured: boolean;
 }
 
 interface InstalledIntegration {
@@ -46,167 +27,168 @@ interface InstalledIntegration {
   sync_frequency: string | null;
   last_sync_at: string | null;
   health_score: number | null;
-  created_at?: string;
+  is_active?: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 const SYNC_FREQUENCIES = ['realtime', 'hourly', 'daily', 'weekly', 'manual'];
 
+function formatDate(value: string | null): string {
+  if (!value) return '—';
+  try {
+    return new Date(value).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  } catch {
+    return value;
+  }
+}
+
+function healthColor(score: number | null): string {
+  if (score === null) return 'gray';
+  if (score >= 80) return 'green';
+  if (score >= 50) return 'yellow';
+  return 'red';
+}
+
 export function InstalledIntegrationsModule({ businessId }: { businessId: string }) {
   const { showToast } = useToast();
-  const [installed, setInstalled] = useState<InstalledIntegration[]>([]);
+  const [items, setItems] = useState<InstalledIntegration[]>([]);
   const [providers, setProviders] = useState<IntegrationProvider[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<InstalledIntegration | null>(null);
-  const [form, setForm] = useState({ provider_id: '', sync_frequency: SYNC_FREQUENCIES[0] });
+  const [form, setForm] = useState({ provider_id: '', sync_frequency: 'daily' });
   const [saving, setSaving] = useState(false);
 
-  const fetchData = useCallback(async () => {
+  const providerMap = new Map(providers.map((p) => [p.id, p]));
+
+  const load = useCallback(async () => {
     setLoading(true);
-    const [instRes, provRes] = await Promise.all([
-      supabase.from('installed_integrations').select('*').eq('business_id', businessId).order('created_at', { ascending: false }),
-      supabase.from('integration_providers').select('*').order('name', { ascending: true }),
-    ]);
-    if (instRes.error) {
-      showToast('error', 'Failed to load installed integrations');
-    } else {
-      setInstalled((instRes.data as InstalledIntegration[]) || []);
-    }
-    if (provRes.error) {
-      showToast('error', 'Failed to load integration providers');
-    } else {
-      setProviders((provRes.data as IntegrationProvider[]) || []);
+    try {
+      const [{ data: provData, error: provError }, { data: instData, error: instError }] = await Promise.all([
+        supabase.from('integration_providers').select('id, name, category, auth_type, is_active, is_featured').eq('is_active', true).order('name'),
+        supabase.from('installed_integrations').select('*').eq('business_id', businessId).order('created_at', { ascending: false }),
+      ]);
+      if (provError) throw provError;
+      if (instError) throw instError;
+      setProviders((provData as IntegrationProvider[]) || []);
+      setItems((instData as InstalledIntegration[]) || []);
+    } catch (e) {
+      showToast('error', `Failed to load integrations: ${(e as Error).message}`);
     }
     setLoading(false);
   }, [businessId, showToast]);
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  useEffect(() => { load(); }, [load]);
 
-  const providerName = (id: string) => providers.find((p) => p.id === id)?.name || 'Unknown Provider';
-
-  const openCreate = () => {
+  function openCreate() {
     setEditing(null);
-    setForm({ provider_id: providers[0]?.id || '', sync_frequency: SYNC_FREQUENCIES[0] });
+    setForm({ provider_id: providers[0]?.id ?? '', sync_frequency: 'daily' });
     setModalOpen(true);
-  };
+  }
 
-  const openEdit = (i: InstalledIntegration) => {
+  function openEdit(i: InstalledIntegration) {
     setEditing(i);
-    setForm({ provider_id: i.provider_id, sync_frequency: i.sync_frequency || SYNC_FREQUENCIES[0] });
+    setForm({ provider_id: i.provider_id, sync_frequency: i.sync_frequency ?? 'daily' });
     setModalOpen(true);
-  };
+  }
 
-  const handleSave = async () => {
-    if (!form.provider_id) {
-      showToast('error', 'Please select a provider');
-      return;
-    }
+  async function handleSave() {
+    if (!form.provider_id) { showToast('error', 'Select a provider'); return; }
     setSaving(true);
-    const payload = {
-      business_id: businessId,
-      provider_id: form.provider_id,
-      sync_frequency: form.sync_frequency,
-    };
-    let error;
-    if (editing) {
-      ({ error } = await supabase.from('installed_integrations').update(payload).eq('id', editing.id));
-    } else {
-      ({ error } = await supabase.from('installed_integrations').insert(payload));
+    try {
+      if (editing) {
+        const { error } = await supabase
+          .from('installed_integrations')
+          .update({ provider_id: form.provider_id, sync_frequency: form.sync_frequency })
+          .eq('id', editing.id);
+        if (error) throw error;
+        showToast('success', 'Integration updated');
+      } else {
+        const { error } = await supabase
+          .from('installed_integrations')
+          .insert({
+            business_id: businessId,
+            provider_id: form.provider_id,
+            sync_frequency: form.sync_frequency,
+            status: 'connected',
+          });
+        if (error) throw error;
+        showToast('success', 'Integration installed');
+      }
+      setModalOpen(false);
+      load();
+    } catch (e) {
+      showToast('error', (e as Error).message);
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
-    if (error) {
-      showToast('error', `Failed to ${editing ? 'update' : 'install'} integration`);
-      return;
-    }
-    showToast('success', `Integration ${editing ? 'updated' : 'installed'} successfully`);
-    setModalOpen(false);
-    fetchData();
-  };
+  }
 
-  const handleDelete = async (i: InstalledIntegration) => {
+  async function handleDelete(id: string) {
     if (!confirm('Remove this integration?')) return;
-    const { error } = await supabase.from('installed_integrations').delete().eq('id', i.id);
-    if (error) {
-      showToast('error', 'Failed to remove integration');
-      return;
-    }
+    const { error } = await supabase.from('installed_integrations').delete().eq('id', id);
+    if (error) { showToast('error', error.message); return; }
     showToast('success', 'Integration removed');
-    fetchData();
-  };
+    load();
+  }
 
-  const healthColor = (score: number | null) => {
-    if (score === null) return 'gray';
-    if (score >= 80) return 'green';
-    if (score >= 50) return 'yellow';
-    return 'red';
-  };
-
-  const statusColor = (s: string | null) => {
-    if (!s) return 'gray';
-    if (s === 'active' || s === 'connected') return 'green';
-    if (s === 'error' || s === 'disconnected') return 'red';
-    return 'yellow';
-  };
+  if (loading) return <LoadingSpinner label="Loading integrations…" />;
 
   return (
     <div>
       <PageHeader
         title="Installed Integrations"
-        description="Manage integrations installed for this business"
-        action={
-          <Button onClick={openCreate}>
-            <Plus className="w-4 h-4" /> Install Integration
-          </Button>
-        }
+        description="Manage third-party integrations connected to this business"
+        action={<Button onClick={openCreate}><Plus className="w-4 h-4" /> Install Integration</Button>}
       />
 
-      {loading ? (
-        <LoadingSpinner label="Loading integrations..." />
-      ) : installed.length === 0 ? (
+      {items.length === 0 ? (
         <EmptyState
           icon={Plug}
-          title="No installed integrations"
-          description="Install an integration to connect external services"
-          action={
-            <Button onClick={openCreate}>
-              <Plus className="w-4 h-4" /> Install Integration
-            </Button>
-          }
+          title="No integrations installed"
+          description="Connect third-party providers to sync data and extend your workflows."
+          action={<Button onClick={openCreate}><Plus className="w-4 h-4" /> Install Integration</Button>}
         />
       ) : (
-        <div className="grid gap-3">
-          {installed.map((i) => (
-            <Card key={i.id} className="p-4">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold text-white mb-2">{providerName(i.provider_id)}</h3>
-                  <div className="flex flex-wrap gap-2 mb-2">
-                    {i.status && <Badge color={statusColor(i.status)}>{i.status}</Badge>}
-                    {i.sync_frequency && <Badge color="blue">{i.sync_frequency}</Badge>}
-                    {i.health_score !== null && (
-                      <Badge color={healthColor(i.health_score)}>
-                        <Activity className="w-3 h-3 mr-1" />
-                        {i.health_score}%
-                      </Badge>
-                    )}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {items.map((i) => {
+            const prov = providerMap.get(i.provider_id);
+            return (
+              <Card key={i.id} className="p-5 flex flex-col gap-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-9 h-9 rounded-lg bg-blue-500/10 flex items-center justify-center">
+                      <Plug className="w-4.5 h-4.5 text-blue-400" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-white">{prov?.name ?? 'Unknown Provider'}</h3>
+                      {prov?.category && <p className="text-xs text-zinc-500">{prov.category}</p>}
+                    </div>
                   </div>
-                  <p className="text-sm text-zinc-500">
-                    Last sync: {i.last_sync_at ? new Date(i.last_sync_at).toLocaleString() : 'Never'}
-                  </p>
+                  <Badge color={i.status === 'connected' ? 'green' : i.status === 'error' ? 'red' : 'gray'}>{i.status ?? '—'}</Badge>
                 </div>
-                <div className="flex gap-1.5 shrink-0">
-                  <Button variant="ghost" size="sm" onClick={() => openEdit(i)}>
-                    <Pencil className="w-3.5 h-3.5" />
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => handleDelete(i)}>
-                    <Trash2 className="w-3.5 h-3.5 text-red-400" />
-                  </Button>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div>
+                    <p className="text-xs text-zinc-500">Sync Frequency</p>
+                    <p className="text-zinc-300">{i.sync_frequency ?? '—'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-zinc-500">Health Score</p>
+                    <Badge color={healthColor(i.health_score)}>{i.health_score !== null ? `${i.health_score}%` : '—'}</Badge>
+                  </div>
+                  <div className="col-span-2">
+                    <p className="text-xs text-zinc-500">Last Sync</p>
+                    <p className="text-zinc-300">{formatDate(i.last_sync_at)}</p>
+                  </div>
                 </div>
-              </div>
-            </Card>
-          ))}
+                <div className="flex items-center gap-2 mt-2">
+                  <Button size="sm" variant="secondary" onClick={() => openEdit(i)}><Pencil className="w-3.5 h-3.5" /> Edit</Button>
+                  <Button size="sm" variant="danger" onClick={() => handleDelete(i.id)}><Trash2 className="w-3.5 h-3.5" /> Remove</Button>
+                </div>
+              </Card>
+            );
+          })}
         </div>
       )}
 
@@ -215,25 +197,19 @@ export function InstalledIntegrationsModule({ businessId }: { businessId: string
           <div>
             <label className="block text-sm font-medium text-zinc-300 mb-1.5">Provider</label>
             <Select value={form.provider_id} onChange={(v) => setForm({ ...form, provider_id: v })}>
-              <option value="">Select a provider</option>
-              {providers.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
+              <option value="">Select a provider…</option>
+              {providers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </Select>
           </div>
           <div>
             <label className="block text-sm font-medium text-zinc-300 mb-1.5">Sync Frequency</label>
             <Select value={form.sync_frequency} onChange={(v) => setForm({ ...form, sync_frequency: v })}>
-              {SYNC_FREQUENCIES.map((f) => (
-                <option key={f} value={f}>{f}</option>
-              ))}
+              {SYNC_FREQUENCIES.map((f) => <option key={f} value={f}>{f}</option>)}
             </Select>
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="secondary" onClick={() => setModalOpen(false)}>Cancel</Button>
-            <Button onClick={handleSave} disabled={saving}>
-              {saving ? 'Saving...' : editing ? 'Update' : 'Install'}
-            </Button>
+            <Button onClick={handleSave} disabled={saving}>{saving ? 'Saving…' : editing ? 'Save Changes' : 'Install'}</Button>
           </div>
         </div>
       </Modal>
@@ -242,70 +218,77 @@ export function InstalledIntegrationsModule({ businessId }: { businessId: string
 }
 
 /* ============================================================
- * IntegrationProvidersModule
- * List integration_providers (global, read-only)
+ * IntegrationProvidersModule — Read-only global provider catalog
  * ============================================================ */
+
+interface FullProvider extends IntegrationProvider {
+  description: string | null;
+  logo_url: string | null;
+  supported_features: string[] | null;
+}
 
 export function IntegrationProvidersModule() {
   const { showToast } = useToast();
-  const [providers, setProviders] = useState<IntegrationProvider[]>([]);
+  const [items, setItems] = useState<FullProvider[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchProviders = async () => {
+    async function load() {
       const { data, error } = await supabase
         .from('integration_providers')
         .select('*')
-        .order('name', { ascending: true });
+        .order('sort_order', { ascending: true });
       if (error) {
-        showToast('error', 'Failed to load integration providers');
+        showToast('error', `Failed to load providers: ${error.message}`);
       } else {
-        setProviders((data as IntegrationProvider[]) || []);
+        setItems((data as FullProvider[]) || []);
       }
       setLoading(false);
-    };
-    fetchProviders();
+    }
+    load();
   }, [showToast]);
+
+  if (loading) return <LoadingSpinner label="Loading providers…" />;
 
   return (
     <div>
       <PageHeader
         title="Integration Providers"
-        description="Available integrations you can connect to your business"
+        description="Browse the catalog of available integration providers"
       />
 
-      {loading ? (
-        <LoadingSpinner label="Loading providers..." />
-      ) : providers.length === 0 ? (
-        <EmptyState icon={Layers} title="No providers available" description="Integration providers will appear here" />
+      {items.length === 0 ? (
+        <EmptyState
+          icon={Plug}
+          title="No providers available"
+          description="The integration catalog is currently empty."
+        />
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {providers.map((p) => (
-            <Card key={p.id} className="p-5 flex flex-col">
-              <div className="flex items-start justify-between mb-3">
-                <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
-                  <Plug className="w-5 h-5 text-blue-400" />
-                </div>
-                <div className="flex gap-1">
-                  {p.is_featured && (
-                    <Star className="w-4 h-4 text-amber-400 fill-amber-400" />
-                  )}
-                  {p.is_active ? (
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {items.map((p) => (
+            <Card key={p.id} className="p-5 flex flex-col gap-3">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-3">
+                  {p.logo_url ? (
+                    <img src={p.logo_url} alt={p.name} className="w-10 h-10 rounded-lg object-cover" />
                   ) : (
-                    <XCircle className="w-4 h-4 text-zinc-600" />
+                    <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
+                      <Plug className="w-5 h-5 text-blue-400" />
+                    </div>
                   )}
+                  <div>
+                    <h3 className="font-semibold text-white">{p.name}</h3>
+                    {p.category && <p className="text-xs text-zinc-500">{p.category}</p>}
+                  </div>
                 </div>
+                {p.is_featured && <Star className="w-4 h-4 text-amber-400 fill-amber-400" />}
               </div>
-              <h3 className="font-semibold text-white mb-1">{p.name}</h3>
-              {p.category && <Badge color="purple">{p.category}</Badge>}
-              {p.description && <p className="text-sm text-zinc-400 mt-2 flex-1">{p.description}</p>}
-              {p.auth_type && (
-                <div className="mt-3 pt-3 border-t border-white/5">
-                  <span className="text-xs text-zinc-500">Auth: </span>
-                  <span className="text-xs text-zinc-300">{p.auth_type}</span>
-                </div>
-              )}
+              {p.description && <p className="text-sm text-zinc-400 line-clamp-3">{p.description}</p>}
+              <div className="flex flex-wrap gap-2 mt-auto">
+                <Badge color={p.is_active ? 'green' : 'gray'}>{p.is_active ? 'Active' : 'Inactive'}</Badge>
+                {p.auth_type && <Badge color="blue">{p.auth_type}</Badge>}
+                {p.is_featured && <Badge color="yellow">Featured</Badge>}
+              </div>
             </Card>
           ))}
         </div>

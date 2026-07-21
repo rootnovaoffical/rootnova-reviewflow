@@ -2,24 +2,12 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { useToast } from '../context/ToastContext';
 import {
-  LoadingSpinner,
-  EmptyState,
-  PageHeader,
-  Card,
-  Badge,
+  LoadingSpinner, EmptyState, PageHeader, Card, Badge,
 } from '../components/UI';
-import {
-  Building2,
-  Users,
-  GitBranch,
-  MapPin,
-  Shield,
-  Mail,
-} from 'lucide-react';
+import { Building2, Users, Network, Shield, MapPin } from 'lucide-react';
 
 /* ============================================================
- * OrganizationsModule
- * Show single organization record (read-only)
+ * OrganizationsModule — Read-only single org display
  * ============================================================ */
 
 interface Organization {
@@ -29,6 +17,9 @@ interface Organization {
   type: string | null;
   contact_email: string | null;
   status: string | null;
+  logo_url: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export function OrganizationsModule({ organizationId }: { organizationId: string }) {
@@ -37,75 +28,72 @@ export function OrganizationsModule({ organizationId }: { organizationId: string
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchOrg = async () => {
-      setLoading(true);
+    async function load() {
+      if (!organizationId) { setLoading(false); return; }
       const { data, error } = await supabase
         .from('organizations')
         .select('*')
         .eq('id', organizationId)
         .maybeSingle();
       if (error) {
-        showToast('error', 'Failed to load organization');
+        showToast('error', `Failed to load organization: ${error.message}`);
       } else {
         setOrg(data as Organization | null);
       }
       setLoading(false);
-    };
-    fetchOrg();
+    }
+    load();
   }, [organizationId, showToast]);
 
-  const statusColor = (s: string | null) => {
-    if (!s) return 'gray';
-    if (s === 'active' || s === 'verified') return 'green';
-    if (s === 'suspended' || s === 'deleted') return 'red';
-    return 'yellow';
-  };
-
-  if (loading) return <LoadingSpinner label="Loading organization..." />;
+  if (loading) return <LoadingSpinner label="Loading organization…" />;
 
   if (!org) {
     return (
-      <EmptyState
-        icon={Building2}
-        title="Organization not found"
-        description="The organization record could not be loaded"
-      />
+      <div>
+        <PageHeader title="Organization" description="Organization details" />
+        <EmptyState icon={Building2} title="No organization" description="This business is not associated with an organization." />
+      </div>
     );
   }
 
   return (
     <div>
       <PageHeader title="Organization" description="Organization details" />
+
       <Card className="p-6">
-        <div className="flex items-start gap-4 mb-6">
-          <div className="w-14 h-14 rounded-xl bg-blue-500/10 flex items-center justify-center shrink-0">
-            <Building2 className="w-7 h-7 text-blue-400" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <h2 className="text-xl font-bold text-white">{org.name}</h2>
-            <code className="text-sm text-zinc-500 font-mono">{org.slug}</code>
-          </div>
-          {org.status && <Badge color={statusColor(org.status)}>{org.status}</Badge>}
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-xs text-zinc-500 mb-1">Type</label>
-            <p className="text-white font-medium">{org.type || '—'}</p>
-          </div>
-          <div>
-            <label className="block text-xs text-zinc-500 mb-1">Contact Email</label>
-            <div className="flex items-center gap-1.5">
-              <Mail className="w-4 h-4 text-zinc-500" />
-              <p className="text-white font-medium">{org.contact_email || '—'}</p>
+        <div className="flex items-start gap-4">
+          {org.logo_url ? (
+            <img src={org.logo_url} alt={org.name} className="w-16 h-16 rounded-xl object-cover" />
+          ) : (
+            <div className="w-16 h-16 rounded-xl bg-blue-500/10 flex items-center justify-center">
+              <Building2 className="w-8 h-8 text-blue-400" />
             </div>
+          )}
+          <div className="flex-1">
+            <div className="flex items-center gap-3 mb-1">
+              <h3 className="text-xl font-bold text-white">{org.name}</h3>
+              <Badge color={org.status === 'active' ? 'green' : 'gray'}>{org.status ?? '—'}</Badge>
+            </div>
+            <p className="text-sm text-zinc-500">{org.slug}</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6">
+          <div>
+            <p className="text-xs text-zinc-500 mb-1">Type</p>
+            <p className="text-white">{org.type ?? '—'}</p>
           </div>
           <div>
-            <label className="block text-xs text-zinc-500 mb-1">Slug</label>
-            <p className="text-white font-medium font-mono">{org.slug}</p>
+            <p className="text-xs text-zinc-500 mb-1">Contact Email</p>
+            <p className="text-white">{org.contact_email ?? '—'}</p>
           </div>
           <div>
-            <label className="block text-xs text-zinc-500 mb-1">Status</label>
-            <p className="text-white font-medium">{org.status || '—'}</p>
+            <p className="text-xs text-zinc-500 mb-1">Status</p>
+            <Badge color={org.status === 'active' ? 'green' : 'gray'}>{org.status ?? '—'}</Badge>
+          </div>
+          <div>
+            <p className="text-xs text-zinc-500 mb-1">Slug</p>
+            <p className="text-white">{org.slug}</p>
           </div>
         </div>
       </Card>
@@ -114,24 +102,25 @@ export function OrganizationsModule({ organizationId }: { organizationId: string
 }
 
 /* ============================================================
- * OrganizationMembersModule
- * List organization_members filtered by organization_id (read-only)
+ * OrganizationMembersModule — Read-only list
  * ============================================================ */
 
-interface OrganizationMember {
+interface OrgMember {
   id: string;
   organization_id: string;
   user_id: string;
   role: string | null;
   status: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export function OrganizationMembersModule({ organizationId }: { organizationId: string }) {
   const { showToast } = useToast();
-  const [members, setMembers] = useState<OrganizationMember[]>([]);
+  const [items, setItems] = useState<OrgMember[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchMembers = useCallback(async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase
       .from('organization_members')
@@ -139,68 +128,53 @@ export function OrganizationMembersModule({ organizationId }: { organizationId: 
       .eq('organization_id', organizationId)
       .order('created_at', { ascending: false });
     if (error) {
-      showToast('error', 'Failed to load members');
+      showToast('error', `Failed to load members: ${error.message}`);
     } else {
-      setMembers((data as OrganizationMember[]) || []);
+      setItems((data as OrgMember[]) || []);
     }
     setLoading(false);
   }, [organizationId, showToast]);
 
-  useEffect(() => {
-    fetchMembers();
-  }, [fetchMembers]);
+  useEffect(() => { load(); }, [load]);
 
-  const roleColor = (r: string | null) => {
-    if (!r) return 'gray';
-    if (r === 'owner' || r === 'admin') return 'purple';
-    if (r === 'manager') return 'blue';
-    return 'gray';
-  };
-
-  const statusColor = (s: string | null) => {
-    if (!s) return 'gray';
-    if (s === 'active' || s === 'invited') return 'green';
-    if (s === 'removed' || s === 'suspended') return 'red';
-    return 'yellow';
-  };
+  if (loading) return <LoadingSpinner label="Loading members…" />;
 
   return (
     <div>
       <PageHeader title="Organization Members" description="Members of this organization" />
 
-      {loading ? (
-        <LoadingSpinner label="Loading members..." />
-      ) : members.length === 0 ? (
-        <EmptyState icon={Users} title="No members" description="Organization members will appear here" />
+      {items.length === 0 ? (
+        <EmptyState icon={Users} title="No members" description="Organization members will appear here." />
       ) : (
-        <div className="grid gap-3">
-          {members.map((m) => (
-            <Card key={m.id} className="p-4">
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-white/5 flex items-center justify-center">
-                    <Users className="w-4 h-4 text-zinc-400" />
-                  </div>
-                  <div>
-                    <p className="text-white font-medium font-mono text-sm">{m.user_id}</p>
-                    <div className="flex gap-1.5 mt-1">
-                      {m.role && <Badge color={roleColor(m.role)}>{m.role}</Badge>}
-                      {m.status && <Badge color={statusColor(m.status)}>{m.status}</Badge>}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </Card>
-          ))}
-        </div>
+        <Card className="overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-white/10 text-left text-zinc-400">
+                  <th className="px-4 py-3 font-medium">User ID</th>
+                  <th className="px-4 py-3 font-medium">Role</th>
+                  <th className="px-4 py-3 font-medium">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((m) => (
+                  <tr key={m.id} className="border-b border-white/5 hover:bg-white/5">
+                    <td className="px-4 py-3"><code className="text-blue-300 text-xs">{m.user_id}</code></td>
+                    <td className="px-4 py-3"><Badge color="blue">{m.role ?? '—'}</Badge></td>
+                    <td className="px-4 py-3"><Badge color={m.status === 'active' ? 'green' : 'gray'}>{m.status ?? '—'}</Badge></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
       )}
     </div>
   );
 }
 
 /* ============================================================
- * EnterpriseBranchesModule
- * List enterprise_branches filtered by organization_id (read-only)
+ * EnterpriseBranchesModule — Read-only list
  * ============================================================ */
 
 interface EnterpriseBranch {
@@ -212,72 +186,69 @@ interface EnterpriseBranch {
   state: string | null;
   status: string | null;
   health_score: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+function healthColor(score: number | null): string {
+  if (score === null) return 'gray';
+  if (score >= 80) return 'green';
+  if (score >= 50) return 'yellow';
+  return 'red';
 }
 
 export function EnterpriseBranchesModule({ organizationId }: { organizationId: string }) {
   const { showToast } = useToast();
-  const [branches, setBranches] = useState<EnterpriseBranch[]>([]);
+  const [items, setItems] = useState<EnterpriseBranch[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchBranches = useCallback(async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase
       .from('enterprise_branches')
       .select('*')
       .eq('organization_id', organizationId)
-      .order('name', { ascending: true });
+      .order('created_at', { ascending: false });
     if (error) {
-      showToast('error', 'Failed to load branches');
+      showToast('error', `Failed to load branches: ${error.message}`);
     } else {
-      setBranches((data as EnterpriseBranch[]) || []);
+      setItems((data as EnterpriseBranch[]) || []);
     }
     setLoading(false);
   }, [organizationId, showToast]);
 
-  useEffect(() => {
-    fetchBranches();
-  }, [fetchBranches]);
+  useEffect(() => { load(); }, [load]);
 
-  const statusColor = (s: string | null) => {
-    if (!s) return 'gray';
-    if (s === 'active' || s === 'operational') return 'green';
-    if (s === 'closed' || s === 'inactive') return 'red';
-    return 'yellow';
-  };
-
-  const healthColor = (score: number | null) => {
-    if (score === null) return 'gray';
-    if (score >= 80) return 'green';
-    if (score >= 50) return 'yellow';
-    return 'red';
-  };
+  if (loading) return <LoadingSpinner label="Loading branches…" />;
 
   return (
     <div>
       <PageHeader title="Enterprise Branches" description="Branch locations for this organization" />
 
-      {loading ? (
-        <LoadingSpinner label="Loading branches..." />
-      ) : branches.length === 0 ? (
-        <EmptyState icon={GitBranch} title="No branches" description="Enterprise branches will appear here" />
+      {items.length === 0 ? (
+        <EmptyState icon={Network} title="No branches" description="Enterprise branches will appear here." />
       ) : (
-        <div className="grid gap-3">
-          {branches.map((b) => (
-            <Card key={b.id} className="p-4">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {items.map((b) => (
+            <Card key={b.id} className="p-5 flex flex-col gap-3">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-9 h-9 rounded-lg bg-blue-500/10 flex items-center justify-center">
+                    <MapPin className="w-4.5 h-4.5 text-blue-400" />
+                  </div>
+                  <div>
                     <h3 className="font-semibold text-white">{b.name}</h3>
-                    {b.branch_code && <Badge color="blue">{b.branch_code}</Badge>}
-                    {b.status && <Badge color={statusColor(b.status)}>{b.status}</Badge>}
+                    {b.branch_code && <p className="text-xs text-zinc-500">{b.branch_code}</p>}
                   </div>
-                  <div className="flex items-center gap-1.5 text-sm text-zinc-400 mb-1">
-                    <MapPin className="w-3.5 h-3.5" />
-                    <span>{[b.city, b.state].filter(Boolean).join(', ') || 'Location not set'}</span>
-                  </div>
-                  {b.health_score !== null && (
-                    <Badge color={healthColor(b.health_score)}>Health: {b.health_score}%</Badge>
-                  )}
+                </div>
+                <Badge color={b.status === 'active' ? 'green' : 'gray'}>{b.status ?? '—'}</Badge>
+              </div>
+              <div className="text-sm space-y-1">
+                <p className="text-zinc-400"><span className="text-zinc-500">City:</span> {b.city ?? '—'}</p>
+                <p className="text-zinc-400"><span className="text-zinc-500">State:</span> {b.state ?? '—'}</p>
+                <div className="flex items-center gap-2 pt-1">
+                  <span className="text-zinc-500 text-xs">Health:</span>
+                  <Badge color={healthColor(b.health_score)}>{b.health_score !== null ? `${b.health_score}%` : '—'}</Badge>
                 </div>
               </div>
             </Card>
@@ -289,8 +260,7 @@ export function EnterpriseBranchesModule({ organizationId }: { organizationId: s
 }
 
 /* ============================================================
- * EnterpriseRegionsModule
- * List enterprise_regions filtered by organization_id (read-only)
+ * EnterpriseRegionsModule — Read-only list
  * ============================================================ */
 
 interface EnterpriseRegion {
@@ -300,75 +270,75 @@ interface EnterpriseRegion {
   region_type: string | null;
   code: string | null;
   status: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export function EnterpriseRegionsModule({ organizationId }: { organizationId: string }) {
   const { showToast } = useToast();
-  const [regions, setRegions] = useState<EnterpriseRegion[]>([]);
+  const [items, setItems] = useState<EnterpriseRegion[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchRegions = useCallback(async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase
       .from('enterprise_regions')
       .select('*')
       .eq('organization_id', organizationId)
-      .order('name', { ascending: true });
+      .order('created_at', { ascending: false });
     if (error) {
-      showToast('error', 'Failed to load regions');
+      showToast('error', `Failed to load regions: ${error.message}`);
     } else {
-      setRegions((data as EnterpriseRegion[]) || []);
+      setItems((data as EnterpriseRegion[]) || []);
     }
     setLoading(false);
   }, [organizationId, showToast]);
 
-  useEffect(() => {
-    fetchRegions();
-  }, [fetchRegions]);
+  useEffect(() => { load(); }, [load]);
 
-  const statusColor = (s: string | null) => {
-    if (!s) return 'gray';
-    if (s === 'active') return 'green';
-    if (s === 'inactive' || s === 'archived') return 'red';
-    return 'yellow';
-  };
+  if (loading) return <LoadingSpinner label="Loading regions…" />;
 
   return (
     <div>
       <PageHeader title="Enterprise Regions" description="Regional groupings for this organization" />
 
-      {loading ? (
-        <LoadingSpinner label="Loading regions..." />
-      ) : regions.length === 0 ? (
-        <EmptyState icon={MapPin} title="No regions" description="Enterprise regions will appear here" />
+      {items.length === 0 ? (
+        <EmptyState icon={Network} title="No regions" description="Enterprise regions will appear here." />
       ) : (
-        <div className="grid gap-3">
-          {regions.map((r) => (
-            <Card key={r.id} className="p-4">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
-                    <h3 className="font-semibold text-white">{r.name}</h3>
-                    {r.code && <Badge color="blue">{r.code}</Badge>}
-                    {r.status && <Badge color={statusColor(r.status)}>{r.status}</Badge>}
-                  </div>
-                  {r.region_type && <p className="text-sm text-zinc-400">Type: {r.region_type}</p>}
-                </div>
-              </div>
-            </Card>
-          ))}
-        </div>
+        <Card className="overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-white/10 text-left text-zinc-400">
+                  <th className="px-4 py-3 font-medium">Name</th>
+                  <th className="px-4 py-3 font-medium">Region Type</th>
+                  <th className="px-4 py-3 font-medium">Code</th>
+                  <th className="px-4 py-3 font-medium">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((r) => (
+                  <tr key={r.id} className="border-b border-white/5 hover:bg-white/5">
+                    <td className="px-4 py-3 text-white font-medium">{r.name}</td>
+                    <td className="px-4 py-3"><Badge color="blue">{r.region_type ?? '—'}</Badge></td>
+                    <td className="px-4 py-3 text-zinc-300">{r.code ?? '—'}</td>
+                    <td className="px-4 py-3"><Badge color={r.status === 'active' ? 'green' : 'gray'}>{r.status ?? '—'}</Badge></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
       )}
     </div>
   );
 }
 
 /* ============================================================
- * OrganizationPoliciesModule
- * List organization_policies filtered by organization_id (read-only)
+ * OrganizationPoliciesModule — Read-only list
  * ============================================================ */
 
-interface OrganizationPolicy {
+interface OrgPolicy {
   id: string;
   organization_id: string;
   policy_key: string;
@@ -376,64 +346,57 @@ interface OrganizationPolicy {
   name: string;
   description: string | null;
   status: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export function OrganizationPoliciesModule({ organizationId }: { organizationId: string }) {
   const { showToast } = useToast();
-  const [policies, setPolicies] = useState<OrganizationPolicy[]>([]);
+  const [items, setItems] = useState<OrgPolicy[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchPolicies = useCallback(async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase
       .from('organization_policies')
       .select('*')
       .eq('organization_id', organizationId)
-      .order('name', { ascending: true });
+      .order('created_at', { ascending: false });
     if (error) {
-      showToast('error', 'Failed to load policies');
+      showToast('error', `Failed to load policies: ${error.message}`);
     } else {
-      setPolicies((data as OrganizationPolicy[]) || []);
+      setItems((data as OrgPolicy[]) || []);
     }
     setLoading(false);
   }, [organizationId, showToast]);
 
-  useEffect(() => {
-    fetchPolicies();
-  }, [fetchPolicies]);
+  useEffect(() => { load(); }, [load]);
 
-  const statusColor = (s: string | null) => {
-    if (!s) return 'gray';
-    if (s === 'active' || s === 'enabled') return 'green';
-    if (s === 'disabled' || s === 'archived') return 'red';
-    return 'yellow';
-  };
+  if (loading) return <LoadingSpinner label="Loading policies…" />;
 
   return (
     <div>
-      <PageHeader title="Organization Policies" description="Policies configured for this organization" />
+      <PageHeader title="Organization Policies" description="Policy configurations for this organization" />
 
-      {loading ? (
-        <LoadingSpinner label="Loading policies..." />
-      ) : policies.length === 0 ? (
-        <EmptyState icon={Shield} title="No policies" description="Organization policies will appear here" />
+      {items.length === 0 ? (
+        <EmptyState icon={Shield} title="No policies" description="Organization policies will appear here." />
       ) : (
-        <div className="grid gap-3">
-          {policies.map((p) => (
-            <Card key={p.id} className="p-4">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Shield className="w-4 h-4 text-zinc-500" />
-                    <h3 className="font-semibold text-white">{p.name}</h3>
-                    {p.status && <Badge color={statusColor(p.status)}>{p.status}</Badge>}
+        <div className="grid gap-4 md:grid-cols-2">
+          {items.map((p) => (
+            <Card key={p.id} className="p-5 flex flex-col gap-2">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-9 h-9 rounded-lg bg-blue-500/10 flex items-center justify-center">
+                    <Shield className="w-4.5 h-4.5 text-blue-400" />
                   </div>
-                  <div className="flex flex-wrap gap-2 mb-1">
-                    {p.policy_key && <Badge color="purple">{p.policy_key}</Badge>}
-                    {p.policy_type && <Badge color="blue">{p.policy_type}</Badge>}
-                  </div>
-                  {p.description && <p className="text-sm text-zinc-400 mt-1">{p.description}</p>}
+                  <h3 className="font-semibold text-white">{p.name}</h3>
                 </div>
+                <Badge color={p.status === 'active' ? 'green' : 'gray'}>{p.status ?? '—'}</Badge>
+              </div>
+              {p.description && <p className="text-sm text-zinc-400">{p.description}</p>}
+              <div className="flex flex-wrap gap-2 mt-1">
+                <Badge color="purple">{p.policy_key}</Badge>
+                {p.policy_type && <Badge color="blue">{p.policy_type}</Badge>}
               </div>
             </Card>
           ))}

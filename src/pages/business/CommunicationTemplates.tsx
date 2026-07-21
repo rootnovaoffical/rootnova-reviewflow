@@ -130,7 +130,7 @@ export default function BusinessTemplates() {
                     </div>
                     <div className="flex gap-1">
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${chm.bg} ${chm.color}`}>{chm.icon}</span>
-                      {template.ai_optimized && <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-primary-500/15 text-primary-300">AI</span>}
+                      {template.is_ai_optimized && <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-primary-500/15 text-primary-300">AI</span>}
                     </div>
                   </div>
 
@@ -208,7 +208,7 @@ function TemplateEditor({ businessId, businessName, editing, onClose, onSaved }:
       body: body.trim(),
       variables: detectedVars,
       locale,
-      ai_optimized: editing?.ai_optimized || false,
+      is_ai_optimized: editing?.is_ai_optimized || false,
       ai_optimization_score: editing?.ai_optimization_score || 0,
       is_active: true,
     };
@@ -221,7 +221,7 @@ function TemplateEditor({ businessId, businessName, editing, onClose, onSaved }:
       }
       showToast("Template updated", "success");
     } else {
-      const { error } = await createTemplate(templateData);
+      const { error } = await createTemplate({ ...templateData, version: 1 } as Omit<MessageTemplate, "id" | "created_at" | "updated_at">);
       if (error) { showToast("Failed to create template", "error"); setSaving(false); return; }
       if (profile) {
         await insertAuditLog({ actor_id: profile.id, actor_email: profile.email, action: "template_created", target_type: "business", target_id: businessId, metadata: { name: templateData.name } });

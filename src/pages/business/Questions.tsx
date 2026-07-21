@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import BusinessShell from "./BusinessShell";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../context/AuthContext";
-import type { Question } from "../../lib/types";
+import type { Question, FlowType } from "../../lib/types";
 import { SkeletonList } from "../../components/Skeleton";
 import { EmptyState } from "../../components/States";
 import { useToast } from "../../context/ToastContext";
@@ -109,7 +109,7 @@ function QuestionModal({ question, onClose, onSave }: { question: Question | nul
         <h2 className="text-lg font-bold text-white mb-4">{question ? "Edit Question" : "New Question"}</h2>
         <div className="space-y-3">
           <div><label className="block text-xs text-slate-400 mb-1">Question Text</label><input value={form.question_text} onChange={(e) => setForm((f) => ({ ...f, question_text: e.target.value }))} className="input-field w-full" /></div>
-          <div><label className="block text-xs text-slate-400 mb-1">Flow Type</label><select value={form.flow_type} onChange={(e) => setForm((f) => ({ ...f, flow_type: e.target.value }))} className="input-field w-full"><option value="POSITIVE">Positive</option><option value="NEUTRAL">Neutral</option><option value="NEGATIVE">Negative</option><option value="ALL">All</option></select></div>
+          <div><label className="block text-xs text-slate-400 mb-1">Flow Type</label><select value={form.flow_type} onChange={(e) => setForm((f) => ({ ...f, flow_type: e.target.value as FlowType }))} className="input-field w-full"><option value="POSITIVE">Positive</option><option value="NEUTRAL">Neutral</option><option value="NEGATIVE">Negative</option><option value="ALL">All</option></select></div>
           <div><label className="block text-xs text-slate-400 mb-1">Options (one per line)</label><textarea value={form.options} onChange={(e) => setForm((f) => ({ ...f, options: e.target.value }))} className="input-field w-full" rows={4} /></div>
           <div className="flex gap-4">
             <label className="flex items-center gap-2 text-sm text-slate-300"><input type="checkbox" checked={form.is_required} onChange={(e) => setForm((f) => ({ ...f, is_required: e.target.checked }))} /> Required</label>

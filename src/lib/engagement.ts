@@ -60,6 +60,10 @@ export function segmentMeta(segment: CustomerSegment): {
     inactive: { label: "Inactive", color: "text-slate-500", bg: "bg-slate-600/15", border: "border-slate-600/30", icon: "💤" },
     needs_followup: { label: "Needs Follow-up", color: "text-warning-400", bg: "bg-warning-500/15", border: "border-warning-500/30", icon: "📨" },
     returning_after_long_time: { label: "Returning After Long Time", color: "text-accent-300", bg: "bg-accent-500/15", border: "border-accent-500/30", icon: "🔙" },
+    active: { label: "Active", color: "text-success-400", bg: "bg-success-500/15", border: "border-success-500/30", icon: "✅" },
+    repeat: { label: "Repeat", color: "text-primary-300", bg: "bg-primary-500/15", border: "border-primary-500/30", icon: "🔁" },
+    at_risk: { label: "At Risk", color: "text-warning-400", bg: "bg-warning-500/15", border: "border-warning-500/30", icon: "⚠️" },
+    churned: { label: "Churned", color: "text-error-400", bg: "bg-error-500/15", border: "border-error-500/30", icon: "💔" },
   };
   return map[segment] ?? map.new;
 }

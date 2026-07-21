@@ -142,7 +142,7 @@ export default function BusinessLoyalty() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {programs.map((program, i) => {
-              const pm = programTypeMeta(program.program_type);
+              const pm = programTypeMeta(program.program_type as LoyaltyProgramType);
               const isActive = program.status === "active";
               return (
                 <div
@@ -216,7 +216,7 @@ function LoyaltyBuilder({ businessId, editing, onClose, onSaved }: {
   const { profile } = useAuth();
   const { showToast } = useToast();
   const [name, setName] = useState(editing?.name || "");
-  const [programType, setProgramType] = useState<LoyaltyProgramType>(editing?.program_type || "visit_based");
+  const [programType, setProgramType] = useState<LoyaltyProgramType>((editing?.program_type as LoyaltyProgramType) || "visit_based");
   const [targetCount, setTargetCount] = useState(editing?.target_count || 5);
   const [rewardDescription, setRewardDescription] = useState(editing?.reward_description || "");
   const [pointsPerAction, setPointsPerAction] = useState(editing?.points_per_action || 1);

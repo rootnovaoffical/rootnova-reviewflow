@@ -24,7 +24,7 @@ import {
   executionStatusMeta,
   type NodeDefinition,
 } from "../../lib/workflow";
-import type { Workflow, WorkflowExecution, WorkflowLog, NodeType, NodeCategory } from "../../lib/types";
+import type { Workflow, WorkflowExecution, WorkflowLog, WorkflowNode, WorkflowEdge, WorkflowVersion, NodeType, NodeCategory } from "../../lib/types";
 
 interface CanvasNode {
   key: string;
@@ -93,14 +93,14 @@ export default function BusinessWorkflowEditor() {
       setWorkflow(wfRes.data);
       setNodes((nodesRes.data || []).map((n) => ({
         key: n.node_key,
-        node_type: n.node_type,
-        node_category: n.node_category,
+        node_type: n.node_type as NodeType,
+        node_category: n.node_category as NodeCategory,
         label: n.label,
-        config: n.config,
+        config: n.config || {},
         position_x: Number(n.position_x),
         position_y: Number(n.position_y),
         is_collapsed: n.is_collapsed,
-      })));
+      })) as CanvasNode[]);
       setEdges((edgesRes.data || []).map((e) => ({
         source: e.source_node_key,
         target: e.target_node_key,
@@ -193,7 +193,7 @@ export default function BusinessWorkflowEditor() {
     setSaving(true);
     const { error: wfErr } = await updateWorkflow(workflow.id, {
       canvas_data: { pan, zoom },
-      variables: workflow.variables,
+      variables: workflow.variables || [],
     });
     if (wfErr) { showToast("Failed to save canvas", "error"); setSaving(false); return; }
 
@@ -207,7 +207,7 @@ export default function BusinessWorkflowEditor() {
       position_y: n.position_y,
       is_collapsed: n.is_collapsed,
       sort_order: i,
-    }));
+    })) as Omit<WorkflowNode, "id" | "created_at" | "updated_at" | "business_id" | "workflow_id">[];
     const { error: nodeErr } = await saveWorkflowNodes(workflow.id, businessId, nodesData);
     if (nodeErr) { showToast("Failed to save nodes", "error"); setSaving(false); return; }
 
@@ -216,22 +216,21 @@ export default function BusinessWorkflowEditor() {
       target_node_key: e.target,
       edge_label: e.label || null,
       edge_data: {},
-    }));
-    const { error: edgeErr } = await saveWorkflowEdges(workflow.id, businessId, edgesData);
+    })) as unknown as Omit<WorkflowEdge, "id" | "created_at" | "updated_at" | "business_id" | "workflow_id">[];
+    const { error: edgeErr } = await saveWorkflowEdges(workflow.id, businessId, edgesData as unknown as Omit<WorkflowEdge, "id" | "created_at" | "workflow_id" | "business_id">[]);
     if (edgeErr) { showToast("Failed to save connections", "error"); setSaving(false); return; }
 
     // Create version snapshot
     await createWorkflowVersion({
       workflow_id: workflow.id,
-      business_id: businessId,
-      version: workflow.version,
+      version_number: workflow.version,
       canvas_data: { pan, zoom },
       nodes: nodes as unknown as Record<string, unknown>[],
       edges: edges as unknown as Record<string, unknown>[],
-      variables: workflow.variables,
-      change_note: "Manual save",
+      variables: workflow.variables || [],
+      change_notes: "Manual save",
       created_by: profile?.id || null,
-    });
+    } as Omit<WorkflowVersion, "id" | "created_at">);
 
     if (profile) {
       await insertAuditLog({ actor_id: profile.id, actor_email: profile.email, action: "workflow_saved", target_type: "workflow", target_id: workflow.id, metadata: { node_count: nodes.length, edge_count: edges.length } });

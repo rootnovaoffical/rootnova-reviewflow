@@ -4,7 +4,7 @@
 
 // ---- Module 1: Customer Review Core ----
 export type ReviewStatus = "pending" | "completed" | "abandoned";
-export type AIStatus = "pending" | "processing" | "done" | "failed";
+export type AIStatus = "pending" | "processing" | "done" | "failed" | "completed";
 
 export interface Business {
   id: string;
@@ -17,6 +17,7 @@ export interface Business {
   google_place_id: string | null;
   google_maps_url: string | null;
   google_review_url: string | null;
+  google_review_url_derived: string | null;
   public_review_enabled: boolean;
   status: string;
   organization_id: string | null;
@@ -32,8 +33,8 @@ export interface Business {
 export interface ReviewSession {
   id: string;
   business_id: string;
-  rating: number | null;
-  answers: Record<string, unknown> | null;
+  rating: number;
+  answers: Array<{ question_id: string; answer: string }> | Record<string, unknown> | null;
   ai_generated_review: string | null;
   ai_status: AIStatus;
   google_place_id_snapshot: string | null;
@@ -44,13 +45,18 @@ export interface ReviewSession {
 }
 
 // ---- Module 3: QR Management ----
+export type QRType = "reviewflow" | "menu" | "whatsapp" | "website" | "campaign" | "custom";
+
 export interface QRCode {
   id: string;
   business_id: string;
   name: string;
   slug: string;
+  qr_type: QRType;
+  destination_url: string;
   qr_code_url: string | null;
   scan_count: number;
+  status: "active" | "inactive";
   is_active: boolean;
   location_label: string | null;
   created_at: string;
@@ -81,7 +87,9 @@ export interface IntelligenceInsight {
 
 // ---- Module 5: Action Center ----
 export type ActionPriority = "critical" | "high" | "medium" | "low";
-export type ActionStatus = "open" | "in_progress" | "completed" | "dismissed";
+export type ActionStatus = "open" | "in_progress" | "completed" | "dismissed" | "resolved";
+
+export type AutomationStatus = "active" | "paused" | "draft" | "archived";
 
 export interface ActionItem {
   id: string;
@@ -107,6 +115,14 @@ export type CustomerSegment =
   | "repeat"
   | "vip"
   | "at_risk"
+  | "returning"
+  | "loyal"
+  | "promoter"
+  | "passive"
+  | "detractor"
+  | "inactive"
+  | "needs_followup"
+  | "returning_after_long_time"
   | "churned"
   | "inactive";
 
@@ -255,6 +271,7 @@ export interface ProviderConfig {
   business_id: string;
   provider_id: string;
   is_enabled: boolean;
+  is_default: boolean;
   config: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
@@ -273,6 +290,9 @@ export interface MessageTemplate {
   is_active: boolean;
   is_ai_optimized: boolean;
   ai_optimization_notes: string | null;
+  ai_optimization_score: number | null;
+  locale: string | null;
+  version: number;
   created_at: string;
   updated_at: string;
 }
@@ -327,6 +347,11 @@ export interface CommunicationAuditLog {
   entity_type: string;
   entity_id: string;
   actor_id: string | null;
+  actor_type: string | null;
+  trigger_source: string | null;
+  channel: string | null;
+  ai_involved: boolean | null;
+  outcome: string | null;
   metadata: Record<string, unknown> | null;
   created_at: string;
 }
@@ -415,7 +440,9 @@ export interface WorkflowNode {
   workflow_id: string;
   node_key: string;
   type: NodeType;
+  node_type: string | null;
   category: NodeCategory;
+  node_category: string | null;
   label: string;
   config: Record<string, unknown> | null;
   position_x: number;
@@ -432,6 +459,7 @@ export interface WorkflowEdge {
   source_node_key: string;
   target_node_key: string;
   label: string | null;
+  edge_label: string | null;
   condition_config: Record<string, unknown> | null;
   sort_order: number;
   created_at: string;
@@ -462,7 +490,9 @@ export interface WorkflowLog {
   business_id: string;
   execution_id: string;
   node_key: string;
+  node_label: string | null;
   level: "info" | "warn" | "error" | "debug";
+  log_level: string | null;
   message: string;
   ai_reasoning: string | null;
   provider_used: string | null;
@@ -888,3 +918,195 @@ export interface DeveloperToken {
   created_at: string;
   updated_at: string;
 }
+
+// ---- Shared / Platform-wide types ----
+
+export type Role =
+  | "ROOTNOVA_SUPER_ADMIN"
+  | "ROOTNOVA_ADMIN"
+  | "PARTNER_OWNER"
+  | "PARTNER_ADMIN"
+  | "PARTNER_TEAM_MEMBER"
+  | "BUSINESS_ADMIN";
+
+export type FlowType = "ALWAYS" | "POSITIVE" | "NEGATIVE";
+
+export interface Question {
+  id: string;
+  business_id: string;
+  question_text: string;
+  question_type: string;
+  flow_type: FlowType;
+  options: string[];
+  is_required: boolean;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AnalyticsEvent {
+  id: string;
+  business_id: string | null;
+  session_id: string | null;
+  event_type: string;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export interface Organization {
+  id: string;
+  name: string;
+  slug: string;
+  type: string;
+  logo_url: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OrganizationMember {
+  id: string;
+  organization_id: string;
+  user_id: string;
+  role: string;
+  status: string;
+  profile?: Profile | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AdminInvitation {
+  id: string;
+  organization_id: string | null;
+  email: string;
+  role: string;
+  status: string;
+  invited_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AuditLog {
+  id: string;
+  actor_id: string | null;
+  actor_email: string | null;
+  action: string;
+  target_type: string | null;
+  target_id: string | null;
+  organization_id: string | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export interface PlatformAsset {
+  id: string;
+  key: string;
+  label: string;
+  asset_type: string;
+  public_url: string | null;
+  storage_path: string | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FeatureFlag {
+  id: string;
+  key: string;
+  label: string;
+  description: string | null;
+  category: string;
+  is_enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Plan {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  monthly_price: number;
+  annual_price: number;
+  setup_fee: number;
+  max_businesses: number | null;
+  max_team_members: number | null;
+  max_review_sessions: number | null;
+  ai_usage_allowance: string | null;
+  trial_duration_days: number | null;
+  sort_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Subscription {
+  id: string;
+  organization_id: string;
+  plan_id: string;
+  status: string;
+  billing_cycle: "MONTHLY" | "ANNUAL";
+  custom_monthly_price: number | null;
+  custom_setup_fee: number | null;
+  discount_percent: number;
+  is_founding_partner: boolean | null;
+  contract_start_date: string | null;
+  contract_end_date: string | null;
+  trial_ends_at: string | null;
+  current_period_start: string | null;
+  current_period_end: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Payment {
+  id: string;
+  organization_id: string;
+  plan_id: string | null;
+  billing_cycle: "MONTHLY" | "ANNUAL";
+  amount: number;
+  payment_purpose: string;
+  payment_method: string;
+  upi_id: string | null;
+  utr_reference: string | null;
+  screenshot_path: string | null;
+  rejection_reason: string | null;
+  status: string;
+  submitted_by: string | null;
+  payment_date: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type AutomationTriggerType =
+  | "review_submitted"
+  | "rating_threshold"
+  | "customer_segment"
+  | "campaign_response";
+
+export type AutomationActionType =
+  | "send_message"
+  | "notify_manager"
+  | "open_recovery"
+  | "add_points"
+  | "send_coupon";
+
+export type CampaignType =
+  | "review"
+  | "discount"
+  | "festival"
+  | "referral"
+  | "weekend_offer"
+  | "happy_hour"
+  | "new_menu";
+
+export type CampaignStatus = "draft" | "active" | "paused" | "completed";
+
+export type LoyaltyProgramType =
+  | "visit_based"
+  | "review_based"
+  | "birthday"
+  | "festival";

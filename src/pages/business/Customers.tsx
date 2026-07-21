@@ -214,7 +214,7 @@ function CustomerCard({ customer, delay, onClick }: { customer: Customer; delay:
       </div>
 
       <div className="flex items-center justify-between text-xs text-slate-500 pt-3 border-t border-white/5">
-        <span>{customer.avg_rating > 0 ? `${customer.avg_rating.toFixed(1)}⭐` : "No rating"}</span>
+        <span>{(customer.avg_rating ?? 0) > 0 ? `${(customer.avg_rating ?? 0).toFixed(1)}⭐` : "No rating"}</span>
         <span>{customer.last_visit_at ? `Last visit ${timeAgo(customer.last_visit_at)}` : "First visit"}</span>
       </div>
     </div>
@@ -270,7 +270,7 @@ function CustomerDetailPanel({ customer, reviews, timeline, timelineLoading, onC
           </div>
           <div className="bg-slate-900/50 rounded-xl p-3 border border-white/5 text-center">
             <p className="text-xs text-slate-500 uppercase tracking-wide">Avg Rating</p>
-            <p className="text-xl font-bold text-white mt-1">{customer.avg_rating > 0 ? customer.avg_rating.toFixed(1) : "—"}</p>
+            <p className="text-xl font-bold text-white mt-1">{(customer.avg_rating ?? 0) > 0 ? (customer.avg_rating ?? 0).toFixed(1) : "—"}</p>
           </div>
         </div>
 

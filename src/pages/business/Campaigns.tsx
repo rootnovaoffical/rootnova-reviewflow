@@ -116,8 +116,8 @@ export default function BusinessCampaigns() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {campaigns.map((campaign, i) => {
-              const tm = campaignTypeMeta(campaign.campaign_type);
-              const sm = campaignStatusMeta(campaign.status);
+              const tm = campaignTypeMeta(campaign.campaign_type as CampaignType);
+              const sm = campaignStatusMeta(campaign.status as CampaignStatus);
               const conversionRate = campaign.reach_count > 0 ? Math.round((campaign.conversion_count / campaign.reach_count) * 100) : 0;
               return (
                 <div
@@ -202,7 +202,7 @@ function CampaignBuilder({ businessId, editing, onClose, onSaved }: {
   const { showToast } = useToast();
   const [name, setName] = useState(editing?.name || "");
   const [description, setDescription] = useState(editing?.description || "");
-  const [campaignType, setCampaignType] = useState<CampaignType>(editing?.campaign_type || "review");
+  const [campaignType, setCampaignType] = useState<CampaignType>((editing?.campaign_type as CampaignType) || "review");
   const [audienceSegment, setAudienceSegment] = useState(editing?.audience_segment || "all");
   const [scheduleStart, setScheduleStart] = useState(editing?.schedule_start?.slice(0, 16) || "");
   const [scheduleEnd, setScheduleEnd] = useState(editing?.schedule_end?.slice(0, 16) || "");

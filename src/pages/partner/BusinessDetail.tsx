@@ -35,7 +35,7 @@ export default function PartnerBusinessDetail() {
       setBusiness(b.data as Business);
       setQuestions((q.data || []) as Question[]);
       setReviews((r.data || []) as ReviewSession[]);
-      setEditForm({ name: (b.data as Business).name, welcome_message: (b.data as Business).welcome_message, google_review_url: (b.data as Business).google_review_url || "", public_review_enabled: (b.data as Business).public_review_enabled });
+      setEditForm({ name: (b.data as Business).name, welcome_message: (b.data as Business).welcome_message || "", google_review_url: (b.data as Business).google_review_url || "", public_review_enabled: (b.data as Business).public_review_enabled });
       setLoading(false);
     });
   };

@@ -398,7 +398,7 @@ function MessageDetailPanel({ message, events, eventsLoading, onClose, onRetry, 
         )}
 
         {/* Provider response */}
-        {Object.keys(message.provider_response).length > 0 && (
+        {Object.keys(message.provider_response || {}).length > 0 && (
           <div className="bg-slate-900/40 rounded-xl p-4 mb-4 border border-white/5">
             <p className="text-xs text-slate-500 uppercase tracking-wide mb-2">Provider Response</p>
             <pre className="text-xs text-slate-400 overflow-x-auto">{JSON.stringify(message.provider_response, null, 2)}</pre>

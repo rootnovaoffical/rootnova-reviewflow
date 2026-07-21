@@ -29,7 +29,7 @@ export default function BusinessMyBusiness() {
         if (!data?.business_id) { setLoading(false); return; }
         supabase.from("businesses").select("*").eq("id", data.business_id).single().then(({ data: b }) => {
           setBusiness(b as Business);
-          setEditForm({ name: (b as Business).name, welcome_message: (b as Business).welcome_message, google_review_url: (b as Business).google_review_url || "", primary_color: (b as Business).primary_color, secondary_color: (b as Business).secondary_color, public_review_enabled: (b as Business).public_review_enabled });
+          setEditForm({ name: (b as Business).name, welcome_message: (b as Business).welcome_message || "", google_review_url: (b as Business).google_review_url || "", primary_color: (b as Business).primary_color || "", secondary_color: (b as Business).secondary_color || "", public_review_enabled: (b as Business).public_review_enabled });
           setLoading(false);
         });
       });
@@ -90,7 +90,7 @@ export default function BusinessMyBusiness() {
                 <div><dt className="text-slate-500">Welcome Message</dt><dd className="text-white">{business.welcome_message}</dd></div>
                 <div><dt className="text-slate-500">Google Review URL</dt><dd className="text-white truncate">{business.google_review_url || "—"}</dd></div>
                 <div><dt className="text-slate-500">Public Reviews</dt><dd className="text-white">{business.public_review_enabled ? "Enabled" : "Disabled"}</dd></div>
-                <div className="flex gap-3"><div><dt className="text-slate-500">Primary</dt><dd><div className="w-6 h-6 rounded" style={{ background: business.primary_color }} /></dd></div><div><dt className="text-slate-500">Secondary</dt><dd><div className="w-6 h-6 rounded" style={{ background: business.secondary_color }} /></dd></div></div>
+                <div className="flex gap-3"><div><dt className="text-slate-500">Primary</dt><dd><div className="w-6 h-6 rounded" style={{ background: business.primary_color || undefined }} /></dd></div><div><dt className="text-slate-500">Secondary</dt><dd><div className="w-6 h-6 rounded" style={{ background: business.secondary_color || undefined }} /></dd></div></div>
               </dl>
               <button onClick={() => setEditing(true)} className="btn-ghost mt-4 w-full">Edit</button>
             </div>

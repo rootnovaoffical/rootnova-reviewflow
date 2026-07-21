@@ -2,7 +2,7 @@ import { getInitials } from "../lib/utils";
 
 interface AvatarProps {
   url?: string | null;
-  name?: string;
+  name?: string | null;
   size?: "sm" | "md" | "lg" | "xl";
   className?: string;
   ring?: boolean;

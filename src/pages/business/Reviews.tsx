@@ -565,11 +565,11 @@ function ReviewDetailPanel({ review, copied, onCopy, onClose, onResponse }: {
         )}
 
         {/* Customer answers */}
-        {review.answers && review.answers.length > 0 && (
+        {review.answers && Array.isArray(review.answers) && (review.answers as unknown[]).length > 0 && (
           <div className="mb-5">
             <p className="text-xs text-slate-500 uppercase tracking-wide mb-2">Customer Answers</p>
             <div className="space-y-1.5">
-              {review.answers.map((a: any, i: number) => (
+              {(review.answers as Array<{ question?: string; question_id?: string; answer: string }>).map((a, i) => (
                 <div key={i} className="flex justify-between text-sm bg-slate-900/30 rounded-lg px-3 py-2">
                   <span className="text-slate-400">{a.question || a.question_id?.slice(0, 8) || `Question ${i + 1}`}</span>
                   <span className="text-white font-medium">{a.answer}</span>

@@ -117,8 +117,8 @@ export default function BusinessAutomations() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {rules.map((rule, i) => {
-              const tm = triggerTypeMeta(rule.trigger_type);
-              const am = actionTypeMeta(rule.action_type);
+              const tm = triggerTypeMeta(rule.trigger_type as AutomationTriggerType);
+              const am = actionTypeMeta(rule.action_type as AutomationActionType);
               const isActive = rule.status === "active";
               return (
                 <div
@@ -145,7 +145,7 @@ export default function BusinessAutomations() {
                       <span>{am.icon}</span>
                       <span>Then: <span className="text-slate-300">{am.label}</span></span>
                     </div>
-                    {rule.delay_hours > 0 && (
+                    {(rule.delay_hours || 0) > 0 && (
                       <div className="flex items-center gap-2 text-xs text-slate-400">
                         <span>⏱️</span>
                         <span>Wait: <span className="text-slate-300">{rule.delay_hours}h</span></span>
@@ -199,9 +199,9 @@ function AutomationBuilder({ businessId, editing, onClose, onSaved }: {
   const { profile } = useAuth();
   const { showToast } = useToast();
   const [name, setName] = useState(editing?.name || "");
-  const [triggerType, setTriggerType] = useState<AutomationTriggerType>(editing?.trigger_type || "review_submitted");
+  const [triggerType, setTriggerType] = useState<AutomationTriggerType>((editing?.trigger_type as AutomationTriggerType) || "review_submitted");
   const [triggerConfig, setTriggerConfig] = useState<Record<string, unknown>>(editing?.trigger_config || {});
-  const [actionType, setActionType] = useState<AutomationActionType>(editing?.action_type || "send_message");
+  const [actionType, setActionType] = useState<AutomationActionType>((editing?.action_type as AutomationActionType) || "send_message");
   const [actionConfig, setActionConfig] = useState<Record<string, unknown>>(editing?.action_config || {});
   const [delayHours, setDelayHours] = useState(editing?.delay_hours || 0);
   const [saving, setSaving] = useState(false);

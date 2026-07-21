@@ -38,7 +38,7 @@ export default function ProtectedRoute({ roles, children }: Props) {
     );
   }
 
-  if (!roles.includes(profile.role)) {
+  if (!roles.includes(profile.role as Role)) {
     return <Navigate to={defaultPathForRole(profile.role)} replace />;
   }
 

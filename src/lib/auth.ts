@@ -19,7 +19,7 @@ export async function updateProfile(userId: string, updates: Partial<Profile>): 
   return data as Profile;
 }
 
-export async function insertAuditLog(entry: { actor_id?: string; actor_email?: string; action: string; target_type?: string; target_id?: string; organization_id?: string; metadata?: Record<string, unknown> }): Promise<void> {
+export async function insertAuditLog(entry: { actor_id?: string | null; actor_email?: string | null; action: string; target_type?: string | null; target_id?: string | null; organization_id?: string | null; metadata?: Record<string, unknown> }): Promise<void> {
   const { error } = await supabase.from("audit_logs").insert(entry);
   if (error) console.error("insertAuditLog:", error.message);
 }

@@ -151,7 +151,7 @@ export default function BusinessActions() {
   };
 
   const handleStatusChange = async (itemId: string, status: ActionItem["status"]) => {
-    const { error: updateErr } = await updateActionItemStatus(itemId, status);
+    const { error: updateErr } = await updateActionItemStatus(itemId, status as "open" | "in_progress" | "dismissed" | "resolved");
     if (updateErr) {
       showToast("Failed to update status", "error");
       return;

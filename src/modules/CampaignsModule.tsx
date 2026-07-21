@@ -1,292 +1,158 @@
-import { useEffect, useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
-import { LoadingSpinner, EmptyState, PageHeader, Card, Badge, Button, Input, TextArea, Select, Modal } from '../components/UI';
+import { PageHeader, Card, Badge, Button, Input, TextArea, Select, Modal, LoadingSpinner, EmptyState } from '../components/UI';
 import { useToast } from '../context/ToastContext';
-import { Megaphone, Plus, Pencil, Trash2, Calendar, Users, Mail, MousePointerClick, CheckCircle } from 'lucide-react';
-
-interface Campaign {
-  id: string;
-  name: string;
-  description: string | null;
-  campaign_type: string;
-  audience_segment: string | null;
-  status: string;
-  schedule_start: string | null;
-  schedule_end: string | null;
-  reach_count: number;
-  response_count: number;
-  conversion_count: number;
-}
-
-interface CampaignForm {
-  name: string;
-  description: string;
-  campaign_type: string;
-  audience_segment: string;
-  status: string;
-  schedule_start: string;
-  schedule_end: string;
-}
-
-const emptyCampaignForm: CampaignForm = {
-  name: '',
-  description: '',
-  campaign_type: 'review',
-  audience_segment: '',
-  status: 'draft',
-  schedule_start: '',
-  schedule_end: '',
-};
-
-function statusColor(status: string): string {
-  switch (status) {
-    case 'active':
-    case 'running':
-      return 'green';
-    case 'draft':
-      return 'gray';
-    case 'scheduled':
-      return 'blue';
-    case 'completed':
-      return 'purple';
-    case 'paused':
-      return 'yellow';
-    case 'failed':
-      return 'red';
-    default:
-      return 'gray';
-  }
-}
+import { Megaphone, Plus, Users } from 'lucide-react';
 
 export function CampaignsModule({ businessId }: { businessId: string }) {
   const { showToast } = useToast();
+  const [campaigns, setCampaigns] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editing, setEditing] = useState<Campaign | null>(null);
-  const [form, setForm] = useState<CampaignForm>(emptyCampaignForm);
-  const [saving, setSaving] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [editing, setEditing] = useState<any | null>(null);
+  const [form, setForm] = useState({ name: '', description: '', campaign_type: '', audience_segment: '', status: 'draft', schedule_start: '', schedule_end: '', reach_count: 0, response_count: 0, conversion_count: 0 });
 
-  useEffect(() => {
-    fetchCampaigns();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [businessId]);
-
-  async function fetchCampaigns() {
+  const load = useCallback(async () => {
     setLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('campaigns')
-        .select('id, name, description, campaign_type, audience_segment, status, schedule_start, schedule_end, reach_count, response_count, conversion_count')
-        .eq('business_id', businessId)
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      setCampaigns((data ?? []) as Campaign[]);
-    } catch (e) {
-      showToast('error', 'Failed to load campaigns');
-    } finally {
-      setLoading(false);
-    }
-  }
+    const { data, error } = await supabase.from('campaigns').select('*').eq('business_id', businessId).order('created_at', { ascending: false });
+    if (error) showToast('error', error.message);
+    else setCampaigns(data || []);
+    setLoading(false);
+  }, [businessId, showToast]);
 
-  function openCreate() {
-    setEditing(null);
-    setForm(emptyCampaignForm);
-    setModalOpen(true);
-  }
+  useEffect(() => { load(); }, [load]);
 
-  function openEdit(c: Campaign) {
-    setEditing(c);
-    setForm({
-      name: c.name,
-      description: c.description ?? '',
-      campaign_type: c.campaign_type,
-      audience_segment: c.audience_segment ?? '',
-      status: c.status,
-      schedule_start: c.schedule_start ? c.schedule_start.slice(0, 16) : '',
-      schedule_end: c.schedule_end ? c.schedule_end.slice(0, 16) : '',
-    });
-    setModalOpen(true);
-  }
+  function openCreate() { setEditing(null); setForm({ name: '', description: '', campaign_type: '', audience_segment: '', status: 'draft', schedule_start: '', schedule_end: '', reach_count: 0, response_count: 0, conversion_count: 0 }); setShowModal(true); }
+  function openEdit(c: any) { setEditing(c); setForm({ name: c.name || '', description: c.description || '', campaign_type: c.campaign_type || '', audience_segment: c.audience_segment || '', status: c.status || 'draft', schedule_start: c.schedule_start || '', schedule_end: c.schedule_end || '', reach_count: c.reach_count ?? 0, response_count: c.response_count ?? 0, conversion_count: c.conversion_count ?? 0 }); setShowModal(true); }
 
   async function handleSave() {
-    if (!form.name.trim()) {
-      showToast('error', 'Name is required');
-      return;
+    if (!form.name) { showToast('error', 'Name is required'); return; }
+    const payload = { ...form, reach_count: Number(form.reach_count), response_count: Number(form.response_count), conversion_count: Number(form.conversion_count) };
+    if (editing) {
+      const { error } = await supabase.from('campaigns').update(payload).eq('id', editing.id);
+      if (error) { showToast('error', error.message); return; }
+      showToast('success', 'Campaign updated');
+    } else {
+      const { error } = await supabase.from('campaigns').insert({ business_id: businessId, ...payload });
+      if (error) { showToast('error', error.message); return; }
+      showToast('success', 'Campaign created');
     }
-    setSaving(true);
-    try {
-      const payload = {
-        business_id: businessId,
-        name: form.name.trim(),
-        description: form.description.trim() || null,
-        campaign_type: form.campaign_type,
-        audience_segment: form.audience_segment.trim() || null,
-        status: form.status,
-        schedule_start: form.schedule_start ? new Date(form.schedule_start).toISOString() : null,
-        schedule_end: form.schedule_end ? new Date(form.schedule_end).toISOString() : null,
-      };
-      if (editing) {
-        const { error } = await supabase.from('campaigns').update(payload).eq('id', editing.id);
-        if (error) throw error;
-        showToast('success', 'Campaign updated');
-      } else {
-        const { error } = await supabase.from('campaigns').insert(payload);
-        if (error) throw error;
-        showToast('success', 'Campaign created');
-      }
-      setModalOpen(false);
-      fetchCampaigns();
-    } catch (e) {
-      showToast('error', 'Failed to save campaign');
-    } finally {
-      setSaving(false);
-    }
+    setShowModal(false);
+    load();
   }
 
-  async function handleDelete(c: Campaign) {
-    if (!confirm(`Delete campaign "${c.name}"?`)) return;
-    try {
-      const { error } = await supabase.from('campaigns').delete().eq('id', c.id);
-      if (error) throw error;
-      showToast('success', 'Campaign deleted');
-      fetchCampaigns();
-    } catch (e) {
-      showToast('error', 'Failed to delete campaign');
-    }
+  async function handleDelete(id: string) {
+    if (!confirm('Delete this campaign?')) return;
+    const { error } = await supabase.from('campaigns').delete().eq('id', id);
+    if (error) { showToast('error', error.message); return; }
+    showToast('success', 'Campaign deleted');
+    load();
   }
 
-  if (loading) return <LoadingSpinner label="Loading campaigns..." />;
+  const statusColor: Record<string, string> = { draft: 'gray', active: 'green', paused: 'yellow', completed: 'blue', failed: 'red' };
+
+  function conversionRate(c: any) {
+    if (!c.reach_count || c.reach_count === 0) return '0%';
+    return `${Math.round((c.conversion_count / c.reach_count) * 100)}%`;
+  }
 
   return (
     <div>
-      <PageHeader
-        title="Campaigns"
-        description="Marketing campaigns and their performance"
-        action={
-          <Button onClick={openCreate}>
-            <Plus className="w-4 h-4" /> New Campaign
-          </Button>
-        }
-      />
-
-      {campaigns.length === 0 ? (
-        <EmptyState icon={Megaphone} title="No campaigns yet" description="Create a campaign to reach your audience." />
+      <PageHeader title="Campaigns" description="Marketing campaigns and performance" action={<Button onClick={openCreate}><Plus className="w-4 h-4" /> New Campaign</Button>} />
+      {loading ? <LoadingSpinner label="Loading campaigns..." /> : campaigns.length === 0 ? (
+        <EmptyState icon={Megaphone} title="No campaigns" description="Create a marketing campaign to reach your audience." action={<Button onClick={openCreate}><Plus className="w-4 h-4" /> New Campaign</Button>} />
       ) : (
         <div className="space-y-3">
-          {campaigns.map((c) => {
-            const convRate = c.reach_count > 0 ? Math.round((c.conversion_count / c.reach_count) * 100) : 0;
-            return (
-              <Card key={c.id} className="p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1 flex-wrap">
-                      <span className="text-sm font-semibold text-white">{c.name}</span>
-                      <Badge color="blue">{c.campaign_type}</Badge>
-                      <Badge color={statusColor(c.status)}>{c.status}</Badge>
-                      {c.audience_segment && <Badge color="gray">{c.audience_segment}</Badge>}
-                    </div>
-                    {c.description && <p className="text-sm text-zinc-400 mb-3">{c.description}</p>}
-                    <div className="grid grid-cols-3 gap-3 mb-3">
-                      <div className="flex items-center gap-2 text-xs">
-                        <Users className="w-4 h-4 text-zinc-500" />
-                        <div>
-                          <p className="text-zinc-500">Reach</p>
-                          <p className="text-zinc-200 font-medium">{c.reach_count}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 text-xs">
-                        <Mail className="w-4 h-4 text-zinc-500" />
-                        <div>
-                          <p className="text-zinc-500">Responses</p>
-                          <p className="text-zinc-200 font-medium">{c.response_count}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 text-xs">
-                        <CheckCircle className="w-4 h-4 text-zinc-500" />
-                        <div>
-                          <p className="text-zinc-500">Conversions</p>
-                          <p className="text-zinc-200 font-medium">{c.conversion_count} ({convRate}%)</p>
-                        </div>
-                      </div>
-                    </div>
-                    {(c.schedule_start || c.schedule_end) && (
-                      <div className="flex items-center gap-1 text-xs text-zinc-500">
-                        <Calendar className="w-3 h-3" />
-                        {c.schedule_start && new Date(c.schedule_start).toLocaleDateString()}
-                        {c.schedule_start && c.schedule_end && ' → '}
-                        {c.schedule_end && new Date(c.schedule_end).toLocaleDateString()}
-                      </div>
-                    )}
+          {campaigns.map((c) => (
+            <Card key={c.id} className="p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    <span className="text-sm font-semibold text-white">{c.name}</span>
+                    {c.campaign_type && <Badge color="purple">{c.campaign_type}</Badge>}
+                    <Badge color={statusColor[c.status] || 'gray'}>{c.status}</Badge>
                   </div>
-                  <div className="flex items-center gap-1">
-                    <Button variant="ghost" size="sm" onClick={() => openEdit(c)}>
-                      <Pencil className="w-3.5 h-3.5" />
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => handleDelete(c)}>
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </Button>
+                  {c.description && <p className="text-sm text-zinc-400">{c.description}</p>}
+                  {c.audience_segment && (
+                    <p className="text-xs text-zinc-500 mt-1 flex items-center gap-1"><Users className="w-3 h-3" /> Audience: {c.audience_segment}</p>
+                  )}
+                  <div className="flex gap-4 mt-2 text-xs text-zinc-500">
+                    <span>Reach: <span className="text-zinc-300">{c.reach_count}</span></span>
+                    <span>Responses: <span className="text-zinc-300">{c.response_count}</span></span>
+                    <span>Conversions: <span className="text-zinc-300">{c.conversion_count}</span></span>
+                    <span>Conv. Rate: <span className="text-emerald-300">{conversionRate(c)}</span></span>
                   </div>
+                  {(c.schedule_start || c.schedule_end) && (
+                    <p className="text-xs text-zinc-600 mt-1.5">
+                      {c.schedule_start && new Date(c.schedule_start).toLocaleDateString()} → {c.schedule_end && new Date(c.schedule_end).toLocaleDateString()}
+                    </p>
+                  )}
                 </div>
-              </Card>
-            );
-          })}
+                <div className="flex gap-1.5 shrink-0">
+                  <Button variant="ghost" size="sm" onClick={() => openEdit(c)}>Edit</Button>
+                  <Button variant="ghost" size="sm" onClick={() => handleDelete(c.id)}>Delete</Button>
+                </div>
+              </div>
+            </Card>
+          ))}
         </div>
       )}
 
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editing ? 'Edit Campaign' : 'New Campaign'}>
-        <div className="space-y-4">
+      <Modal open={showModal} onClose={() => setShowModal(false)} title={editing ? 'Edit Campaign' : 'New Campaign'}>
+        <div className="space-y-3">
           <div>
-            <label className="block text-xs font-medium text-zinc-400 mb-1.5">Name</label>
+            <label className="text-xs text-zinc-400 mb-1 block">Name</label>
             <Input value={form.name} onChange={(v) => setForm({ ...form, name: v })} placeholder="Campaign name" />
           </div>
           <div>
-            <label className="block text-xs font-medium text-zinc-400 mb-1.5">Description</label>
-            <TextArea value={form.description} onChange={(v) => setForm({ ...form, description: v })} placeholder="Optional" rows={2} />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-zinc-400 mb-1.5">Campaign Type</label>
-              <Select value={form.campaign_type} onChange={(v) => setForm({ ...form, campaign_type: v })}>
-                <option value="review">Review</option>
-                <option value="promotion">Promotion</option>
-                <option value="referral">Referral</option>
-                <option value="retention">Retention</option>
-                <option value="winback">Win-back</option>
-                <option value="custom">Custom</option>
-              </Select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-zinc-400 mb-1.5">Status</label>
-              <Select value={form.status} onChange={(v) => setForm({ ...form, status: v })}>
-                <option value="draft">Draft</option>
-                <option value="scheduled">Scheduled</option>
-                <option value="active">Active</option>
-                <option value="paused">Paused</option>
-                <option value="completed">Completed</option>
-                <option value="failed">Failed</option>
-              </Select>
-            </div>
+            <label className="text-xs text-zinc-400 mb-1 block">Description</label>
+            <TextArea value={form.description} onChange={(v) => setForm({ ...form, description: v })} placeholder="Campaign description" />
           </div>
           <div>
-            <label className="block text-xs font-medium text-zinc-400 mb-1.5">Audience Segment</label>
-            <Input value={form.audience_segment} onChange={(v) => setForm({ ...form, audience_segment: v })} placeholder="e.g. vip, new, at_risk" />
+            <label className="text-xs text-zinc-400 mb-1 block">Campaign Type</label>
+            <Input value={form.campaign_type} onChange={(v) => setForm({ ...form, campaign_type: v })} placeholder="e.g. email, social" />
+          </div>
+          <div>
+            <label className="text-xs text-zinc-400 mb-1 block">Audience Segment</label>
+            <Input value={form.audience_segment} onChange={(v) => setForm({ ...form, audience_segment: v })} placeholder="e.g. vip, new customers" />
+          </div>
+          <div>
+            <label className="text-xs text-zinc-400 mb-1 block">Status</label>
+            <Select value={form.status} onChange={(v) => setForm({ ...form, status: v })}>
+              <option value="draft">Draft</option>
+              <option value="active">Active</option>
+              <option value="paused">Paused</option>
+              <option value="completed">Completed</option>
+              <option value="failed">Failed</option>
+            </Select>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-zinc-400 mb-1.5">Schedule Start</label>
-              <Input type="datetime-local" value={form.schedule_start} onChange={(v) => setForm({ ...form, schedule_start: v })} />
+              <label className="text-xs text-zinc-400 mb-1 block">Schedule Start</label>
+              <Input value={form.schedule_start} onChange={(v) => setForm({ ...form, schedule_start: v })} type="date" />
             </div>
             <div>
-              <label className="block text-xs font-medium text-zinc-400 mb-1.5">Schedule End</label>
-              <Input type="datetime-local" value={form.schedule_end} onChange={(v) => setForm({ ...form, schedule_end: v })} />
+              <label className="text-xs text-zinc-400 mb-1 block">Schedule End</label>
+              <Input value={form.schedule_end} onChange={(v) => setForm({ ...form, schedule_end: v })} type="date" />
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="text-xs text-zinc-400 mb-1 block">Reach</label>
+              <Input value={String(form.reach_count)} onChange={(v) => setForm({ ...form, reach_count: Number(v) })} type="number" />
+            </div>
+            <div>
+              <label className="text-xs text-zinc-400 mb-1 block">Responses</label>
+              <Input value={String(form.response_count)} onChange={(v) => setForm({ ...form, response_count: Number(v) })} type="number" />
+            </div>
+            <div>
+              <label className="text-xs text-zinc-400 mb-1 block">Conversions</label>
+              <Input value={String(form.conversion_count)} onChange={(v) => setForm({ ...form, conversion_count: Number(v) })} type="number" />
             </div>
           </div>
           <div className="flex justify-end gap-2 pt-2">
-            <Button variant="secondary" onClick={() => setModalOpen(false)}>Cancel</Button>
-            <Button onClick={handleSave} disabled={saving}>
-              <MousePointerClick className="w-4 h-4" /> {saving ? 'Saving...' : 'Save'}
-            </Button>
+            <Button variant="secondary" onClick={() => setShowModal(false)}>Cancel</Button>
+            <Button onClick={handleSave}>{editing ? 'Save' : 'Create'}</Button>
           </div>
         </div>
       </Modal>

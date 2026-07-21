@@ -1,27 +1,32 @@
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
+import { FileStack } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { LoadingSpinner, EmptyState, PageHeader, Card, Badge } from '../components/UI';
 import { useToast } from '../context/ToastContext';
-import { Workflow, Sparkles } from 'lucide-react';
+import { LoadingSpinner, EmptyState, PageHeader, Card, Badge } from '../components/UI';
 
 interface WorkflowTemplate {
   id: string;
   name: string;
   description: string | null;
-  category: string;
-  trigger_type: string;
+  category: string | null;
+  trigger_type: string | null;
   use_count: number;
   is_active: boolean;
 }
 
-export default function WorkflowTemplatesModule({ businessId }: { businessId: string }) {
+interface WorkflowTemplatesModuleProps {
+  businessId: string;
+}
+
+export default function WorkflowTemplatesModule({ businessId: _businessId }: WorkflowTemplatesModuleProps) {
   const { showToast } = useToast();
   const [loading, setLoading] = useState(true);
   const [templates, setTemplates] = useState<WorkflowTemplate[]>([]);
 
   useEffect(() => {
     fetchTemplates();
-  }, [businessId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function fetchTemplates() {
     setLoading(true);
@@ -30,47 +35,67 @@ export default function WorkflowTemplatesModule({ businessId }: { businessId: st
         .from('workflow_templates')
         .select('id, name, description, category, trigger_type, use_count, is_active')
         .order('use_count', { ascending: false });
+
       if (error) throw error;
       setTemplates((data ?? []) as WorkflowTemplate[]);
-    } catch {
-      showToast('error', 'Failed to load workflow templates');
+    } catch (err) {
+      showToast('error', `Failed to load templates: ${(err as Error).message}`);
     } finally {
       setLoading(false);
     }
+  }
+
+  function categoryColor(category: string | null): string {
+    if (!category) return 'gray';
+    const map: Record<string, string> = {
+      general: 'blue',
+      reviews: 'green',
+      marketing: 'purple',
+      support: 'yellow',
+      onboarding: 'blue',
+      retention: 'green',
+    };
+    return map[category] ?? 'gray';
   }
 
   if (loading) return <LoadingSpinner label="Loading templates..." />;
 
   return (
     <div>
-      <PageHeader title="Workflow Templates" description="Pre-built workflow templates you can use for your business" />
+      <PageHeader title="Workflow Templates" description="Pre-built workflow templates — install and customize for your business" />
 
       {templates.length === 0 ? (
-        <EmptyState icon={Sparkles} title="No templates available" description="Workflow templates will appear here when they become available." />
+        <Card className="p-5">
+          <EmptyState icon={FileStack} title="No templates available" description="Workflow templates will appear here when they are published." />
+        </Card>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {templates.map((t) => (
-            <Card key={t.id} className="p-4 hover:border-blue-400/30 transition-colors">
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-sm font-semibold text-white truncate">{t.name}</h3>
-                  <p className="text-xs text-zinc-500 mt-1 line-clamp-3">{t.description || 'No description'}</p>
+          {templates.map((tpl) => (
+            <Card key={tpl.id} className="p-5 flex flex-col">
+              <div className="flex items-start justify-between mb-2">
+                <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
+                  <FileStack className="w-5 h-5 text-blue-400" />
                 </div>
-                {t.is_active ? (
-                  <Badge color="green">Active</Badge>
-                ) : (
-                  <Badge color="gray">Inactive</Badge>
+                <Badge color={tpl.is_active ? 'green' : 'gray'}>
+                  {tpl.is_active ? 'Active' : 'Inactive'}
+                </Badge>
+              </div>
+
+              <h3 className="text-sm font-semibold text-white mt-2">{tpl.name}</h3>
+              {tpl.description && (
+                <p className="text-sm text-zinc-400 mt-1 flex-1 line-clamp-3">{tpl.description}</p>
+              )}
+
+              <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-white/10">
+                {tpl.category && (
+                  <Badge color={categoryColor(tpl.category)}>{tpl.category}</Badge>
                 )}
-              </div>
-              <div className="flex items-center gap-1.5 flex-wrap mb-3">
-                <Badge color="purple">{t.category}</Badge>
-                <Badge color="blue">{t.trigger_type}</Badge>
-              </div>
-              <div className="flex items-center justify-between pt-3 border-t border-white/5">
-                <div className="flex items-center gap-1.5 text-xs text-zinc-500">
-                  <Workflow className="w-3 h-3" />
-                  {t.use_count} {t.use_count === 1 ? 'use' : 'uses'}
-                </div>
+                {tpl.trigger_type && (
+                  <Badge color="blue">{tpl.trigger_type.replace(/_/g, ' ')}</Badge>
+                )}
+                <span className="text-xs text-zinc-500 ml-auto">
+                  {tpl.use_count} use{tpl.use_count !== 1 ? 's' : ''}
+                </span>
               </div>
             </Card>
           ))}

@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
+import { uploadAvatar } from '../lib/storage';
 import type { Profile, Business, Organization, UserRole } from '../lib/types';
 
 interface AuthContextValue {
@@ -16,6 +17,7 @@ interface AuthContextValue {
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   switchBusiness: (businessId: string) => void;
+  updateAvatar: (file: File) => Promise<{ error: string | null }>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -112,8 +114,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setProfile(null); setBusinesses([]); setBusiness(null); setOrganization(null);
   }, []);
 
+  const updateAvatar = useCallback(async (file: File) => {
+    if (!user) return { error: 'Not authenticated' };
+    const url = await uploadAvatar(user.id, file);
+    if (!url) return { error: 'Failed to upload image' };
+    const { error } = await supabase.from('profiles').update({ avatar_url: url }).eq('id', user.id);
+    if (error) return { error: error.message };
+    setProfile((prev) => prev ? { ...prev, avatar_url: url } : prev);
+    return { error: null };
+  }, [user]);
+
   return (
-    <AuthContext.Provider value={{ session, user, profile, businesses, business, organization, role: profile?.role ?? 'BUSINESS_ADMIN', loading, signIn, signUp, signOut, switchBusiness }}>
+    <AuthContext.Provider value={{ session, user, profile, businesses, business, organization, role: profile?.role ?? 'BUSINESS_ADMIN', loading, signIn, signUp, signOut, switchBusiness, updateAvatar }}>
       {children}
     </AuthContext.Provider>
   );

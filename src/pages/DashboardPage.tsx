@@ -1,10 +1,11 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import {
   LayoutDashboard, Star, HelpCircle, QrCode, Zap, Workflow, FileStack,
   Mail, FileText, Users, Gift, Target, Brain, Sparkles, BarChart3,
   Plug, Code2, Key, Webhook, CreditCard, Building2, Network, Shield,
-  LogOut, ChevronDown, Menu, Bell, Settings,
+  LogOut, ChevronDown, Menu, Bell, Settings, Camera,
 } from 'lucide-react';
 import OverviewModule from '../modules/OverviewModule';
 import ReviewsModule from '../modules/ReviewsModule';
@@ -98,13 +99,28 @@ const NAV_GROUPS: NavGroup[] = [
 ];
 
 export default function DashboardPage() {
-  const { user, business, businesses, organization, role, signOut, switchBusiness } = useAuth();
+  const { user, profile, business, businesses, organization, role, signOut, switchBusiness, updateAvatar } = useAuth();
+  const { showToast } = useToast();
   const [activeView, setActiveView] = useState('overview');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [bizDropdown, setBizDropdown] = useState(false);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const visibleGroups = useMemo(() => NAV_GROUPS.filter((g) => !g.roles || g.roles.includes(role)), [role]);
   const orgId = organization?.id ?? '';
+
+  async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { showToast('error', 'File too large (max 5MB)'); return; }
+    setAvatarUploading(true);
+    const result = await updateAvatar(file);
+    if (result.error) showToast('error', result.error);
+    else showToast('success', 'Profile photo updated');
+    setAvatarUploading(false);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }
 
   function renderModule() {
     if (!business) return <div className="text-center py-16 text-zinc-500">No business available. Contact your administrator.</div>;
@@ -199,9 +215,24 @@ export default function DashboardPage() {
                 {bizDropdown && (<><div className="fixed inset-0 z-10" onClick={() => setBizDropdown(false)} /><div className="absolute right-0 mt-2 w-64 max-h-72 overflow-y-auto rounded-xl bg-zinc-900/95 backdrop-blur-xl border border-white/10 shadow-2xl z-20 py-1.5">{businesses.map((b) => (<button key={b.id} onClick={() => { switchBusiness(b.id); setBizDropdown(false); }} className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-white/5 transition-colors ${b.id === business?.id ? 'text-blue-300' : 'text-zinc-300'}`}>{b.logo_url ? <img src={b.logo_url} alt="" className="w-5 h-5 rounded" /> : <Building2 className="w-4 h-4 text-zinc-500" />}<span className="truncate">{b.name}</span></button>))}</div></>)}
               </div>
             )}
-            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10">
-              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center text-xs font-bold text-white">{(user?.email ?? '?')[0].toUpperCase()}</div>
-              <span className="text-sm text-zinc-300 max-w-[120px] truncate">{user?.email}</span>
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10">
+              <div className="relative group">
+                {profile?.avatar_url ? (
+                  <img src={profile.avatar_url} alt="" className="w-7 h-7 rounded-full object-cover" />
+                ) : (
+                  <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center text-xs font-bold text-white">{(user?.email ?? '?')[0].toUpperCase()}</div>
+                )}
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={avatarUploading}
+                  className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-blue-500 border border-zinc-900 flex items-center justify-center hover:bg-blue-400 transition-colors"
+                  title="Upload profile photo"
+                >
+                  <Camera className="w-2.5 h-2.5 text-white" />
+                </button>
+                <input ref={fileInputRef} type="file" accept="image/*" onChange={handleAvatarChange} className="hidden" />
+              </div>
+              <span className="text-sm text-zinc-300 max-w-[120px] truncate hidden sm:inline">{user?.email}</span>
             </div>
             <button onClick={signOut} className="p-2 rounded-lg hover:bg-white/5 text-zinc-400 hover:text-red-400 transition-colors" title="Sign out"><LogOut className="w-4 h-4" /></button>
           </div>

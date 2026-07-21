@@ -1,102 +1,94 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
-import { LoadingSpinner, EmptyState, PageHeader, Card, Badge } from '../components/UI';
+import {
+  Card, Badge,
+  PageHeader, LoadingSpinner, EmptyState,
+} from '../components/UI';
 import { useToast } from '../context/ToastContext';
-import { CreditCard, Receipt, Wallet, FileText, DollarSign, Building2, Calendar, CheckCircle2 } from 'lucide-react';
+import {
+  CreditCard, Receipt, FileText, Layers,
+} from 'lucide-react';
 
-function formatDate(d: string | null): string {
-  if (!d) return '—';
-  try { return new Date(d).toLocaleDateString(); } catch { return d; }
+function fmtDate(s: string | null) {
+  if (!s) return '—';
+  try { return new Date(s).toLocaleDateString(); } catch { return s; }
 }
 
-function formatDateTime(d: string | null): string {
-  if (!d) return '—';
-  try { return new Date(d).toLocaleString(); } catch { return d; }
+function fmtMoney(v: number | null) {
+  if (v === null) return '—';
+  return `${Number(v).toFixed(2)}`;
 }
 
-function formatCurrency(amount: number | null): string {
-  if (amount === null || amount === undefined) return '—';
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
+function statusColor(status: string | null) {
+  if (!status) return 'gray';
+  const s = status.toLowerCase();
+  if (['active', 'paid', 'succeeded'].includes(s)) return 'green';
+  if (['pending', 'processing'].includes(s)) return 'yellow';
+  if (['failed', 'overdue', 'void'].includes(s)) return 'red';
+  return 'gray';
 }
 
-/* ============================================================
- * PlansModule
- * No props. List plans (global table). Read-only. Card grid.
- * Show: name, slug, monthly_price, annual_price, setup_fee, max_businesses, is_active
- * ============================================================ */
+/* ------------------------------------------------------------------ */
+/* PlansModule                                                        */
+/* ------------------------------------------------------------------ */
 
-interface Plan {
+type Plan = {
   id: string;
   name: string;
-  slug: string | null;
+  slug: string;
   monthly_price: number | null;
   annual_price: number | null;
   setup_fee: number | null;
   max_businesses: number | null;
-  is_active: boolean;
-}
+  is_active: boolean | null;
+};
 
 export function PlansModule() {
   const { showToast } = useToast();
-  const [plans, setPlans] = useState<Plan[]>([]);
+  const [items, setItems] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    (async () => {
-      setLoading(true);
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
       const { data, error } = await supabase
         .from('plans')
-        .select('*')
+        .select('id, name, slug, monthly_price, annual_price, setup_fee, max_businesses, is_active')
         .order('monthly_price', { ascending: true });
-      if (error) {
-        showToast('error', `Failed to load plans: ${error.message}`);
-      } else {
-        setPlans(data || []);
-      }
+      if (error) throw error;
+      setItems(data || []);
+    } catch (err) {
+      showToast('error', `Failed to load plans: ${(err as Error).message}`);
+    } finally {
       setLoading(false);
-    })();
+    }
   }, [showToast]);
+
+  useEffect(() => { load(); }, [load]);
+
+  if (loading) return <LoadingSpinner label="Loading plans…" />;
 
   return (
     <div>
       <PageHeader title="Plans" description="Available subscription plans" />
-      {loading ? (
-        <LoadingSpinner label="Loading plans..." />
-      ) : plans.length === 0 ? (
-        <EmptyState icon={CreditCard} title="No plans available" description="Subscription plans will appear here." />
+      {items.length === 0 ? (
+        <EmptyState icon={Layers} title="No plans configured" />
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {plans.map((p) => (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {items.map((p) => (
             <Card key={p.id} className="p-5 flex flex-col">
-              <div className="flex items-start justify-between gap-2 mb-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-9 h-9 rounded-lg bg-blue-500/10 flex items-center justify-center">
-                    <CreditCard className="w-4 h-4 text-blue-400" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-white">{p.name}</h3>
-                    {p.slug && <p className="text-xs text-zinc-500 font-mono">{p.slug}</p>}
-                  </div>
+              <div className="flex items-start justify-between mb-3">
+                <div>
+                  <h3 className="text-lg font-bold text-white">{p.name}</h3>
+                  <p className="text-sm text-zinc-500 font-mono">{p.slug}</p>
                 </div>
                 {p.is_active ? <Badge color="green">Active</Badge> : <Badge color="gray">Inactive</Badge>}
               </div>
-              <div className="space-y-2 flex-1">
-                <div className="flex justify-between text-sm">
-                  <span className="text-zinc-500">Monthly</span>
-                  <span className="text-white font-medium">{formatCurrency(p.monthly_price)}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-zinc-500">Annual</span>
-                  <span className="text-white font-medium">{formatCurrency(p.annual_price)}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-zinc-500">Setup Fee</span>
-                  <span className="text-white font-medium">{formatCurrency(p.setup_fee)}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-zinc-500">Max Businesses</span>
-                  <span className="text-white font-medium">{p.max_businesses !== null ? p.max_businesses : '—'}</span>
-                </div>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between"><span className="text-zinc-500">Monthly</span><span className="text-white font-semibold">{fmtMoney(p.monthly_price)}</span></div>
+                <div className="flex justify-between"><span className="text-zinc-500">Annual</span><span className="text-white font-semibold">{fmtMoney(p.annual_price)}</span></div>
+                <div className="flex justify-between"><span className="text-zinc-500">Setup Fee</span><span className="text-white">{fmtMoney(p.setup_fee)}</span></div>
+                <div className="flex justify-between"><span className="text-zinc-500">Max Businesses</span><span className="text-white">{p.max_businesses ?? '—'}</span></div>
               </div>
             </Card>
           ))}
@@ -106,78 +98,74 @@ export function PlansModule() {
   );
 }
 
-/* ============================================================
- * SubscriptionsModule
- * List subscriptions filtered by organization_id. Read-only.
- * Show: plan_id (lookup name), status, billing_cycle, current_period_start, current_period_end
- * ============================================================ */
+/* ------------------------------------------------------------------ */
+/* SubscriptionsModule                                               */
+/* ------------------------------------------------------------------ */
 
-interface Subscription {
+type Subscription = {
   id: string;
-  organization_id: string;
   plan_id: string;
   status: string | null;
   billing_cycle: string | null;
   current_period_start: string | null;
   current_period_end: string | null;
-}
+};
 
-interface PlanRef { id: string; name: string; }
+type PlanLookup = { id: string; name: string };
 
 export function SubscriptionsModule({ organizationId }: { organizationId: string }) {
   const { showToast } = useToast();
-  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
-  const [plans, setPlans] = useState<PlanRef[]>([]);
+  const [items, setItems] = useState<Subscription[]>([]);
+  const [plans, setPlans] = useState<Record<string, PlanLookup>>({});
   const [loading, setLoading] = useState(true);
 
-  const fetchData = useCallback(async () => {
+  const load = useCallback(async () => {
     setLoading(true);
-    const [subRes, planRes] = await Promise.all([
-      supabase.from('subscriptions').select('*').eq('organization_id', organizationId).order('current_period_start', { ascending: false }),
-      supabase.from('plans').select('id, name'),
-    ]);
-    if (subRes.error) showToast('error', `Failed to load subscriptions: ${subRes.error.message}`);
-    else setSubscriptions(subRes.data || []);
-    if (planRes.error) showToast('error', `Failed to load plans: ${planRes.error.message}`);
-    else setPlans(planRes.data || []);
-    setLoading(false);
+    try {
+      const [subRes, planRes] = await Promise.all([
+        supabase
+          .from('subscriptions')
+          .select('id, plan_id, status, billing_cycle, current_period_start, current_period_end')
+          .eq('organization_id', organizationId)
+          .order('created_at', { ascending: false }),
+        supabase.from('plans').select('id, name'),
+      ]);
+      if (subRes.error) throw subRes.error;
+      if (planRes.error) throw planRes.error;
+      setItems(subRes.data || []);
+      const map: Record<string, PlanLookup> = {};
+      (planRes.data || []).forEach((p: PlanLookup) => { map[p.id] = p; });
+      setPlans(map);
+    } catch (err) {
+      showToast('error', `Failed to load subscriptions: ${(err as Error).message}`);
+    } finally {
+      setLoading(false);
+    }
   }, [organizationId, showToast]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => { load(); }, [load]);
 
-  const planName = (pid: string) => plans.find((p) => p.id === pid)?.name || pid;
-
-  const statusColor = (s: string | null): string => {
-    if (!s) return 'gray';
-    if (['active', 'trialing'].includes(s)) return 'green';
-    if (['past_due', 'unpaid', 'canceled'].includes(s)) return 'red';
-    return 'gray';
-  };
+  if (loading) return <LoadingSpinner label="Loading subscriptions…" />;
 
   return (
     <div>
       <PageHeader title="Subscriptions" description="Subscription history for this organization" />
-      {loading ? (
-        <LoadingSpinner label="Loading subscriptions..." />
-      ) : subscriptions.length === 0 ? (
-        <EmptyState icon={CreditCard} title="No subscriptions" description="Subscriptions will appear here once created." />
+      {items.length === 0 ? (
+        <EmptyState icon={CreditCard} title="No subscriptions" />
       ) : (
         <div className="grid gap-3">
-          {subscriptions.map((s) => (
+          {items.map((s) => (
             <Card key={s.id} className="p-4">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-2">
-                    <CreditCard className="w-4 h-4 text-blue-400 shrink-0" />
-                    <h3 className="font-semibold text-white truncate">{planName(s.plan_id)}</h3>
-                    {s.status && <Badge color={statusColor(s.status)}>{s.status}</Badge>}
-                    {s.billing_cycle && <Badge color="purple">{s.billing_cycle}</Badge>}
-                  </div>
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-zinc-400">
-                    <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" /> Start: <span className="text-zinc-200">{formatDate(s.current_period_start)}</span></span>
-                    <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" /> End: <span className="text-zinc-200">{formatDate(s.current_period_end)}</span></span>
+              <div className="flex items-center justify-between gap-4">
+                <div className="min-w-0">
+                  <h3 className="font-semibold text-white mb-1">{plans[s.plan_id]?.name || s.plan_id}</h3>
+                  <div className="flex flex-wrap gap-2 text-sm text-zinc-400">
+                    {s.billing_cycle && <Badge color="blue">{s.billing_cycle}</Badge>}
+                    <span>Start: {fmtDate(s.current_period_start)}</span>
+                    <span>End: {fmtDate(s.current_period_end)}</span>
                   </div>
                 </div>
+                <Badge color={statusColor(s.status)}>{s.status}</Badge>
               </div>
             </Card>
           ))}
@@ -187,165 +175,158 @@ export function SubscriptionsModule({ organizationId }: { organizationId: string
   );
 }
 
-/* ============================================================
- * PaymentsModule
- * List payments filtered by organization_id. Read-only.
- * Show: amount, payment_purpose, payment_method, utr_reference, status, payment_date
- * ============================================================ */
+/* ------------------------------------------------------------------ */
+/* PaymentsModule                                                    */
+/* ------------------------------------------------------------------ */
 
-interface Payment {
+type Payment = {
   id: string;
-  organization_id: string;
   amount: number | null;
   payment_purpose: string | null;
   payment_method: string | null;
   utr_reference: string | null;
   status: string | null;
   payment_date: string | null;
-}
+};
 
 export function PaymentsModule({ organizationId }: { organizationId: string }) {
   const { showToast } = useToast();
-  const [payments, setPayments] = useState<Payment[]>([]);
+  const [items, setItems] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchPayments = useCallback(async () => {
+  const load = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('payments')
-      .select('*')
-      .eq('organization_id', organizationId)
-      .order('payment_date', { ascending: false });
-    if (error) {
-      showToast('error', `Failed to load payments: ${error.message}`);
-    } else {
-      setPayments(data || []);
+    try {
+      const { data, error } = await supabase
+        .from('payments')
+        .select('id, amount, payment_purpose, payment_method, utr_reference, status, payment_date')
+        .eq('organization_id', organizationId)
+        .order('payment_date', { ascending: false });
+      if (error) throw error;
+      setItems(data || []);
+    } catch (err) {
+      showToast('error', `Failed to load payments: ${(err as Error).message}`);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [organizationId, showToast]);
 
-  useEffect(() => { fetchPayments(); }, [fetchPayments]);
+  useEffect(() => { load(); }, [load]);
 
-  const statusColor = (s: string | null): string => {
-    if (!s) return 'gray';
-    if (['success', 'completed', 'paid'].includes(s)) return 'green';
-    if (['failed', 'declined', 'refunded'].includes(s)) return 'red';
-    if (['pending', 'processing'].includes(s)) return 'yellow';
-    return 'gray';
-  };
+  if (loading) return <LoadingSpinner label="Loading payments…" />;
 
   return (
     <div>
       <PageHeader title="Payments" description="Payment history for this organization" />
-      {loading ? (
-        <LoadingSpinner label="Loading payments..." />
-      ) : payments.length === 0 ? (
-        <EmptyState icon={Wallet} title="No payments" description="Payments will appear here once processed." />
+      {items.length === 0 ? (
+        <EmptyState icon={CreditCard} title="No payments recorded" />
       ) : (
-        <div className="grid gap-3">
-          {payments.map((p) => (
-            <Card key={p.id} className="p-4">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Wallet className="w-4 h-4 text-blue-400 shrink-0" />
-                    <h3 className="font-semibold text-white">{formatCurrency(p.amount)}</h3>
-                    {p.status && <Badge color={statusColor(p.status)}>{p.status}</Badge>}
-                  </div>
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-zinc-400">
-                    {p.payment_purpose && <span>Purpose: <span className="text-zinc-200">{p.payment_purpose}</span></span>}
-                    {p.payment_method && <span>Method: <span className="text-zinc-200">{p.payment_method}</span></span>}
-                    {p.utr_reference && <span className="font-mono">UTR: <span className="text-zinc-200">{p.utr_reference}</span></span>}
-                    {p.payment_date && <span>Date: <span className="text-zinc-200">{formatDate(p.payment_date)}</span></span>}
-                  </div>
-                </div>
-              </div>
-            </Card>
-          ))}
-        </div>
+        <Card className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-white/10 text-left text-zinc-500">
+                <th className="px-4 py-3 font-medium">Amount</th>
+                <th className="px-4 py-3 font-medium">Purpose</th>
+                <th className="px-4 py-3 font-medium">Method</th>
+                <th className="px-4 py-3 font-medium">UTR Reference</th>
+                <th className="px-4 py-3 font-medium">Status</th>
+                <th className="px-4 py-3 font-medium">Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((p) => (
+                <tr key={p.id} className="border-b border-white/5 hover:bg-white/5">
+                  <td className="px-4 py-3 font-semibold text-white">{fmtMoney(p.amount)}</td>
+                  <td className="px-4 py-3 text-zinc-300">{p.payment_purpose || '—'}</td>
+                  <td className="px-4 py-3 text-zinc-300">{p.payment_method || '—'}</td>
+                  <td className="px-4 py-3 text-zinc-400 font-mono">{p.utr_reference || '—'}</td>
+                  <td className="px-4 py-3"><Badge color={statusColor(p.status)}>{p.status}</Badge></td>
+                  <td className="px-4 py-3 text-zinc-400">{fmtDate(p.payment_date)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
       )}
     </div>
   );
 }
 
-/* ============================================================
- * InvoicesModule
- * List invoices filtered by organization_id. Read-only.
- * Show: invoice_number, billing_cycle, subtotal, tax_amount, total_amount, status, due_date
- * ============================================================ */
+/* ------------------------------------------------------------------ */
+/* InvoicesModule                                                    */
+/* ------------------------------------------------------------------ */
 
-interface Invoice {
+type Invoice = {
   id: string;
-  organization_id: string;
-  invoice_number: string | null;
+  invoice_number: string;
   billing_cycle: string | null;
   subtotal: number | null;
   tax_amount: number | null;
   total_amount: number | null;
   status: string | null;
   due_date: string | null;
-}
+};
 
 export function InvoicesModule({ organizationId }: { organizationId: string }) {
   const { showToast } = useToast();
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [items, setItems] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchInvoices = useCallback(async () => {
+  const load = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('invoices')
-      .select('*')
-      .eq('organization_id', organizationId)
-      .order('due_date', { ascending: false });
-    if (error) {
-      showToast('error', `Failed to load invoices: ${error.message}`);
-    } else {
-      setInvoices(data || []);
+    try {
+      const { data, error } = await supabase
+        .from('invoices')
+        .select('id, invoice_number, billing_cycle, subtotal, tax_amount, total_amount, status, due_date')
+        .eq('organization_id', organizationId)
+        .order('due_date', { ascending: false });
+      if (error) throw error;
+      setItems(data || []);
+    } catch (err) {
+      showToast('error', `Failed to load invoices: ${(err as Error).message}`);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [organizationId, showToast]);
 
-  useEffect(() => { fetchInvoices(); }, [fetchInvoices]);
+  useEffect(() => { load(); }, [load]);
 
-  const statusColor = (s: string | null): string => {
-    if (!s) return 'gray';
-    if (['paid', 'completed'].includes(s)) return 'green';
-    if (['overdue', 'void'].includes(s)) return 'red';
-    if (['open', 'sent', 'draft'].includes(s)) return 'yellow';
-    return 'gray';
-  };
+  if (loading) return <LoadingSpinner label="Loading invoices…" />;
 
   return (
     <div>
       <PageHeader title="Invoices" description="Invoice history for this organization" />
-      {loading ? (
-        <LoadingSpinner label="Loading invoices..." />
-      ) : invoices.length === 0 ? (
-        <EmptyState icon={Receipt} title="No invoices" description="Invoices will appear here once generated." />
+      {items.length === 0 ? (
+        <EmptyState icon={Receipt} title="No invoices" />
       ) : (
-        <div className="grid gap-3">
-          {invoices.map((inv) => (
-            <Card key={inv.id} className="p-4">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Receipt className="w-4 h-4 text-blue-400 shrink-0" />
-                    <h3 className="font-semibold text-white truncate">{inv.invoice_number || '—'}</h3>
-                    {inv.status && <Badge color={statusColor(inv.status)}>{inv.status}</Badge>}
-                    {inv.billing_cycle && <Badge color="purple">{inv.billing_cycle}</Badge>}
-                  </div>
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-zinc-400">
-                    <span>Subtotal: <span className="text-zinc-200">{formatCurrency(inv.subtotal)}</span></span>
-                    <span>Tax: <span className="text-zinc-200">{formatCurrency(inv.tax_amount)}</span></span>
-                    <span>Total: <span className="text-white font-medium">{formatCurrency(inv.total_amount)}</span></span>
-                    <span>Due: <span className="text-zinc-200">{formatDate(inv.due_date)}</span></span>
-                  </div>
-                </div>
-              </div>
-            </Card>
-          ))}
-        </div>
+        <Card className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-white/10 text-left text-zinc-500">
+                <th className="px-4 py-3 font-medium">Invoice #</th>
+                <th className="px-4 py-3 font-medium">Cycle</th>
+                <th className="px-4 py-3 font-medium">Subtotal</th>
+                <th className="px-4 py-3 font-medium">Tax</th>
+                <th className="px-4 py-3 font-medium">Total</th>
+                <th className="px-4 py-3 font-medium">Status</th>
+                <th className="px-4 py-3 font-medium">Due Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((inv) => (
+                <tr key={inv.id} className="border-b border-white/5 hover:bg-white/5">
+                  <td className="px-4 py-3 font-mono text-white">{inv.invoice_number}</td>
+                  <td className="px-4 py-3 text-zinc-300">{inv.billing_cycle || '—'}</td>
+                  <td className="px-4 py-3 text-zinc-300">{fmtMoney(inv.subtotal)}</td>
+                  <td className="px-4 py-3 text-zinc-300">{fmtMoney(inv.tax_amount)}</td>
+                  <td className="px-4 py-3 font-semibold text-white">{fmtMoney(inv.total_amount)}</td>
+                  <td className="px-4 py-3"><Badge color={statusColor(inv.status)}>{inv.status}</Badge></td>
+                  <td className="px-4 py-3 text-zinc-400">{fmtDate(inv.due_date)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
       )}
     </div>
   );

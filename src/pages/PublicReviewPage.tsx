@@ -2,27 +2,38 @@ import { useState, useEffect } from 'react';
 import { useToast } from '../context/ToastContext';
 import { SpatialBackground } from '../components/UI';
 import { supabase } from '../lib/supabase';
-import { Star, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
+import { buildGoogleReviewUrl } from '../lib/storage';
+import { Star, ArrowRight, Loader2, AlertCircle, ExternalLink, MapPin } from 'lucide-react';
 
 interface Props { businessSlug: string; }
 
 export default function PublicReviewPage({ businessSlug }: Props) {
   const { showToast } = useToast();
-  const [step, setStep] = useState<'welcome' | 'rating' | 'questions' | 'generating' | 'result'>('welcome');
-  const [business, setBusiness] = useState<{ id: string; name: string; welcome_message: string | null; logo_url: string | null } | null>(null);
+  const [step, setStep] = useState<'welcome' | 'rating' | 'questions' | 'generating' | 'result' | 'google_redirect'>('welcome');
+  const [business, setBusiness] = useState<{
+    id: string; name: string; welcome_message: string | null; logo_url: string | null;
+    google_place_id: string | null; google_review_url: string | null; google_review_url_derived: string | null;
+    google_maps_url: string | null; public_review_enabled: boolean;
+  } | null>(null);
   const [questions, setQuestions] = useState<{ id: string; question_text: string; question_type: string; options: string[] | null; is_required: boolean; flow_type: string; sort_order: number }[]>([]);
   const [rating, setRating] = useState<number | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [review, setReview] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [googleUrl, setGoogleUrl] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadBusiness() {
-      const { data, error: err } = await supabase.from('businesses').select('id, name, welcome_message, logo_url, public_review_enabled').eq('slug', businessSlug).maybeSingle();
+      const { data, error: err } = await supabase
+        .from('businesses')
+        .select('id, name, welcome_message, logo_url, public_review_enabled, google_place_id, google_review_url, google_review_url_derived, google_maps_url')
+        .eq('slug', businessSlug)
+        .maybeSingle();
       if (err || !data) { setError('Business not found'); return; }
-      if (!(data as { public_review_enabled: boolean }).public_review_enabled) { setError('Reviews are not enabled for this business'); return; }
-      setBusiness(data as typeof business);
+      const b = data as NonNullable<typeof business>;
+      if (!b.public_review_enabled) { setError('Reviews are not enabled for this business'); return; }
+      setBusiness(b);
     }
     loadBusiness();
   }, [businessSlug]);
@@ -33,8 +44,21 @@ export default function PublicReviewPage({ businessSlug }: Props) {
     setQuestions((data as typeof questions) || []);
   }
 
-  function handleRating(r: number) { setRating(r); loadQuestions(); setStep('questions'); }
+  function handleRating(r: number) {
+    setRating(r);
+    loadQuestions();
+    setStep('questions');
+  }
+
   function handleAnswer(qId: string, val: string) { setAnswers((prev) => ({ ...prev, [qId]: val })); }
+
+  function getGoogleReviewUrl(): string | null {
+    if (!business) return null;
+    if (business.google_review_url) return business.google_review_url;
+    if (business.google_review_url_derived) return business.google_review_url_derived;
+    if (business.google_place_id) return buildGoogleReviewUrl(business.google_place_id);
+    return null;
+  }
 
   async function submitAnswers() {
     if (!business || !rating) return;
@@ -43,17 +67,32 @@ export default function PublicReviewPage({ businessSlug }: Props) {
     }
     setLoading(true); setStep('generating');
     try {
-      const { data, error: err } = await supabase.from('review_sessions').insert({ business_id: business.id, rating, answers, ai_status: 'pending' }).select().single();
+      const { data, error: err } = await supabase.from('review_sessions').insert({
+        business_id: business.id,
+        rating,
+        answers,
+        ai_status: 'pending',
+        google_place_id_snapshot: business.google_place_id,
+      }).select().single();
       if (err) throw err;
       const sessionId = (data as { id: string }).id;
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-review`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
         body: JSON.stringify({ sessionId }),
       });
       if (!res.ok) throw new Error(`Request failed (${res.status})`);
       const result = await res.json() as { review?: string; error?: string };
       if (result.error) throw new Error(result.error);
-      setReview(result.review ?? 'Thank you for your feedback!'); setStep('result');
+      setReview(result.review ?? 'Thank you for your feedback!');
+      // For positive reviews (4-5 stars), show Google review redirect
+      if (rating >= 4) {
+        const url = getGoogleReviewUrl();
+        if (url) { setGoogleUrl(url); setStep('google_redirect'); }
+        else { setStep('result'); }
+      } else {
+        setStep('result');
+      }
     } catch (e) { showToast('error', `Failed to generate review: ${(e as Error).message}`); setStep('questions'); }
     finally { setLoading(false); }
   }
@@ -67,11 +106,114 @@ export default function PublicReviewPage({ businessSlug }: Props) {
       <div className="relative z-10 w-full max-w-2xl">
         <div className="rounded-2xl bg-zinc-900/80 backdrop-blur-xl border border-white/10 p-6 sm:p-10 shadow-2xl">
           {business.logo_url && <img src={business.logo_url} alt={business.name} className="w-16 h-16 rounded-xl object-cover mb-4 mx-auto" />}
-          {step === 'welcome' && (<div className="text-center"><h1 className="text-2xl sm:text-3xl font-bold text-white mb-3">{business.welcome_message || `Welcome to ${business.name}`}</h1><p className="text-zinc-400 mb-8">We'd love to hear about your experience. Your feedback helps us improve.</p><button onClick={() => setStep('rating')} className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-blue-500/20 border border-blue-400/30 text-blue-200 hover:bg-blue-500/30 font-medium transition-colors">Start Review <ArrowRight className="w-4 h-4" /></button></div>)}
-          {step === 'rating' && (<div className="text-center"><h2 className="text-xl font-bold text-white mb-2">How was your experience?</h2><p className="text-zinc-400 mb-8 text-sm">Tap the emoji that best matches your experience</p><div className="grid grid-cols-5 gap-2 sm:gap-4">{[5,4,3,2,1].map((r) => (<button key={r} onClick={() => handleRating(r)} className="group flex flex-col items-center gap-2 transition-all hover:scale-110"><div className={`w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center text-2xl sm:text-3xl ${r >= 4 ? 'bg-emerald-500/20 border border-emerald-400/30' : r === 3 ? 'bg-blue-500/20 border border-blue-400/30' : 'bg-red-500/20 border border-red-400/30'}`}>{r === 5 ? '🤩' : r === 4 ? '😀' : r === 3 ? '😐' : r === 2 ? '😕' : '😡'}</div><span className="text-xs text-zinc-400">{r === 5 ? 'Amazing' : r === 4 ? 'Good' : r === 3 ? 'Okay' : r === 2 ? 'Poor' : 'Terrible'}</span></button>))}</div></div>)}
-          {step === 'questions' && (<div><h2 className="text-xl font-bold text-white mb-6">A few quick questions</h2><div className="space-y-5">{questions.length === 0 ? <p className="text-zinc-400 text-sm">No questions configured. Click continue to generate your review.</p> : questions.map((q) => (<div key={q.id}><label className="block text-sm font-medium text-zinc-200 mb-2">{q.question_text}{q.is_required && <span className="text-red-400"> *</span>}</label>{q.question_type === 'text' ? <input type="text" value={answers[q.id] ?? ''} onChange={(e) => handleAnswer(q.id, e.target.value)} className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder-zinc-600 focus:outline-none focus:border-blue-400/50" placeholder="Your answer…" /> : q.question_type === 'multiple_choice' ? <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">{(q.options || []).map((o) => <button key={o} onClick={() => handleAnswer(q.id, o)} className={`px-3 py-2 rounded-lg text-left text-sm border transition-colors ${answers[q.id] === o ? 'bg-blue-500/20 border-blue-400/30 text-blue-200' : 'bg-white/5 border-white/10 text-zinc-300 hover:bg-white/10'}`}>{o}</button>)}</div> : <div className="flex gap-2">{[5,4,3,2,1].map((r) => <button key={r} onClick={() => handleAnswer(q.id, String(r))} className={`w-10 h-10 rounded-lg border ${answers[q.id] === String(r) ? 'bg-amber-500/30 border-amber-400/50 text-amber-200' : 'bg-white/5 border-white/10 text-zinc-400 hover:bg-white/10'}`}><Star className="w-5 h-5 mx-auto" /></button>)}</div>}</div>))}</div><button onClick={submitAnswers} disabled={loading} className="mt-6 w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-blue-500/20 border border-blue-400/30 text-blue-200 hover:bg-blue-500/30 font-medium transition-colors disabled:opacity-50">{loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <>Continue <ArrowRight className="w-4 h-4" /></>}</button></div>)}
-          {step === 'generating' && (<div className="text-center py-12"><Loader2 className="w-12 h-12 text-blue-400 animate-spin mx-auto mb-4" /><h2 className="text-lg font-bold text-white mb-2">Generating your review…</h2><p className="text-zinc-400 text-sm">Our AI is crafting a personalized review based on your feedback.</p></div>)}
-          {step === 'result' && (<div className="text-center"><div className="w-16 h-16 rounded-full bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center mx-auto mb-4"><Star className="w-8 h-8 text-emerald-400" /></div><h2 className="text-xl font-bold text-white mb-4">Your Review is Ready!</h2><div className="rounded-xl bg-white/5 border border-white/10 p-5 text-left mb-6"><p className="text-zinc-200 leading-relaxed whitespace-pre-wrap">{review}</p></div><button onClick={() => { setStep('welcome'); setRating(null); setAnswers({}); setReview(null); }} className="px-5 py-2.5 rounded-xl bg-white/5 border border-white/10 text-zinc-300 hover:bg-white/10 text-sm">Submit Another</button></div>)}
+          {step === 'welcome' && (
+            <div className="text-center">
+              <h1 className="text-2xl sm:text-3xl font-bold text-white mb-3">{business.welcome_message || `Welcome to ${business.name}`}</h1>
+              <p className="text-zinc-400 mb-8">We'd love to hear about your experience. Your feedback helps us improve.</p>
+              {business.google_maps_url && (
+                <a href={business.google_maps_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 mb-6">
+                  <MapPin className="w-3.5 h-3.5" /> View on Google Maps
+                </a>
+              )}
+              <div>
+                <button onClick={() => setStep('rating')} className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-blue-500/20 border border-blue-400/30 text-blue-200 hover:bg-blue-500/30 font-medium transition-colors">
+                  Start Review <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+          {step === 'rating' && (
+            <div className="text-center">
+              <h2 className="text-xl font-bold text-white mb-2">How was your experience?</h2>
+              <p className="text-zinc-400 mb-8 text-sm">Tap the emoji that best matches your experience</p>
+              <div className="grid grid-cols-5 gap-2 sm:gap-4">
+                {[5,4,3,2,1].map((r) => (
+                  <button key={r} onClick={() => handleRating(r)} className="group flex flex-col items-center gap-2 transition-all hover:scale-110">
+                    <div className={`w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center text-2xl sm:text-3xl ${r >= 4 ? 'bg-emerald-500/20 border border-emerald-400/30' : r === 3 ? 'bg-blue-500/20 border border-blue-400/30' : 'bg-red-500/20 border border-red-400/30'}`}>
+                      {r === 5 ? '🤩' : r === 4 ? '😀' : r === 3 ? '😐' : r === 2 ? '😕' : '😡'}
+                    </div>
+                    <span className="text-xs text-zinc-400">{r === 5 ? 'Amazing' : r === 4 ? 'Good' : r === 3 ? 'Okay' : r === 2 ? 'Poor' : 'Terrible'}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {step === 'questions' && (
+            <div>
+              <h2 className="text-xl font-bold text-white mb-6">A few quick questions</h2>
+              <div className="space-y-5">
+                {questions.length === 0 ? <p className="text-zinc-400 text-sm">No questions configured. Click continue to generate your review.</p> : questions.map((q) => (
+                  <div key={q.id}>
+                    <label className="block text-sm font-medium text-zinc-200 mb-2">{q.question_text}{q.is_required && <span className="text-red-400"> *</span>}</label>
+                    {q.question_type === 'text' ? (
+                      <input type="text" value={answers[q.id] ?? ''} onChange={(e) => handleAnswer(q.id, e.target.value)} className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder-zinc-600 focus:outline-none focus:border-blue-400/50" placeholder="Your answer…" />
+                    ) : q.question_type === 'multiple_choice' ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {(q.options || []).map((o) => (
+                          <button key={o} onClick={() => handleAnswer(q.id, o)} className={`px-3 py-2 rounded-lg text-left text-sm border transition-colors ${answers[q.id] === o ? 'bg-blue-500/20 border-blue-400/30 text-blue-200' : 'bg-white/5 border-white/10 text-zinc-300 hover:bg-white/10'}`}>{o}</button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="flex gap-2">
+                        {[5,4,3,2,1].map((r) => (
+                          <button key={r} onClick={() => handleAnswer(q.id, String(r))} className={`w-10 h-10 rounded-lg border ${answers[q.id] === String(r) ? 'bg-amber-500/30 border-amber-400/50 text-amber-200' : 'bg-white/5 border-white/10 text-zinc-400 hover:bg-white/10'}`}>
+                            <Star className="w-5 h-5 mx-auto" />
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <button onClick={submitAnswers} disabled={loading} className="mt-6 w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-blue-500/20 border border-blue-400/30 text-blue-200 hover:bg-blue-500/30 font-medium transition-colors disabled:opacity-50">
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <>Continue <ArrowRight className="w-4 h-4" /></>}
+              </button>
+            </div>
+          )}
+          {step === 'generating' && (
+            <div className="text-center py-12">
+              <Loader2 className="w-12 h-12 text-blue-400 animate-spin mx-auto mb-4" />
+              <h2 className="text-lg font-bold text-white mb-2">Generating your review…</h2>
+              <p className="text-zinc-400 text-sm">Our AI is crafting a personalized review based on your feedback.</p>
+            </div>
+          )}
+          {step === 'result' && (
+            <div className="text-center">
+              <div className="w-16 h-16 rounded-full bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center mx-auto mb-4">
+                <Star className="w-8 h-8 text-emerald-400" />
+              </div>
+              <h2 className="text-xl font-bold text-white mb-4">Your Review is Ready!</h2>
+              <div className="rounded-xl bg-white/5 border border-white/10 p-5 text-left mb-6">
+                <p className="text-zinc-200 leading-relaxed whitespace-pre-wrap">{review}</p>
+              </div>
+              <button onClick={() => { setStep('welcome'); setRating(null); setAnswers({}); setReview(null); }} className="px-5 py-2.5 rounded-xl bg-white/5 border border-white/10 text-zinc-300 hover:bg-white/10 text-sm">
+                Submit Another
+              </button>
+            </div>
+          )}
+          {step === 'google_redirect' && (
+            <div className="text-center">
+              <div className="w-16 h-16 rounded-full bg-blue-500/20 border border-blue-400/30 flex items-center justify-center mx-auto mb-4">
+                <Star className="w-8 h-8 text-blue-400" />
+              </div>
+              <h2 className="text-xl font-bold text-white mb-2">We're so glad you enjoyed your visit!</h2>
+              <p className="text-zinc-400 mb-2 text-sm">Your feedback means the world to us. Would you mind sharing your experience on Google Reviews? It helps other customers find us and takes just a moment.</p>
+              {review && (
+                <div className="rounded-xl bg-white/5 border border-white/10 p-4 text-left mb-6 mt-4">
+                  <p className="text-xs text-zinc-500 mb-1">Here's your generated review — feel free to copy and paste:</p>
+                  <p className="text-zinc-200 leading-relaxed whitespace-pre-wrap text-sm">{review}</p>
+                </div>
+              )}
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                <a href={googleUrl ?? '#'} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-blue-500/20 border border-blue-400/30 text-blue-200 hover:bg-blue-500/30 font-medium transition-colors">
+                  <ExternalLink className="w-4 h-4" /> Post on Google Reviews
+                </a>
+                <button onClick={() => { setStep('welcome'); setRating(null); setAnswers({}); setReview(null); setGoogleUrl(null); }} className="px-5 py-3 rounded-xl bg-white/5 border border-white/10 text-zinc-300 hover:bg-white/10 text-sm">
+                  Maybe Later
+                </button>
+              </div>
+            </div>
+          )}
         </div>
         <p className="text-center text-xs text-zinc-600 mt-4">Powered by RootNova ReviewFlow</p>
       </div>

@@ -18,8 +18,27 @@ Deno.serve(async (req: Request) => {
 
     const rating = session.rating as number;
     const answers = (session.answers as Record<string, string>) || {};
-    const { data: business } = await supabase.from("businesses").select("name").eq("id", session.business_id).single();
+
+    const { data: business } = await supabase.from("businesses").select("name, google_place_id, google_review_url, google_review_url_derived").eq("id", session.business_id).single();
     const businessName = (business as { name?: string })?.name || "this business";
+
+    // Build google_review_url_derived if not already set
+    const bizData = business as { google_place_id?: string; google_review_url?: string; google_review_url_derived?: string };
+    let derivedUrl: string | null = bizData?.google_review_url || bizData?.google_review_url_derived || null;
+    if (!derivedUrl && bizData?.google_place_id) {
+      derivedUrl = `https://search.google.com/local/writereview?placeid=${bizData.google_place_id}`;
+    }
+
+    // Update the business with derived URL if it was missing
+    if (derivedUrl && !bizData?.google_review_url_derived && bizData?.google_place_id) {
+      await supabase.from("businesses").update({ google_review_url_derived: derivedUrl }).eq("id", session.business_id);
+    }
+
+    // Ensure google_place_id_snapshot is set on the session
+    if (!session.google_place_id_snapshot && bizData?.google_place_id) {
+      await supabase.from("review_sessions").update({ google_place_id_snapshot: bizData.google_place_id }).eq("id", sessionId);
+    }
+
     const { data: questions } = await supabase.from("questions").select("id, question_text").eq("business_id", session.business_id);
     const questionMap = new Map<string, string>();
     for (const q of (questions as { id: string; question_text: string }[] || [])) questionMap.set(q.id, q.question_text);
@@ -51,8 +70,15 @@ Deno.serve(async (req: Request) => {
       review += ` While I appreciate the effort, there are areas that need attention. I hope the team takes this feedback constructively. Rating: ${rating} out of 5 stars.`;
     }
 
-    await supabase.from("review_sessions").update({ ai_generated_review: review, ai_status: "completed" }).eq("id", sessionId);
-    return new Response(JSON.stringify({ review, sessionId }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    await supabase.from("review_sessions").update({
+      ai_generated_review: review,
+      ai_status: "completed",
+      completed_at: new Date().toISOString(),
+    }).eq("id", sessionId);
+
+    return new Response(JSON.stringify({ review, sessionId, googleReviewUrl: derivedUrl }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   } catch (err) {
     return new Response(JSON.stringify({ error: (err as Error).message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }

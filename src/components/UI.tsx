@@ -1,5 +1,8 @@
-import { Loader2 } from 'lucide-react';
+import { useState } from 'react';
+import { Loader2, Image as ImageIcon, Upload } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { useToast } from '../context/ToastContext';
+import { supabase } from '../lib/supabase';
 
 export function SpatialBackground() {
   return (
@@ -48,4 +51,56 @@ export function StatCard({ label, value, icon: Icon, color = 'blue' }: { label: 
   const colors: Record<string, string> = { blue: 'text-blue-400 bg-blue-500/10', green: 'text-emerald-400 bg-emerald-500/10', red: 'text-red-400 bg-red-500/10', yellow: 'text-amber-400 bg-amber-500/10', purple: 'text-violet-400 bg-violet-500/10' };
   return (<Card className="p-4"><div className="flex items-center justify-between"><div><p className="text-xs text-zinc-500 mb-1">{label}</p><p className="text-2xl font-bold text-white">{value}</p></div><div className={`w-10 h-10 rounded-lg flex items-center justify-center ${colors[color] || colors.blue}`}><Icon className="w-5 h-5" /></div></div></Card>);
 }
+export function ImageUpload({ onUpload, currentUrl, label, bucket, folderId }: { onUpload: (url: string) => void; currentUrl: string | null; label: string; bucket: 'avatars' | 'business-logos'; folderId: string }) {
+  const { showToast } = useToast();
+  const [uploading, setUploading] = useState(false);
+
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { showToast('error', 'File too large (max 5MB)'); return; }
+    setUploading(true);
+    try {
+      const ext = file.name.split('.').pop() || 'jpg';
+      const path = `${folderId}/${Date.now()}.${ext}`;
+      const { error } = await supabase.storage.from(bucket).upload(path, file, { upsert: true });
+      if (error) throw error;
+      const { data } = supabase.storage.from(bucket).getPublicUrl(path);
+      onUpload(data.publicUrl);
+      showToast('success', 'Image uploaded successfully');
+    } catch (err) {
+      showToast('error', `Upload failed: ${(err as Error).message}`);
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-4">
+      <div className="relative">
+        {currentUrl ? (
+          <img src={currentUrl} alt={label} className="w-20 h-20 rounded-xl object-cover border border-white/10" />
+        ) : (
+          <div className="w-20 h-20 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center">
+            <ImageIcon className="w-8 h-8 text-zinc-600" />
+          </div>
+        )}
+        {uploading && (
+          <div className="absolute inset-0 rounded-xl bg-black/60 flex items-center justify-center">
+            <Loader2 className="w-6 h-6 text-blue-400 animate-spin" />
+          </div>
+        )}
+      </div>
+      <div>
+        <p className="text-sm font-medium text-zinc-200 mb-1">{label}</p>
+        <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-zinc-300 hover:bg-white/10 transition-colors cursor-pointer">
+          <Upload className="w-3.5 h-3.5" />
+          {currentUrl ? 'Change' : 'Upload'}
+          <input type="file" accept="image/*" onChange={handleFile} className="hidden" disabled={uploading} />
+        </label>
+      </div>
+    </div>
+  );
+}
+
 export default SpatialBackground;

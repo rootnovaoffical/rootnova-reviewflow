@@ -19,7 +19,7 @@ Deno.serve(async (req: Request) => {
     let bizName = businessName || "this business";
     if (!businessName && businessId) {
       try {
-        const businessRes = await fetch(`${supabaseUrl}/rest/v1/businesses?id=eq.${businessId}&select=name,welcome_message`, {
+        const businessRes = await fetch(`${supabaseUrl}/rest/v1/businesses?id=eq.${businessId}&select=name`, {
           headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, "Content-Type": "application/json" },
         });
         const businesses = await businessRes.json();

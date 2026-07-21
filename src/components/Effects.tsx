@@ -14,23 +14,19 @@ export function Confetti({ trigger }: { trigger: boolean }) {
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
-
     const colors = ["#6366f1", "#22d3ee", "#4ade80", "#facc15", "#f87171", "#a855f7", "#ec4899"];
     particlesRef.current = Array.from({ length: 120 }, () => ({
       x: canvas.width / 2 + (Math.random() - 0.5) * 200,
       y: canvas.height / 2,
       vx: (Math.random() - 0.5) * 14,
       vy: Math.random() * -14 - 4,
-      life: 0,
-      maxLife: 100 + Math.random() * 60,
+      life: 0, maxLife: 100 + Math.random() * 60,
       color: colors[Math.floor(Math.random() * colors.length)],
       size: Math.random() * 8 + 3,
     }));
     activeRef.current = true;
-
     const draw = () => {
       if (!activeRef.current) return;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -39,11 +35,9 @@ export function Confetti({ trigger }: { trigger: boolean }) {
         p.life++;
         if (p.life >= p.maxLife) return;
         alive = true;
-        p.vy += 0.3;
-        p.x += p.vx; p.y += p.vy;
-        const alpha = 1 - p.life / p.maxLife;
+        p.vy += 0.3; p.x += p.vx; p.y += p.vy;
         ctx.fillStyle = p.color;
-        ctx.globalAlpha = alpha;
+        ctx.globalAlpha = 1 - p.life / p.maxLife;
         ctx.fillRect(p.x, p.y, p.size, p.size);
       });
       ctx.globalAlpha = 1;
@@ -51,7 +45,6 @@ export function Confetti({ trigger }: { trigger: boolean }) {
       else { activeRef.current = false; ctx.clearRect(0, 0, canvas.width, canvas.height); }
     };
     draw();
-
     return () => { cancelAnimationFrame(rafRef.current); activeRef.current = false; };
   }, [trigger]);
 
@@ -78,18 +71,10 @@ export function FloatingEmojis({ emojis, trigger }: { emojis: string[]; trigger:
   return (
     <div className="fixed inset-0 z-[98] pointer-events-none">
       {emojis.map((emoji, i) => (
-        <div
-          key={i}
-          className="absolute text-4xl animate-float"
-          style={{
-            left: `${20 + Math.random() * 60}%`,
-            top: `${20 + Math.random() * 60}%`,
-            animationDelay: `${i * 0.3}s`,
-            animationDuration: `${4 + Math.random() * 4}s`,
-          }}
-        >
-          {emoji}
-        </div>
+        <div key={i} className="absolute text-4xl animate-float" style={{
+          left: `${20 + Math.random() * 60}%`, top: `${20 + Math.random() * 60}%`,
+          animationDelay: `${i * 0.3}s`, animationDuration: `${4 + Math.random() * 4}s`,
+        }}>{emoji}</div>
       ))}
     </div>
   );
@@ -113,11 +98,7 @@ export function SelectionParticles({ trigger, color = "#6366f1" }: { trigger: bo
   return (
     <div className="fixed inset-0 z-[97] pointer-events-none flex items-center justify-center">
       {particles.map((p, i) => (
-        <div
-          key={i}
-          className="particle-burst"
-          style={{ background: color, ["--tx" as string]: `${p.tx}px`, ["--ty" as string]: `${p.ty}px` }}
-        />
+        <div key={i} className="particle-burst" style={{ background: color, ["--tx" as string]: `${p.tx}px`, ["--ty" as string]: `${p.ty}px` }} />
       ))}
     </div>
   );

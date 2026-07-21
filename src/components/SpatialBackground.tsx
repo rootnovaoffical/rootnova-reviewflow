@@ -16,39 +16,30 @@ export default function SpatialBackground() {
 
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-    const resize = () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-    };
+    const resize = () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; };
     resize();
     window.addEventListener("resize", resize);
 
-    const initParticles = () => {
-      const count = Math.min(60, Math.floor((canvas.width * canvas.height) / 25000));
-      particlesRef.current = Array.from({ length: count }, () => ({
-        x: Math.random() * canvas.width,
-        y: Math.random() * canvas.height,
-        vx: (Math.random() - 0.5) * 0.25,
-        vy: (Math.random() - 0.5) * 0.25,
-        size: Math.random() * 2 + 0.5,
-        opacity: Math.random() * 0.4 + 0.15,
-      }));
-    };
-    initParticles();
+    const count = Math.min(60, Math.floor((canvas.width * canvas.height) / 25000));
+    particlesRef.current = Array.from({ length: count }, () => ({
+      x: Math.random() * canvas.width,
+      y: Math.random() * canvas.height,
+      vx: (Math.random() - 0.5) * 0.25,
+      vy: (Math.random() - 0.5) * 0.25,
+      size: Math.random() * 2 + 0.5,
+      opacity: Math.random() * 0.4 + 0.15,
+    }));
 
     const handleMouse = (e: MouseEvent) => { mouseRef.current = { x: e.clientX, y: e.clientY }; };
     window.addEventListener("mousemove", handleMouse);
 
     const draw = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      const particles = particlesRef.current;
-
-      particles.forEach((p) => {
+      particlesRef.current.forEach((p) => {
         if (!reduceMotion) {
           p.x += p.vx; p.y += p.vy;
           if (p.x < 0 || p.x > canvas.width) p.vx *= -1;
           if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
-
           const dx = mouseRef.current.x - p.x;
           const dy = mouseRef.current.y - p.y;
           const dist = Math.sqrt(dx * dx + dy * dy);
@@ -58,13 +49,11 @@ export default function SpatialBackground() {
             p.y -= (dy / dist) * force * 0.4;
           }
         }
-
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
         ctx.fillStyle = `rgba(99, 102, 241, ${p.opacity})`;
         ctx.fill();
       });
-
       rafRef.current = requestAnimationFrame(draw);
     };
     draw();

@@ -68,22 +68,29 @@ export default function PublicReviewPage() {
   const [questions, setQuestions] = useState<MCQQuestion[]>([]);
   const transitionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Load business by slug
+  // Load business by slug, or fall back to first available business
   useEffect(() => {
-    if (!slug) { setStage("error"); return; }
-    withTimeout(
-      supabase.from("businesses").select("*").eq("slug", slug).maybeSingle().then(({ data, error }) => {
+    const loadBusiness = async () => {
+      try {
+        let query = supabase.from("businesses").select("*");
+        if (slug) {
+          query = query.eq("slug", slug);
+        } else {
+          query = query.eq("public_review_enabled", true).eq("status", "active").limit(1);
+        }
+        const { data, error } = await withTimeout(query.maybeSingle().then(), 5000);
         if (error || !data) { setStage("error"); return; }
         setBusiness(data as Business);
         if (!(data as Business).public_review_enabled) { setStage("disabled"); return; }
         setStage("welcome");
-        safeInsert("analytics_events", { business_id: (data as Business).id, event_type: "page_view", metadata: { slug } });
-      }),
-      5000
-    ).catch(() => setStage("error"));
+        safeInsert("analytics_events", { business_id: (data as Business).id, event_type: "page_view", metadata: { slug: slug || "default" } });
+      } catch {
+        setStage("error");
+      }
+    };
+    loadBusiness();
   }, [slug]);
 
-  // Build question list based on sentiment
   const buildQuestions = useCallback((r: number) => {
     const base = [...DEFAULT_QUESTIONS];
     if (r >= 4) base.push(POSITIVE_FOLLOWUP);
@@ -95,10 +102,7 @@ export default function PublicReviewPage() {
     if (transitioning) return;
     setTransitioning(true);
     if (transitionTimer.current) clearTimeout(transitionTimer.current);
-    transitionTimer.current = setTimeout(() => {
-      setStage(next);
-      setTransitioning(false);
-    }, 300);
+    transitionTimer.current = setTimeout(() => { setStage(next); setTransitioning(false); }, 300);
   }, [transitioning]);
 
   const handleStart = () => {
@@ -113,12 +117,9 @@ export default function PublicReviewPage() {
     setParticleColor(RATING_OPTIONS[r - 1]?.accent || "#6366f1");
     setTimeout(() => setParticleTrigger(false), 800);
     if (r >= 4) {
-      setConfettiTrigger(false);
-      setTimeout(() => setConfettiTrigger(true), 50);
-      setShockwaveTrigger(false);
-      setTimeout(() => setShockwaveTrigger(true), 50);
-      setEmojisTrigger(false);
-      setTimeout(() => setEmojisTrigger(true), 50);
+      setConfettiTrigger(false); setTimeout(() => setConfettiTrigger(true), 50);
+      setShockwaveTrigger(false); setTimeout(() => setShockwaveTrigger(true), 50);
+      setEmojisTrigger(false); setTimeout(() => setEmojisTrigger(true), 50);
     }
   };
 
@@ -128,8 +129,7 @@ export default function PublicReviewPage() {
       const { data } = await withTimeout(
         supabase.from("review_sessions").insert({
           business_id: business.id, rating, answers: [], ai_status: "pending",
-        }).select().single().then(),
-        5000
+        }).select().single().then(), 5000
       );
       setSessionId(data.id);
       safeInsert("analytics_events", { business_id: business.id, session_id: data.id, event_type: "rating_submitted", metadata: { rating } });
@@ -146,9 +146,7 @@ export default function PublicReviewPage() {
     setSelectedChips((prev) => {
       const current = prev[questionId] || [];
       if (multi) {
-        const updated = current.includes(option)
-          ? current.filter((item) => item !== option)
-          : [...current, option];
+        const updated = current.includes(option) ? current.filter((i) => i !== option) : [...current, option];
         return { ...prev, [questionId]: updated };
       }
       return { ...prev, [questionId]: current.includes(option) ? [] : [option] };
@@ -162,25 +160,15 @@ export default function PublicReviewPage() {
 
   const handleNextQuestion = () => {
     if (!canProceed || transitioning) return;
-    if (isLastQuestion) {
-      handleGenerate();
-    } else {
-      setCurrentQuestionIndex((i) => i + 1);
-    }
+    if (isLastQuestion) { handleGenerate(); }
+    else { setCurrentQuestionIndex((i) => i + 1); }
   };
 
   const handleGenerate = async () => {
     if (!business || !sessionId) return;
-    const answerArray = Object.entries(selectedChips).flatMap(([qid, opts]) =>
-      opts.map((opt) => ({ question_id: qid, answer: opt }))
-    );
+    const answerArray = Object.entries(selectedChips).flatMap(([qid, opts]) => opts.map((opt) => ({ question_id: qid, answer: opt })));
     if (!sessionId.startsWith("local-")) {
-      try {
-        await withTimeout(
-          supabase.from("review_sessions").update({ answers: answerArray }).eq("id", sessionId).then(),
-          4000
-        );
-      } catch { /* non-blocking */ }
+      try { await withTimeout(supabase.from("review_sessions").update({ answers: answerArray }).eq("id", sessionId).then(), 4000); } catch { /* non-blocking */ }
     }
     safeInsert("analytics_events", { business_id: business.id, session_id: sessionId, event_type: "questions_submitted", metadata: { count: answerArray.length } });
     smoothTransition("generating");
@@ -194,15 +182,11 @@ export default function PublicReviewPage() {
           method: "POST",
           headers: { "Content-Type": "application/json", apikey: import.meta.env.VITE_SUPABASE_ANON_KEY },
           body: JSON.stringify({ sessionId: sid, rating: r, answers: ans, businessId: business?.id, businessName: business?.name, regenerate: regen }),
-        }).then((r2) => r2.json()),
-        10000
+        }).then((r2) => r2.json()), 10000
       );
       setAiReview(res.review || "Thank you for your feedback! We're glad you had a great experience.");
       if (!sid.startsWith("local-")) {
-        withTimeout(
-          supabase.from("review_sessions").update({ ai_generated_review: res.review, ai_status: "completed", completed_at: new Date().toISOString() }).eq("id", sid).then(),
-          4000
-        ).catch(() => {});
+        withTimeout(supabase.from("review_sessions").update({ ai_generated_review: res.review, ai_status: "completed", completed_at: new Date().toISOString() }).eq("id", sid).then(), 4000).catch(() => {});
         safeInsert("analytics_events", { business_id: business?.id, session_id: sid, event_type: "ai_completion", metadata: { regenerate: regen } });
       }
     } catch {
@@ -216,9 +200,7 @@ export default function PublicReviewPage() {
     const nextRegen = regenCount + 1;
     setRegenCount(nextRegen);
     setStage("generating");
-    const answerArray = Object.entries(selectedChips).flatMap(([qid, opts]) =>
-      opts.map((opt) => ({ question_id: qid, answer: opt }))
-    );
+    const answerArray = Object.entries(selectedChips).flatMap(([qid, opts]) => opts.map((opt) => ({ question_id: qid, answer: opt })));
     setTimeout(() => generateReview(sessionId, rating, answerArray, nextRegen), 600);
   };
 
@@ -232,13 +214,10 @@ export default function PublicReviewPage() {
     if (aiReview) navigator.clipboard.writeText(aiReview);
     showToast("Review copied! Redirecting to Google...", "success");
     safeInsert("analytics_events", { business_id: business?.id, session_id: sessionId, event_type: "google_click", metadata: {} });
-    const googleUrl = business?.google_review_url ||
-      (business?.google_place_id ? `https://search.google.com/local/writereview?placeid=${business.google_place_id}` : null);
+    const googleUrl = business?.google_review_url || (business?.google_place_id ? `https://search.google.com/local/writereview?placeid=${business.google_place_id}` : null);
     if (googleUrl) window.open(googleUrl, "_blank");
     setStage("google");
   };
-
-  // === RENDER ===
 
   if (stage === "loading") return <><SpatialBackground /><div className="min-h-screen flex items-center justify-center"><div className="w-12 h-12 border-4 border-primary-500/30 border-t-primary-500 rounded-full animate-spin" /></div></>;
   if (stage === "error") return <><SpatialBackground /><div className="min-h-screen flex items-center justify-center text-center p-4"><div className="glass-strong rounded-3xl p-10"><h1 className="text-2xl font-bold text-white mb-2">Business Not Found</h1><p className="text-slate-400">This review link is invalid.</p></div></div></>;
@@ -256,7 +235,6 @@ export default function PublicReviewPage() {
         <div className="relative w-full max-w-2xl">
           <AuroraGlow color={business?.primary_color || "#6366f1"} />
 
-          {/* Logo */}
           {business?.logo_url && (
             <div className="flex justify-center mb-6">
               <div className="logo-pill w-20 h-20 rounded-2xl p-[2px] transform hover:rotate-3 hover:scale-105 transition-all duration-300">
@@ -270,19 +248,11 @@ export default function PublicReviewPage() {
           {/* SCREEN 1: WELCOME */}
           {stage === "welcome" && (
             <div className="glass-card rounded-3xl p-10 text-center screen-enter">
-              <div className="flex justify-center mb-4">
-                <Sparkles className="w-8 h-8 text-primary-400 animate-pulse" />
-              </div>
-              <h1 className="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-white via-slate-200 to-slate-400 mb-3">
-                {business?.name}
-              </h1>
+              <div className="flex justify-center mb-4"><Sparkles className="w-8 h-8 text-primary-400 animate-pulse" /></div>
+              <h1 className="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-white via-slate-200 to-slate-400 mb-3">{business?.name}</h1>
               <p className="text-lg text-slate-300 mb-8">{business?.welcome_message || "We'd love to hear about your experience!"}</p>
-              <button
-                onClick={handleStart}
-                className="pulse-ring px-8 py-4 bg-gradient-to-r from-primary-600 via-primary-500 to-accent-500 text-white text-lg font-bold rounded-2xl shadow-lg shadow-primary-500/40 transform hover:-translate-y-1 hover:scale-105 active:translate-y-0 transition-all duration-300 flex items-center justify-center gap-3 group mx-auto"
-              >
-                <span>Start Review</span>
-                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              <button onClick={handleStart} className="pulse-ring px-8 py-4 bg-gradient-to-r from-primary-600 via-primary-500 to-accent-500 text-white text-lg font-bold rounded-2xl shadow-lg shadow-primary-500/40 transform hover:-translate-y-1 hover:scale-105 active:translate-y-0 transition-all duration-300 flex items-center justify-center gap-3 group mx-auto">
+                <span>Start Review</span><ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </button>
             </div>
           )}
@@ -292,20 +262,8 @@ export default function PublicReviewPage() {
             <div className="glass-card rounded-3xl p-8 sm:p-10 text-center screen-enter">
               <h2 className="text-2xl font-bold text-white mb-2">How was your experience?</h2>
               <p className="text-slate-400 mb-8 text-sm">Your honest moment matters</p>
-
-              <div className="mb-8">
-                <EmojiRating3D value={rating} onChange={setRating} onSelect={handleRatingSelect} />
-              </div>
-
-              <button
-                onClick={handleRatingContinue}
-                disabled={rating === 0 || transitioning}
-                className={`px-8 py-4 rounded-2xl font-bold text-base transition-all duration-300 flex items-center justify-center gap-2 mx-auto ${
-                  rating > 0
-                    ? "bg-gradient-to-r from-primary-600 to-primary-500 text-white shadow-lg shadow-primary-500/40 hover:-translate-y-1 hover:scale-105 active:scale-95"
-                    : "glass text-slate-500 border border-white/5 cursor-not-allowed"
-                }`}
-              >
+              <div className="mb-8"><EmojiRating3D value={rating} onChange={setRating} onSelect={handleRatingSelect} /></div>
+              <button onClick={handleRatingContinue} disabled={rating === 0 || transitioning} className={`px-8 py-4 rounded-2xl font-bold text-base transition-all duration-300 flex items-center justify-center gap-2 mx-auto ${rating > 0 ? "bg-gradient-to-r from-primary-600 to-primary-500 text-white shadow-lg shadow-primary-500/40 hover:-translate-y-1 hover:scale-105 active:scale-95" : "glass text-slate-500 border border-white/5 cursor-not-allowed"}`}>
                 <span>{rating > 0 ? "Continue" : "Select a rating to continue"}</span>
                 {rating > 0 && <ArrowRight className="w-4 h-4" />}
               </button>
@@ -315,57 +273,28 @@ export default function PublicReviewPage() {
           {/* SCREEN 3: STEP-BY-STEP MCQ FLOW */}
           {stage === "questions" && currentQ && (
             <div className="glass-card rounded-3xl p-8 sm:p-10 screen-enter">
-              {/* Progress indicator */}
               <div className="mb-6">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-semibold uppercase tracking-wider text-primary-300">
-                    Quick Questions {currentQuestionIndex + 1} of {questions.length}
-                  </span>
-                  <span className="text-xs text-slate-500">{Math.round(((currentQuestionIndex) / questions.length) * 100)}%</span>
+                  <span className="text-xs font-semibold uppercase tracking-wider text-primary-300">Quick Questions {currentQuestionIndex + 1} of {questions.length}</span>
+                  <span className="text-xs text-slate-500">{Math.round((currentQuestionIndex / questions.length) * 100)}%</span>
                 </div>
                 <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-primary-500 to-accent-500 rounded-full transition-all duration-500"
-                    style={{ width: `${((currentQuestionIndex + 1) / questions.length) * 100}%` }}
-                  />
+                  <div className="h-full bg-gradient-to-r from-primary-500 to-accent-500 rounded-full transition-all duration-500" style={{ width: `${((currentQuestionIndex + 1) / questions.length) * 100}%` }} />
                 </div>
               </div>
-
-              {/* Question */}
               <h2 className="text-xl font-bold text-white mb-4">{currentQ.question_text}</h2>
-
-              {/* Chips */}
               <div className="flex flex-wrap gap-2 mb-6">
                 {currentQ.options.map((opt) => {
                   const isChecked = (selectedChips[currentQ.id] || []).includes(opt);
                   return (
-                    <button
-                      key={opt}
-                      type="button"
-                      onClick={() => handleChipToggle(currentQ.id, opt, currentQ.multi)}
-                      className={`chip px-4 py-2.5 rounded-xl text-sm font-medium border flex items-center gap-1.5 ${
-                        isChecked
-                          ? "chip-selected bg-gradient-to-r from-primary-600 to-accent-500 text-white border-primary-400/60 shadow-[0_0_15px_rgba(99,102,241,0.4)]"
-                          : "glass border-white/10 text-slate-300 hover:text-white hover:border-white/20"
-                      }`}
-                    >
+                    <button key={opt} type="button" onClick={() => handleChipToggle(currentQ.id, opt, currentQ.multi)} className={`chip px-4 py-2.5 rounded-xl text-sm font-medium border flex items-center gap-1.5 ${isChecked ? "chip-selected bg-gradient-to-r from-primary-600 to-accent-500 text-white border-primary-400/60 shadow-[0_0_15px_rgba(99,102,241,0.4)]" : "glass border-white/10 text-slate-300 hover:text-white hover:border-white/20"}`}>
                       {isChecked && <Check className="w-4 h-4 text-emerald-300" />}
                       <span>{opt}</span>
                     </button>
                   );
                 })}
               </div>
-
-              {/* Action button */}
-              <button
-                onClick={handleNextQuestion}
-                disabled={!canProceed || transitioning}
-                className={`w-full py-4 rounded-2xl font-bold text-base transition-all duration-300 flex items-center justify-center gap-2 ${
-                  canProceed
-                    ? "bg-gradient-to-r from-primary-600 via-primary-500 to-accent-500 text-white shadow-lg shadow-primary-500/40 hover:-translate-y-0.5 active:scale-95"
-                    : "glass text-slate-500 border border-white/5 cursor-not-allowed"
-                }`}
-              >
+              <button onClick={handleNextQuestion} disabled={!canProceed || transitioning} className={`w-full py-4 rounded-2xl font-bold text-base transition-all duration-300 flex items-center justify-center gap-2 ${canProceed ? "bg-gradient-to-r from-primary-600 via-primary-500 to-accent-500 text-white shadow-lg shadow-primary-500/40 hover:-translate-y-0.5 active:scale-95" : "glass text-slate-500 border border-white/5 cursor-not-allowed"}`}>
                 <span>{isLastQuestion ? "Generate AI Review" : "Next Question"}</span>
                 {isLastQuestion ? <Sparkles className="w-5 h-5 text-amber-300 animate-pulse" /> : <ChevronRight className="w-5 h-5" />}
               </button>
@@ -391,41 +320,14 @@ export default function PublicReviewPage() {
           {stage === "result" && (
             <div className="glass-card rounded-3xl p-8 sm:p-10 screen-enter">
               <div className="text-center mb-6">
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-primary-500/20 text-primary-300 border border-primary-500/30 mb-2">
-                  <Sparkles className="w-3.5 h-3.5 text-amber-300" /> AI Review Generated
-                </span>
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-primary-500/20 text-primary-300 border border-primary-500/30 mb-2"><Sparkles className="w-3.5 h-3.5 text-amber-300" /> AI Review Generated</span>
                 <h2 className="text-xl font-bold text-white">Ready to Share!</h2>
               </div>
-
-              <div className="glass rounded-2xl p-6 mb-6 relative">
-                <p className="text-slate-200 leading-relaxed text-sm">"{aiReview}"</p>
-              </div>
-
+              <div className="glass rounded-2xl p-6 mb-6 relative"><p className="text-slate-200 leading-relaxed text-sm">"{aiReview}"</p></div>
               <div className="flex flex-col gap-3">
-                <button
-                  onClick={handleRegenerate}
-                  disabled={transitioning}
-                  className="w-full py-3.5 rounded-2xl glass text-white font-medium hover:bg-white/10 transform hover:-translate-y-0.5 active:scale-95 transition-all flex items-center justify-center gap-2"
-                >
-                  <RefreshCw className="w-4 h-4" />
-                  <span>Regenerate</span>
-                </button>
-
-                <button
-                  onClick={handleCopy}
-                  className="w-full py-3.5 rounded-2xl glass text-white font-medium hover:bg-white/10 transform hover:-translate-y-0.5 active:scale-95 transition-all flex items-center justify-center gap-2"
-                >
-                  <Copy className="w-4 h-4" />
-                  <span>Copy Review</span>
-                </button>
-
-                <button
-                  onClick={handleGooglePost}
-                  className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-success-600 to-success-500 text-white font-bold shadow-lg shadow-success-500/30 transform hover:-translate-y-0.5 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                  <span>Post on Google</span>
-                </button>
+                <button onClick={handleRegenerate} disabled={transitioning} className="w-full py-3.5 rounded-2xl glass text-white font-medium hover:bg-white/10 transform hover:-translate-y-0.5 active:scale-95 transition-all flex items-center justify-center gap-2"><RefreshCw className="w-4 h-4" /><span>Regenerate</span></button>
+                <button onClick={handleCopy} className="w-full py-3.5 rounded-2xl glass text-white font-medium hover:bg-white/10 transform hover:-translate-y-0.5 active:scale-95 transition-all flex items-center justify-center gap-2"><Copy className="w-4 h-4" /><span>Copy Review</span></button>
+                <button onClick={handleGooglePost} className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-success-600 to-success-500 text-white font-bold shadow-lg shadow-success-500/30 transform hover:-translate-y-0.5 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2"><ExternalLink className="w-4 h-4" /><span>Post on Google</span></button>
               </div>
             </div>
           )}
@@ -436,9 +338,7 @@ export default function PublicReviewPage() {
               <div className="text-5xl mb-4">{"\u2705"}</div>
               <h2 className="text-2xl font-bold text-white mb-2">Thank You!</h2>
               <p className="text-slate-300 mb-6">We've opened Google Reviews in a new tab. Your feedback means the world to us!</p>
-              <button onClick={() => setStage("welcome")} className="choice3d px-6 py-3 glass text-white font-medium rounded-xl hover:bg-white/10 transition-all">
-                Done
-              </button>
+              <button onClick={() => setStage("welcome")} className="choice3d px-6 py-3 glass text-white font-medium rounded-xl hover:bg-white/10 transition-all">Done</button>
             </div>
           )}
         </div>
@@ -449,10 +349,7 @@ export default function PublicReviewPage() {
 
 function generateLocalReview(businessName: string, rating: number, answers: { question_id: string; answer: string }[]): string {
   const highlights = answers.length > 0 ? answers.map((a) => a.answer).join(", ") : "great service and a wonderful atmosphere";
-  if (rating >= 4) {
-    return `I had an amazing experience at ${businessName}. ${highlights}. The staff was attentive and I would definitely recommend it to others. Thank you for the wonderful experience!`;
-  } else if (rating === 3) {
-    return `My experience at ${businessName} was good. ${highlights}. There's room for improvement but the staff was friendly.`;
-  }
+  if (rating >= 4) return `I had an amazing experience at ${businessName}. ${highlights}. The staff was attentive and I would definitely recommend it to others. Thank you for the wonderful experience!`;
+  if (rating === 3) return `My experience at ${businessName} was good. ${highlights}. There's room for improvement but the staff was friendly.`;
   return `I had a disappointing experience at ${businessName}. ${highlights}. I hope management can address these issues.`;
 }

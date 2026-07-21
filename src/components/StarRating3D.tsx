@@ -39,7 +39,6 @@ export default function EmojiRating3D({ value, onChange, onSelect, disabled }: E
 
   return (
     <div className="flex flex-col items-center gap-4">
-      {/* 3D Star + Emoji buttons */}
       <div className="flex gap-2 sm:gap-3 justify-center items-end" onMouseLeave={() => setHover(0)}>
         {RATING_OPTIONS.map((opt) => {
           const isSelected = value === opt.value;
@@ -56,56 +55,35 @@ export default function EmojiRating3D({ value, onChange, onSelect, disabled }: E
               className={`emoji-card relative flex flex-col items-center justify-center p-3 sm:p-4 rounded-2xl border w-[18%] max-w-[90px] ${
                 isSelected ? "emoji-card-selected glass-card" : "glass"
               } ${disabled ? "cursor-default opacity-50" : "cursor-pointer"}`}
-              style={active ? {
-                borderColor: opt.accent,
-                boxShadow: `0 0 30px ${opt.glow}, 0 10px 30px rgba(0,0,0,0.4)`,
-              } : undefined}
+              style={active ? { borderColor: opt.accent, boxShadow: `0 0 30px ${opt.glow}, 0 10px 30px rgba(0,0,0,0.4)` } : undefined}
               aria-label={opt.label}
             >
-              {active && (
-                <div className="glow-halo glow-halo-active" style={{ background: opt.glow }} />
-              )}
-
+              {active && <div className="glow-halo glow-halo-active" style={{ background: opt.glow }} />}
               {showBurst && (
                 <div className="absolute inset-0 pointer-events-none">
                   {Array.from({ length: 8 }).map((_, i) => {
                     const angle = (i / 8) * Math.PI * 2;
                     return (
-                      <div
-                        key={i}
-                        className="particle-burst"
-                        style={{
-                          left: "50%",
-                          top: "50%",
-                          background: opt.accent,
-                          ["--tx" as string]: `${Math.cos(angle) * 60}px`,
-                          ["--ty" as string]: `${Math.sin(angle) * 60}px`,
-                        }}
-                      />
+                      <div key={i} className="particle-burst" style={{
+                        left: "50%", top: "50%", background: opt.accent,
+                        ["--tx" as string]: `${Math.cos(angle) * 60}px`,
+                        ["--ty" as string]: `${Math.sin(angle) * 60}px`,
+                      }} />
                     );
                   })}
                 </div>
               )}
-
-              <Star
-                className={`w-7 h-7 sm:w-8 sm:h-8 mb-1 transition-all duration-300 ${active ? "fill-current" : ""}`}
-                style={{ color: active ? opt.accent : "#475569" }}
-              />
-              <span className={`text-[10px] sm:text-xs font-semibold transition-colors ${active ? "text-white" : "text-slate-500"}`}>
-                {opt.label}
-              </span>
+              <Star className={`w-7 h-7 sm:w-8 sm:h-8 mb-1 transition-all duration-300 ${active ? "fill-current" : ""}`} style={{ color: active ? opt.accent : "#475569" }} />
+              <span className={`text-[10px] sm:text-xs font-semibold transition-colors ${active ? "text-white" : "text-slate-500"}`}>{opt.label}</span>
             </button>
           );
         })}
       </div>
 
-      {/* Dynamic emoji + reaction text */}
       {(hover || value) > 0 && (
         <div className="flex items-center gap-3 px-5 py-3 rounded-2xl glass animate-spring-in" style={{ boxShadow: `0 0 25px ${RATING_OPTIONS[(hover || value) - 1]?.glow}` }}>
           <span className="text-4xl">{RATING_OPTIONS[(hover || value) - 1]?.emoji}</span>
-          <span className="text-lg font-bold" style={{ color: RATING_OPTIONS[(hover || value) - 1]?.accent }}>
-            {RATING_OPTIONS[(hover || value) - 1]?.reaction}
-          </span>
+          <span className="text-lg font-bold" style={{ color: RATING_OPTIONS[(hover || value) - 1]?.accent }}>{RATING_OPTIONS[(hover || value) - 1]?.reaction}</span>
         </div>
       )}
     </div>

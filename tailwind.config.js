@@ -20,7 +20,6 @@ export default {
         "pulse-glow": "pulseGlow 2s ease-in-out infinite",
         "spring-in": "springIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)",
         "halo": "halo 2s ease-in-out infinite",
-        "tilt": "tilt 0.4s ease-out",
         "burst": "burst 0.8s ease-out forwards",
       },
       keyframes: {
@@ -33,7 +32,6 @@ export default {
         pulseGlow: { "0%,100%": { boxShadow: "0 0 20px rgba(99,102,241,0.3)" }, "50%": { boxShadow: "0 0 40px rgba(99,102,241,0.6)" } },
         springIn: { "0%": { opacity: "0", transform: "scale(0.5) translateY(20px)" }, "100%": { opacity: "1", transform: "scale(1) translateY(0)" } },
         halo: { "0%,100%": { opacity: "0.4", transform: "scale(1)" }, "50%": { opacity: "0.8", transform: "scale(1.15)" } },
-        tilt: { "0%": { transform: "rotateY(0deg)" }, "100%": { transform: "rotateY(5deg)" } },
         burst: { "0%": { transform: "scale(0)", opacity: "1" }, "100%": { transform: "scale(3)", opacity: "0" } },
       },
     },

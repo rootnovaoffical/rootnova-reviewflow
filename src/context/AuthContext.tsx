@@ -154,17 +154,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signUp = useCallback(async (email: string, password: string, fullName: string) => {
     const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { full_name: fullName } },
+      email, password, options: { data: { full_name: fullName } },
     });
     if (error) return { error: error.message };
     if (data.user) {
       await supabase.from('profiles').upsert({
-        id: data.user.id,
-        email,
-        full_name: fullName,
-        role: 'BUSINESS_ADMIN',
+        id: data.user.id, email, full_name: fullName, role: 'BUSINESS_ADMIN',
       });
     }
     return { error: null };
@@ -173,10 +168,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
     localStorage.removeItem('selectedBusinessId');
-    setProfile(null);
-    setBusinesses([]);
-    setBusiness(null);
-    setOrganization(null);
+    setProfile(null); setBusinesses([]); setBusiness(null); setOrganization(null);
   }, []);
 
   return (

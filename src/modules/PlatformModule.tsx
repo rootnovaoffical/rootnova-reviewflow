@@ -1,31 +1,16 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { useToast } from '../context/ToastContext';
-import {
-  LoadingSpinner, EmptyState, PageHeader, Card, Badge, Button,
-} from '../components/UI';
-import { Shield, ScrollText, BarChart3, ToggleLeft, ToggleRight } from 'lucide-react';
+import { LoadingSpinner, EmptyState, PageHeader, Card, Badge } from '../components/UI';
+import { Flag, ScrollText, BarChart3, ToggleLeft, ToggleRight } from 'lucide-react';
 
 function formatDate(value: string | null): string {
   if (!value) return '—';
-  try {
-    return new Date(value).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-  } catch {
-    return value;
-  }
-}
-
-function formatDateTime(value: string | null): string {
-  if (!value) return '—';
-  try {
-    return new Date(value).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
-  } catch {
-    return value;
-  }
+  try { return new Date(value).toLocaleString(); } catch { return value; }
 }
 
 /* ============================================================
- * FeatureFlagsModule — List + toggle is_enabled
+ * FeatureFlagsModule
  * ============================================================ */
 
 interface FeatureFlag {
@@ -35,85 +20,64 @@ interface FeatureFlag {
   description: string | null;
   is_enabled: boolean;
   category: string | null;
-  created_at: string;
-  updated_at: string;
 }
 
 export function FeatureFlagsModule({ businessId }: { businessId: string }) {
   const { showToast } = useToast();
-  const [items, setItems] = useState<FeatureFlag[]>([]);
+  const [flags, setFlags] = useState<FeatureFlag[]>([]);
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('feature_flags')
-      .select('*')
-      .order('category', { ascending: true });
-    if (error) {
-      showToast('error', `Failed to load feature flags: ${error.message}`);
-    } else {
-      setItems((data as FeatureFlag[]) || []);
-    }
+    const { data, error } = await supabase.from('feature_flags').select('*').order('category', { ascending: true });
+    if (error) showToast('error', `Failed to load feature flags: ${error.message}`);
+    else setFlags((data as FeatureFlag[]) || []);
     setLoading(false);
-  }, [useToast]);
+  }, [showToast]);
 
   useEffect(() => { load(); }, [load]);
 
-  async function toggleFlag(f: FeatureFlag) {
+  const toggle = async (f: FeatureFlag) => {
     setToggling(f.id);
-    try {
-      const { error } = await supabase
-        .from('feature_flags')
-        .update({ is_enabled: !f.is_enabled })
-        .eq('id', f.id);
-      if (error) throw error;
-      showToast('success', `Flag "${f.key}" ${f.is_enabled ? 'disabled' : 'enabled'}`);
-      load();
-    } catch (e) {
-      showToast('error', (e as Error).message);
-    } finally {
-      setToggling(null);
-    }
-  }
+    const { error } = await supabase.from('feature_flags').update({ is_enabled: !f.is_enabled }).eq('id', f.id);
+    setToggling(null);
+    if (error) { showToast('error', `Toggle failed: ${error.message}`); return; }
+    showToast('success', `Flag "${f.key}" ${!f.is_enabled ? 'enabled' : 'disabled'}`);
+    setFlags((prev) => prev.map((p) => p.id === f.id ? { ...p, is_enabled: !p.is_enabled } : p));
+  };
 
   if (loading) return <LoadingSpinner label="Loading feature flags…" />;
 
   return (
     <div>
-      <PageHeader title="Feature Flags" description="Toggle platform features on or off" />
+      <PageHeader title="Feature Flags" description="Platform feature toggles" />
 
-      {items.length === 0 ? (
-        <EmptyState icon={Shield} title="No feature flags" description="Feature flags will appear here once configured." />
+      {flags.length === 0 ? (
+        <EmptyState icon={Flag} title="No feature flags" description="Feature flags will appear here." />
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {items.map((f) => (
-            <Card key={f.id} className="p-5 flex flex-col gap-3">
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <div className="w-9 h-9 rounded-lg bg-blue-500/10 flex items-center justify-center">
-                    <Shield className="w-4.5 h-4.5 text-blue-400" />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {flags.map((f) => (
+            <Card key={f.id} className="p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <h3 className="font-semibold text-white truncate">{f.label || f.key}</h3>
+                    {f.category && <Badge color="blue">{f.category}</Badge>}
                   </div>
-                  <div>
-                    <h3 className="font-semibold text-white">{f.label ?? f.key}</h3>
-                    {f.category && <p className="text-xs text-zinc-500">{f.category}</p>}
-                  </div>
+                  <p className="text-xs text-zinc-500 font-mono mb-1">{f.key}</p>
+                  {f.description && <p className="text-sm text-zinc-400">{f.description}</p>}
                 </div>
-                <Badge color={f.is_enabled ? 'green' : 'gray'}>{f.is_enabled ? 'Enabled' : 'Disabled'}</Badge>
-              </div>
-              {f.description && <p className="text-sm text-zinc-400">{f.description}</p>}
-              <div className="flex items-center justify-between mt-2">
-                <code className="text-blue-300 text-xs">{f.key}</code>
-                <Button
-                  size="sm"
-                  variant={f.is_enabled ? 'danger' : 'primary'}
-                  onClick={() => toggleFlag(f)}
+                <button
+                  onClick={() => toggle(f)}
                   disabled={toggling === f.id}
+                  className="shrink-0 p-1 rounded-lg hover:bg-white/5 transition-colors disabled:opacity-50"
+                  title={f.is_enabled ? 'Disable' : 'Enable'}
                 >
-                  {f.is_enabled ? <ToggleRight className="w-4 h-4" /> : <ToggleLeft className="w-4 h-4" />}
-                  {f.is_enabled ? 'Disable' : 'Enable'}
-                </Button>
+                  {f.is_enabled
+                    ? <ToggleRight className="w-8 h-8 text-emerald-400" />
+                    : <ToggleLeft className="w-8 h-8 text-zinc-600" />}
+                </button>
               </div>
             </Card>
           ))}
@@ -124,23 +88,21 @@ export function FeatureFlagsModule({ businessId }: { businessId: string }) {
 }
 
 /* ============================================================
- * AuditLogsModule — Read-only list filtered by organization
+ * AuditLogsModule
  * ============================================================ */
 
 interface AuditLog {
   id: string;
-  actor_id: string | null;
+  organization_id: string;
   actor_email: string | null;
   action: string | null;
   target_type: string | null;
-  target_id: string | null;
-  organization_id: string;
-  created_at: string;
+  created_at: string | null;
 }
 
 export function AuditLogsModule({ organizationId }: { organizationId: string }) {
   const { showToast } = useToast();
-  const [items, setItems] = useState<AuditLog[]>([]);
+  const [logs, setLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -150,12 +112,9 @@ export function AuditLogsModule({ organizationId }: { organizationId: string }) 
       .select('*')
       .eq('organization_id', organizationId)
       .order('created_at', { ascending: false })
-      .limit(200);
-    if (error) {
-      showToast('error', `Failed to load audit logs: ${error.message}`);
-    } else {
-      setItems((data as AuditLog[]) || []);
-    }
+      .limit(100);
+    if (error) showToast('error', `Failed to load audit logs: ${error.message}`);
+    else setLogs((data as AuditLog[]) || []);
     setLoading(false);
   }, [organizationId, showToast]);
 
@@ -165,61 +124,54 @@ export function AuditLogsModule({ organizationId }: { organizationId: string }) 
 
   return (
     <div>
-      <PageHeader title="Audit Logs" description="Activity log for this organization" />
+      <PageHeader title="Audit Logs" description="Activity records for this organization" />
 
-      {items.length === 0 ? (
+      {logs.length === 0 ? (
         <EmptyState icon={ScrollText} title="No audit logs" description="Audit log entries will appear here." />
       ) : (
-        <Card className="overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-white/10 text-left text-zinc-400">
-                  <th className="px-4 py-3 font-medium">Actor</th>
-                  <th className="px-4 py-3 font-medium">Action</th>
-                  <th className="px-4 py-3 font-medium">Target Type</th>
-                  <th className="px-4 py-3 font-medium">Timestamp</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((l) => (
-                  <tr key={l.id} className="border-b border-white/5 hover:bg-white/5">
-                    <td className="px-4 py-3 text-white">{l.actor_email ?? '—'}</td>
-                    <td className="px-4 py-3"><Badge color="blue">{l.action ?? '—'}</Badge></td>
-                    <td className="px-4 py-3 text-zinc-300">{l.target_type ?? '—'}</td>
-                    <td className="px-4 py-3 text-zinc-300">{formatDateTime(l.created_at)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+        <div className="space-y-2">
+          {logs.map((l) => (
+            <Card key={l.id} className="p-3">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center shrink-0">
+                  <ScrollText className="w-4 h-4 text-zinc-400" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {l.action && <Badge color="blue">{l.action}</Badge>}
+                    {l.target_type && <Badge color="purple">{l.target_type}</Badge>}
+                  </div>
+                  {l.actor_email && <p className="text-xs text-zinc-500 mt-1 truncate">{l.actor_email}</p>}
+                </div>
+                <span className="text-xs text-zinc-600 shrink-0">{formatDate(l.created_at)}</span>
+              </div>
+            </Card>
+          ))}
+        </div>
       )}
     </div>
   );
 }
 
 /* ============================================================
- * UsageRecordsModule — Read-only list filtered by organization
+ * UsageRecordsModule
  * ============================================================ */
 
 interface UsageRecord {
   id: string;
   organization_id: string;
-  period_start: string;
-  period_end: string;
+  period_start: string | null;
+  period_end: string | null;
   reviews_generated: number | null;
   ai_requests: number | null;
   messages_sent: number | null;
   reports_generated: number | null;
   qr_scans: number | null;
-  created_at: string;
-  updated_at: string;
 }
 
 export function UsageRecordsModule({ organizationId }: { organizationId: string }) {
   const { showToast } = useToast();
-  const [items, setItems] = useState<UsageRecord[]>([]);
+  const [records, setRecords] = useState<UsageRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -229,11 +181,8 @@ export function UsageRecordsModule({ organizationId }: { organizationId: string 
       .select('*')
       .eq('organization_id', organizationId)
       .order('period_start', { ascending: false });
-    if (error) {
-      showToast('error', `Failed to load usage records: ${error.message}`);
-    } else {
-      setItems((data as UsageRecord[]) || []);
-    }
+    if (error) showToast('error', `Failed to load usage records: ${error.message}`);
+    else setRecords((data as UsageRecord[]) || []);
     setLoading(false);
   }, [organizationId, showToast]);
 
@@ -243,41 +192,45 @@ export function UsageRecordsModule({ organizationId }: { organizationId: string 
 
   return (
     <div>
-      <PageHeader title="Usage Records" description="Platform usage metrics for this organization" />
+      <PageHeader title="Usage Records" description="Resource usage for this organization" />
 
-      {items.length === 0 ? (
-        <EmptyState icon={BarChart3} title="No usage records" description="Usage records will appear here as they are generated." />
+      {records.length === 0 ? (
+        <EmptyState icon={BarChart3} title="No usage records" description="Usage records will appear here." />
       ) : (
-        <Card className="overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-white/10 text-left text-zinc-400">
-                  <th className="px-4 py-3 font-medium">Period Start</th>
-                  <th className="px-4 py-3 font-medium">Period End</th>
-                  <th className="px-4 py-3 font-medium">Reviews</th>
-                  <th className="px-4 py-3 font-medium">AI Requests</th>
-                  <th className="px-4 py-3 font-medium">Messages</th>
-                  <th className="px-4 py-3 font-medium">Reports</th>
-                  <th className="px-4 py-3 font-medium">QR Scans</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((u) => (
-                  <tr key={u.id} className="border-b border-white/5 hover:bg-white/5">
-                    <td className="px-4 py-3 text-white">{formatDate(u.period_start)}</td>
-                    <td className="px-4 py-3 text-zinc-300">{formatDate(u.period_end)}</td>
-                    <td className="px-4 py-3 text-zinc-300">{u.reviews_generated ?? 0}</td>
-                    <td className="px-4 py-3 text-zinc-300">{u.ai_requests ?? 0}</td>
-                    <td className="px-4 py-3 text-zinc-300">{u.messages_sent ?? 0}</td>
-                    <td className="px-4 py-3 text-zinc-300">{u.reports_generated ?? 0}</td>
-                    <td className="px-4 py-3 text-zinc-300">{u.qr_scans ?? 0}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+        <div className="space-y-3">
+          {records.map((r) => (
+            <Card key={r.id} className="p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <BarChart3 className="w-4 h-4 text-blue-400" />
+                <span className="text-sm text-zinc-400">
+                  {formatDate(r.period_start)} — {formatDate(r.period_end)}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                <div>
+                  <p className="text-xs text-zinc-500">Reviews</p>
+                  <p className="text-lg font-bold text-white">{r.reviews_generated ?? 0}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-zinc-500">AI Requests</p>
+                  <p className="text-lg font-bold text-white">{r.ai_requests ?? 0}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-zinc-500">Messages</p>
+                  <p className="text-lg font-bold text-white">{r.messages_sent ?? 0}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-zinc-500">Reports</p>
+                  <p className="text-lg font-bold text-white">{r.reports_generated ?? 0}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-zinc-500">QR Scans</p>
+                  <p className="text-lg font-bold text-white">{r.qr_scans ?? 0}</p>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
       )}
     </div>
   );

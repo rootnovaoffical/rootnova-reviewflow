@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
-import { Workflow, Plus, Trash2, Play, CheckCircle, XCircle } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Plus, Workflow, Play, CheckCircle2, XCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, PageHeader, Card, Badge, Button, Input, TextArea, Select, Modal } from '../components/UI';
 import { useToast } from '../context/ToastContext';
 
-interface WorkflowRow {
+interface WorkflowRecord {
   id: string;
   name: string;
   description: string | null;
@@ -13,51 +13,50 @@ interface WorkflowRow {
   execution_count: number;
   success_count: number;
   failure_count: number;
-  created_at: string;
 }
 
-const TRIGGER_TYPES = ['manual', 'review_submitted', 'review_completed', 'low_rating', 'positive_rating', 'schedule'];
-const WORKFLOW_STATUSES = ['draft', 'active', 'paused', 'archived'];
+type FormState = {
+  name: string;
+  description: string;
+  trigger_type: string;
+};
+
+const EMPTY_FORM: FormState = { name: '', description: '', trigger_type: 'manual' };
 
 export default function WorkflowsModule({ businessId }: { businessId: string }) {
   const { showToast } = useToast();
   const [loading, setLoading] = useState(true);
-  const [workflows, setWorkflows] = useState<WorkflowRow[]>([]);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [deleteId, setDeleteId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-
-  const [form, setForm] = useState({
-    name: '',
-    description: '',
-    trigger_type: 'manual',
-  });
-
-  useEffect(() => {
-    fetchWorkflows();
-  }, [businessId]);
+  const [workflows, setWorkflows] = useState<WorkflowRecord[]>([]);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [form, setForm] = useState<FormState>(EMPTY_FORM);
 
   async function fetchWorkflows() {
     setLoading(true);
     try {
       const { data, error } = await supabase
         .from('workflows')
-        .select('id, name, description, status, trigger_type, execution_count, success_count, failure_count, created_at')
+        .select('id, name, description, status, trigger_type, execution_count, success_count, failure_count')
         .eq('business_id', businessId)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setWorkflows((data as WorkflowRow[]) ?? []);
-    } catch (err: any) {
-      showToast('error', err.message ?? 'Failed to load workflows');
-      setWorkflows([]);
+      setWorkflows((data as WorkflowRecord[]) ?? []);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to load workflows';
+      showToast('error', msg);
     } finally {
       setLoading(false);
     }
   }
 
+  useEffect(() => {
+    void fetchWorkflows();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [businessId]);
+
   function openCreate() {
-    setForm({ name: '', description: '', trigger_type: 'manual' });
+    setForm(EMPTY_FORM);
     setModalOpen(true);
   }
 
@@ -66,6 +65,7 @@ export default function WorkflowsModule({ businessId }: { businessId: string }) 
       showToast('error', 'Name is required');
       return;
     }
+
     setSaving(true);
     try {
       const payload = {
@@ -81,27 +81,19 @@ export default function WorkflowsModule({ businessId }: { businessId: string }) 
       showToast('success', 'Workflow created');
       setModalOpen(false);
       await fetchWorkflows();
-    } catch (err: any) {
-      showToast('error', err.message ?? 'Failed to create workflow');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to create workflow';
+      showToast('error', msg);
     } finally {
       setSaving(false);
     }
   }
 
-  async function handleDelete() {
-    if (!deleteId) return;
-    setSaving(true);
-    try {
-      const { error } = await supabase.from('workflows').delete().eq('id', deleteId);
-      if (error) throw error;
-      showToast('success', 'Workflow deleted');
-      setDeleteId(null);
-      await fetchWorkflows();
-    } catch (err: any) {
-      showToast('error', err.message ?? 'Failed to delete workflow');
-    } finally {
-      setSaving(false);
-    }
+  function statusColor(s: string) {
+    if (s === 'active') return 'green';
+    if (s === 'draft') return 'gray';
+    if (s === 'paused') return 'yellow';
+    return 'gray';
   }
 
   if (loading) return <LoadingSpinner label="Loading workflows..." />;
@@ -110,47 +102,52 @@ export default function WorkflowsModule({ businessId }: { businessId: string }) 
     <div>
       <PageHeader
         title="Workflows"
-        description="Automate multi-step processes"
-        action={<Button onClick={openCreate}><Plus className="w-4 h-4" /> Add Workflow</Button>}
+        description="Automated multi-step processes"
+        action={<Button onClick={openCreate}><Plus className="w-4 h-4" /> New Workflow</Button>}
       />
 
       {workflows.length === 0 ? (
-        <EmptyState icon={Workflow} title="No workflows yet" description="Create workflows to automate multi-step processes for your business." action={<Button onClick={openCreate}><Plus className="w-4 h-4" /> Add Workflow</Button>} />
+        <EmptyState
+          icon={Workflow}
+          title="No workflows yet"
+          description="Create workflows to automate multi-step customer journeys."
+          action={<Button onClick={openCreate}><Plus className="w-4 h-4" /> New Workflow</Button>}
+        />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {workflows.map((w) => (
-            <Card key={w.id} className="p-4">
-              <div className="flex items-start justify-between gap-2 mb-3">
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold text-white truncate">{w.name}</h3>
+          {workflows.map((wf) => (
+            <Card key={wf.id} className="p-4">
+              <div className="flex items-start justify-between mb-2">
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-sm font-semibold text-white truncate">{wf.name}</h3>
                   <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                    <Badge color={w.status === 'active' ? 'green' : w.status === 'draft' ? 'gray' : w.status === 'paused' ? 'yellow' : 'gray'}>{w.status}</Badge>
-                    <Badge color="blue">{w.trigger_type}</Badge>
+                    <Badge color={statusColor(wf.status)}>{wf.status}</Badge>
+                    <Badge color="blue">{wf.trigger_type}</Badge>
                   </div>
                 </div>
-                <Button variant="ghost" size="sm" onClick={() => setDeleteId(w.id)}><Trash2 className="w-3.5 h-3.5 text-red-400" /></Button>
               </div>
-              <p className="text-sm text-zinc-400 line-clamp-2 mb-3 min-h-[2.5rem]">
-                {w.description || <span className="text-zinc-600 italic">No description</span>}
-              </p>
+              {wf.description && <p className="text-xs text-zinc-400 mb-3 line-clamp-2">{wf.description}</p>}
               <div className="grid grid-cols-3 gap-2 pt-3 border-t border-white/10">
                 <div className="text-center">
-                  <div className="flex items-center justify-center gap-1 text-xs text-zinc-500 mb-0.5">
-                    <Play className="w-3 h-3" /> Runs
+                  <div className="flex items-center justify-center gap-1 text-zinc-300">
+                    <Play className="w-3 h-3" />
+                    <span className="text-sm font-semibold">{wf.execution_count}</span>
                   </div>
-                  <p className="text-sm font-semibold text-white">{w.execution_count}</p>
+                  <p className="text-[10px] text-zinc-600 mt-0.5">Executed</p>
                 </div>
                 <div className="text-center">
-                  <div className="flex items-center justify-center gap-1 text-xs text-zinc-500 mb-0.5">
-                    <CheckCircle className="w-3 h-3" /> Success
+                  <div className="flex items-center justify-center gap-1 text-emerald-400">
+                    <CheckCircle2 className="w-3 h-3" />
+                    <span className="text-sm font-semibold">{wf.success_count}</span>
                   </div>
-                  <p className="text-sm font-semibold text-emerald-400">{w.success_count}</p>
+                  <p className="text-[10px] text-zinc-600 mt-0.5">Success</p>
                 </div>
                 <div className="text-center">
-                  <div className="flex items-center justify-center gap-1 text-xs text-zinc-500 mb-0.5">
-                    <XCircle className="w-3 h-3" /> Failed
+                  <div className="flex items-center justify-center gap-1 text-red-400">
+                    <XCircle className="w-3 h-3" />
+                    <span className="text-sm font-semibold">{wf.failure_count}</span>
                   </div>
-                  <p className="text-sm font-semibold text-red-400">{w.failure_count}</p>
+                  <p className="text-[10px] text-zinc-600 mt-0.5">Failed</p>
                 </div>
               </div>
             </Card>
@@ -158,34 +155,31 @@ export default function WorkflowsModule({ businessId }: { businessId: string }) 
         </div>
       )}
 
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Add Workflow">
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="New Workflow">
         <div className="space-y-4">
           <div>
             <label className="block text-xs font-medium text-zinc-400 mb-1.5">Name</label>
-            <Input value={form.name} onChange={(v) => setForm({ ...form, name: v })} placeholder="Post-review follow-up" />
+            <Input value={form.name} onChange={(v) => setForm({ ...form, name: v })} placeholder="e.g. Post-review follow-up" />
           </div>
           <div>
             <label className="block text-xs font-medium text-zinc-400 mb-1.5">Description</label>
-            <TextArea value={form.description} onChange={(v) => setForm({ ...form, description: v })} placeholder="Describe what this workflow does..." rows={3} />
+            <TextArea value={form.description} onChange={(v) => setForm({ ...form, description: v })} placeholder="What does this workflow do?" rows={3} />
           </div>
           <div>
             <label className="block text-xs font-medium text-zinc-400 mb-1.5">Trigger Type</label>
             <Select value={form.trigger_type} onChange={(v) => setForm({ ...form, trigger_type: v })}>
-              {TRIGGER_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+              <option value="manual">Manual</option>
+              <option value="review_submitted">Review Submitted</option>
+              <option value="positive_review">Positive Review</option>
+              <option value="negative_review">Negative Review</option>
+              <option value="customer_signup">Customer Signup</option>
+              <option value="scheduled">Scheduled</option>
             </Select>
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="secondary" onClick={() => setModalOpen(false)}>Cancel</Button>
-            <Button onClick={handleSave} disabled={saving}>{saving ? 'Creating...' : 'Create'}</Button>
+            <Button onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : 'Create'}</Button>
           </div>
-        </div>
-      </Modal>
-
-      <Modal open={!!deleteId} onClose={() => setDeleteId(null)} title="Delete Workflow" maxWidth="max-w-sm">
-        <p className="text-sm text-zinc-300 mb-4">Are you sure you want to delete this workflow? This action cannot be undone.</p>
-        <div className="flex justify-end gap-2">
-          <Button variant="secondary" onClick={() => setDeleteId(null)}>Cancel</Button>
-          <Button variant="danger" onClick={handleDelete} disabled={saving}>{saving ? 'Deleting...' : 'Delete'}</Button>
         </div>
       </Modal>
     </div>

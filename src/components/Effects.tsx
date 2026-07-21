@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef } from "react";
 
 interface ConfettiParticle { x: number; y: number; vx: number; vy: number; life: number; maxLife: number; color: string; size: number; }
 
@@ -19,7 +19,7 @@ export function Confetti({ trigger }: { trigger: boolean }) {
     canvas.height = window.innerHeight;
 
     const colors = ["#6366f1", "#22d3ee", "#4ade80", "#facc15", "#f87171", "#a855f7", "#ec4899"];
-    particlesRef.current = Array.from({ length: 150 }, () => ({
+    particlesRef.current = Array.from({ length: 120 }, () => ({
       x: canvas.width / 2 + (Math.random() - 0.5) * 200,
       y: canvas.height / 2,
       vx: (Math.random() - 0.5) * 14,
@@ -103,40 +103,20 @@ export function AuroraGlow({ color = "#6366f1" }: { color?: string }) {
   );
 }
 
-/**
- * SelectionParticles — floating particle burst when an emoji rating is selected.
- * Renders a fixed-position overlay with CSS-animated particles emanating from center.
- */
 export function SelectionParticles({ trigger, color = "#6366f1" }: { trigger: boolean; color?: string }) {
-  const triggerRef = useRef(trigger);
-  triggerRef.current = trigger;
-
-  const particles = useCallback(() => {
-    return Array.from({ length: 12 }).map((_, i) => {
-      const angle = (i / 12) * Math.PI * 2;
-      const distance = 80 + Math.random() * 60;
-      return {
-        tx: Math.cos(angle) * distance,
-        ty: Math.sin(angle) * distance,
-        delay: Math.random() * 0.1,
-      };
-    });
-  }, []);
-
   if (!trigger) return null;
-
+  const particles = Array.from({ length: 12 }).map((_, i) => {
+    const angle = (i / 12) * Math.PI * 2;
+    const distance = 80 + Math.random() * 60;
+    return { tx: Math.cos(angle) * distance, ty: Math.sin(angle) * distance };
+  });
   return (
     <div className="fixed inset-0 z-[97] pointer-events-none flex items-center justify-center">
-      {particles().map((p, i) => (
+      {particles.map((p, i) => (
         <div
           key={i}
           className="particle-burst"
-          style={{
-            background: color,
-            ["--tx" as string]: `${p.tx}px`,
-            ["--ty" as string]: `${p.ty}px`,
-            animationDelay: `${p.delay}s`,
-          }}
+          style={{ background: color, ["--tx" as string]: `${p.tx}px`, ["--ty" as string]: `${p.ty}px` }}
         />
       ))}
     </div>

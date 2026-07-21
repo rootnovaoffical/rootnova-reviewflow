@@ -243,9 +243,7 @@ export default function DashboardPage() {
         </nav>
         <div className="p-3 border-t border-white/10 space-y-1">
           <button onClick={() => setSettingsMode(true)}
-            className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
-              settingsMode ? 'bg-blue-500/10 text-blue-300' : 'text-zinc-400 hover:text-white hover:bg-white/5'
-            }`}>
+            className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${settingsMode ? 'bg-blue-500/10 text-blue-300' : 'text-zinc-400 hover:text-white hover:bg-white/5'}`}>
             <Settings className="w-4 h-4" /> Settings
           </button>
           <button onClick={signOut}

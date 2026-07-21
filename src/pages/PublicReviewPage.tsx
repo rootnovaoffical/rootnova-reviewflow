@@ -30,7 +30,7 @@ export default function PublicReviewPage() {
   const [questions, setQuestions] = useState<QuestionRow[]>([]);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const [aiReview, setAiReview] = useState<string>('');
+  const [aiReview, setAiReview] = useState('');
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -98,8 +98,7 @@ export default function PublicReviewPage() {
       setAiReview(data.review || data.text || '');
       setStep('result');
     } catch {
-      const fallback = generateFallbackReview(business?.name || '', rating || 0, answers);
-      setAiReview(fallback);
+      setAiReview(generateFallbackReview(business?.name || '', rating || 0, answers));
       setStep('result');
     }
   }, [sessionId, rating, answers, business]);
@@ -184,9 +183,7 @@ export default function PublicReviewPage() {
                       <div className="flex flex-wrap gap-2">
                         {q.options.map((opt) => (
                           <button key={opt} onClick={() => setAnswers({ ...answers, [q.id]: opt })}
-                            className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
-                              answers[q.id] === opt ? 'bg-blue-500/20 border-blue-400/30 text-blue-200' : 'bg-white/5 border-white/10 text-zinc-400 hover:bg-white/10'
-                            }`}>{opt}</button>
+                            className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${answers[q.id] === opt ? 'bg-blue-500/20 border-blue-400/30 text-blue-200' : 'bg-white/5 border-white/10 text-zinc-400 hover:bg-white/10'}`}>{opt}</button>
                         ))}
                       </div>
                     ) : (

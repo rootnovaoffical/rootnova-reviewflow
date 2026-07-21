@@ -1,16 +1,21 @@
 import DataManager from '../components/DataManager';
+import type { ColumnDef } from '../components/DataManager';
 
-const columns = [
-  { key: 'name', label: 'Campaign Name', type: 'text' as const, required: true, showInTable: true },
-  { key: 'campaign_type', label: 'Type', type: 'select' as const, options: ['email', 'sms', 'social', 'web', 'print'], showInTable: true },
-  { key: 'status', label: 'Status', type: 'select' as const, options: ['draft', 'active', 'paused', 'completed'], showInTable: true },
-  { key: 'audience_segment', label: 'Audience', type: 'text' as const, showInTable: true },
-  { key: 'schedule_start', label: 'Start Date', type: 'date' as const, showInTable: true },
-  { key: 'schedule_end', label: 'End Date', type: 'date' as const, showInTable: true },
-  { key: 'reach_count', label: 'Reach', type: 'number' as const, showInTable: true },
-  { key: 'response_count', label: 'Responses', type: 'number' as const, showInTable: true },
+const columns: ColumnDef[] = [
+  { key: 'name', label: 'Campaign Name', type: 'text', required: true, showInTable: true },
+  { key: 'campaign_type', label: 'Type', type: 'select', options: ['review_request', 'loyalty', 'winback', 'promotion', 'announcement'], required: true, showInTable: true },
+  { key: 'status', label: 'Status', type: 'select', options: ['draft', 'active', 'paused', 'completed'], required: true, showInTable: true },
+  { key: 'audience_segment', label: 'Audience', type: 'select', options: ['all', 'new', 'regular', 'vip', 'at_risk'], showInTable: true },
+  { key: 'reach_count', label: 'Reach', type: 'number', showInTable: true, editable: false },
+  { key: 'response_count', label: 'Responses', type: 'number', showInTable: true, editable: false },
+  { key: 'conversion_count', label: 'Conversions', type: 'number', showInTable: true, editable: false },
+  { key: 'description', label: 'Description', type: 'textarea', showInTable: false },
+  { key: 'schedule_start', label: 'Start Date', type: 'date', showInTable: false },
+  { key: 'schedule_end', label: 'End Date', type: 'date', showInTable: false },
 ];
 
-export default function CampaignsModule({ businessId }: { businessId: string }) {
-  return <DataManager table="campaigns" businessId={businessId} columns={columns} defaultValues={{ status: 'draft', campaign_type: 'email', reach_count: 0, response_count: 0 }} />;
+interface Props { businessId: string; }
+
+export default function CampaignsModule({ businessId }: Props) {
+  return <DataManager table="campaigns" businessId={businessId} columns={columns} defaultValues={{ campaign_type: 'review_request', status: 'draft', reach_count: 0, response_count: 0, conversion_count: 0, metadata: {} }} />;
 }

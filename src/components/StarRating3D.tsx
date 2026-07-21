@@ -31,16 +31,10 @@ export default function StarRating3D({ value, onChange }: Props) {
               isSelected ? 'scale-110' : 'scale-100 opacity-60 hover:opacity-100'
             }`}
           >
-            <div
-              className={`w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-br ${opt.color} flex items-center justify-center text-3xl sm:text-4xl shadow-lg transition-transform duration-300 ${
-                isSelected ? 'rotate-6 -translate-y-2' : 'group-hover:rotate-3 group-hover:-translate-y-1'
-              }`}
-            >
+            <div className={`w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-br ${opt.color} flex items-center justify-center text-3xl sm:text-4xl shadow-lg transition-transform duration-300 ${isSelected ? 'rotate-6 -translate-y-2' : 'group-hover:rotate-3 group-hover:-translate-y-1'}`}>
               {opt.emoji}
             </div>
-            <span className={`text-xs sm:text-sm font-medium ${isSelected ? 'text-white' : 'text-zinc-400'}`}>
-              {opt.label}
-            </span>
+            <span className={`text-xs sm:text-sm font-medium ${isSelected ? 'text-white' : 'text-zinc-400'}`}>{opt.label}</span>
           </button>
         );
       })}

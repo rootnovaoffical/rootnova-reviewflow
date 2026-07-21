@@ -1,14 +1,16 @@
 import DataManager from '../components/DataManager';
+import type { ColumnDef } from '../components/DataManager';
 
-const columns = [
-  { key: 'name', label: 'Name', type: 'text' as const, required: true, showInTable: true },
-  { key: 'description', label: 'Description', type: 'textarea' as const, showInTable: true },
-  { key: 'status', label: 'Status', type: 'select' as const, options: ['active', 'paused', 'draft', 'archived'], showInTable: true },
-  { key: 'trigger_type', label: 'Trigger', type: 'text' as const, showInTable: true },
-  { key: 'canvas_data', label: 'Canvas Data', type: 'json' as const, showInTable: false },
-  { key: 'trigger_config', label: 'Trigger Config', type: 'json' as const, showInTable: false },
+const columns: ColumnDef[] = [
+  { key: 'name', label: 'Name', type: 'text', required: true, showInTable: true },
+  { key: 'description', label: 'Description', type: 'textarea', showInTable: true },
+  { key: 'status', label: 'Status', type: 'select', options: ['active', 'paused', 'draft', 'archived'], required: true, showInTable: true },
+  { key: 'trigger_type', label: 'Trigger', type: 'select', options: ['manual', 'event', 'schedule', 'webhook'], required: true, showInTable: true },
+  { key: 'created_at', label: 'Created', type: 'date', showInTable: true, editable: false },
 ];
 
-export default function WorkflowsModule({ businessId }: { businessId: string }) {
-  return <DataManager table="workflows" businessId={businessId} columns={columns} defaultValues={{ status: 'draft' }} />;
+interface Props { businessId: string; }
+
+export default function WorkflowsModule({ businessId }: Props) {
+  return <DataManager table="workflows" businessId={businessId} columns={columns} defaultValues={{ status: 'draft', trigger_type: 'manual' }} />;
 }

@@ -160,7 +160,7 @@ export default function DataManager({
       case 'number':
         return <input type="number" value={val as number | string} onChange={(e) => setFormData({ ...formData, [col.key]: e.target.value })} className={baseClass} placeholder={col.label} />;
       case 'date':
-        return <input type="date" value={val as string ?? ''} onChange={(e) => setFormData({ ...formData, [col.key]: e.target.value })} className={baseClass} />;
+        return <input type="date" value={(val as string) ?? ''} onChange={(e) => setFormData({ ...formData, [col.key]: e.target.value })} className={baseClass} />;
       case 'json':
         return <textarea value={typeof val === 'string' ? val : JSON.stringify(val, null, 2)} onChange={(e) => setFormData({ ...formData, [col.key]: e.target.value })} className={baseClass} rows={4} placeholder='{}' />;
       case 'array':
@@ -188,18 +188,10 @@ export default function DataManager({
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="relative flex-1 max-w-xs">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(0); }}
-            placeholder="Search…"
-            className="w-full pl-9 pr-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder-zinc-500 text-sm focus:outline-none focus:border-blue-400/50"
-          />
+          <input type="text" value={search} onChange={(e) => { setSearch(e.target.value); setPage(0); }} placeholder="Search…"
+            className="w-full pl-9 pr-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder-zinc-500 text-sm focus:outline-none focus:border-blue-400/50" />
         </div>
-        <button
-          onClick={openCreate}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-500/20 border border-blue-400/30 text-blue-200 hover:bg-blue-500/30 transition-colors text-sm font-medium"
-        >
+        <button onClick={openCreate} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-500/20 border border-blue-400/30 text-blue-200 hover:bg-blue-500/30 transition-colors text-sm font-medium">
           <Plus className="w-4 h-4" /> Add New
         </button>
       </div>
@@ -222,7 +214,7 @@ export default function DataManager({
               </thead>
               <tbody>
                 {pageRows.map((row, i) => (
-                  <tr key={row.id as string ?? i} className="border-b border-white/5 hover:bg-white/[0.03] transition-colors">
+                  <tr key={(row.id as string) ?? i} className="border-b border-white/5 hover:bg-white/[0.03] transition-colors">
                     {tableColumns.map((col) => (
                       <td key={col.key} className="px-4 py-3">{renderCell(row, col)}</td>
                     ))}
@@ -241,7 +233,6 @@ export default function DataManager({
               </tbody>
             </table>
           </div>
-
           {totalPages > 1 && (
             <div className="flex items-center justify-between">
               <span className="text-xs text-zinc-500">Page {page + 1} of {totalPages}</span>
@@ -270,9 +261,7 @@ export default function DataManager({
             <div className="space-y-4">
               {editableColumns.map((col) => (
                 <div key={col.key}>
-                  <label className="block text-xs font-medium text-zinc-400 mb-1.5">
-                    {col.label}{col.required && <span className="text-red-400"> *</span>}
-                  </label>
+                  <label className="block text-xs font-medium text-zinc-400 mb-1.5">{col.label}{col.required && <span className="text-red-400"> *</span>}</label>
                   {renderInput(col)}
                 </div>
               ))}

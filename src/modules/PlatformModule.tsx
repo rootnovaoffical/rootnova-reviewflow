@@ -1,38 +1,39 @@
 import DataManager from '../components/DataManager';
+import type { ColumnDef } from '../components/DataManager';
 
-const flagColumns = [
-  { key: 'key', label: 'Key', type: 'text' as const, required: true, showInTable: true },
-  { key: 'label', label: 'Label', type: 'text' as const, required: true, showInTable: true },
-  { key: 'description', label: 'Description', type: 'textarea' as const, showInTable: true },
-  { key: 'is_enabled', label: 'Enabled', type: 'boolean' as const, showInTable: true },
-  { key: 'category', label: 'Category', type: 'text' as const, showInTable: true },
+const flagColumns: ColumnDef[] = [
+  { key: 'flag_key', label: 'Flag Key', type: 'text', required: true, showInTable: true },
+  { key: 'name', label: 'Name', type: 'text', required: true, showInTable: true },
+  { key: 'description', label: 'Description', type: 'textarea', showInTable: true },
+  { key: 'is_enabled', label: 'Enabled', type: 'boolean', showInTable: true },
+  { key: 'rollout_percentage', label: 'Rollout %', type: 'number', showInTable: true },
 ];
 
-const auditColumns = [
-  { key: 'actor_email', label: 'Actor', type: 'text' as const, showInTable: true },
-  { key: 'action', label: 'Action', type: 'text' as const, required: true, showInTable: true },
-  { key: 'target_type', label: 'Target Type', type: 'text' as const, showInTable: true },
-  { key: 'target_id', label: 'Target ID', type: 'text' as const, showInTable: true },
-  { key: 'metadata', label: 'Metadata', type: 'json' as const, showInTable: false },
+const auditColumns: ColumnDef[] = [
+  { key: 'actor_email', label: 'Actor', type: 'text', showInTable: true, editable: false },
+  { key: 'action', label: 'Action', type: 'text', showInTable: true, editable: false },
+  { key: 'target_type', label: 'Target Type', type: 'text', showInTable: true, editable: false },
+  { key: 'metadata', label: 'Metadata', type: 'json', showInTable: false, editable: false },
+  { key: 'created_at', label: 'Timestamp', type: 'date', showInTable: true, editable: false },
 ];
 
-const usageColumns = [
-  { key: 'period_start', label: 'Period Start', type: 'date' as const, showInTable: true },
-  { key: 'period_end', label: 'Period End', type: 'date' as const, showInTable: true },
-  { key: 'reviews_generated', label: 'Reviews', type: 'number' as const, showInTable: true },
-  { key: 'ai_requests', label: 'AI Requests', type: 'number' as const, showInTable: true },
-  { key: 'messages_sent', label: 'Messages Sent', type: 'number' as const, showInTable: true },
-  { key: 'qr_scans', label: 'QR Scans', type: 'number' as const, showInTable: true },
+const usageColumns: ColumnDef[] = [
+  { key: 'metric', label: 'Metric', type: 'text', required: true, showInTable: true },
+  { key: 'value', label: 'Value', type: 'number', required: true, showInTable: true },
+  { key: 'period', label: 'Period', type: 'text', required: true, showInTable: true },
+  { key: 'recorded_at', label: 'Recorded At', type: 'date', showInTable: true, editable: false },
 ];
 
-export function FeatureFlagsModule({ businessId }: { businessId: string }) {
-  return <DataManager table="feature_flags" businessId={businessId} columns={flagColumns} defaultValues={{ is_enabled: false }} />;
+interface Props { businessId: string; }
+
+export function FeatureFlagsModule({ businessId }: Props) {
+  return <DataManager table="feature_flags" businessId={businessId} columns={flagColumns} defaultValues={{ is_enabled: false, rollout_percentage: 0 }} />;
 }
 
-export function AuditLogsModule({ businessId }: { businessId: string }) {
-  return <DataManager table="audit_logs" businessId={businessId} columns={auditColumns} />;
+export function AuditLogsModule({ businessId }: Props) {
+  return <DataManager table="audit_logs" businessId={businessId} columns={auditColumns} pageSize={50} />;
 }
 
-export function UsageRecordsModule({ businessId }: { businessId: string }) {
-  return <DataManager table="usage_records" businessId={businessId} columns={usageColumns} defaultValues={{ reviews_generated: 0, ai_requests: 0, messages_sent: 0, qr_scans: 0 }} />;
+export function UsageRecordsModule({ businessId }: Props) {
+  return <DataManager table="usage_records" businessId={businessId} columns={usageColumns} defaultValues={{ period: 'daily' }} />;
 }

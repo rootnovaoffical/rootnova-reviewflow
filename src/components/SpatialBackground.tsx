@@ -77,9 +77,7 @@ export default function SpatialBackground() {
     resize();
     draw();
 
-    function handleMouse(e: MouseEvent) {
-      mouse = { x: e.clientX, y: e.clientY };
-    }
+    function handleMouse(e: MouseEvent) { mouse = { x: e.clientX, y: e.clientY }; }
 
     window.addEventListener('resize', resize);
     window.addEventListener('mousemove', handleMouse);

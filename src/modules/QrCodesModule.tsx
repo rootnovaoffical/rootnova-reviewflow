@@ -1,13 +1,17 @@
 import DataManager from '../components/DataManager';
+import type { ColumnDef } from '../components/DataManager';
 
-const columns = [
-  { key: 'name', label: 'Name', type: 'text' as const, required: true, showInTable: true },
-  { key: 'qr_type', label: 'Type', type: 'select' as const, options: ['review', 'landing', 'custom'], showInTable: true },
-  { key: 'destination_url', label: 'URL', type: 'text' as const, required: true, showInTable: true },
-  { key: 'status', label: 'Status', type: 'select' as const, options: ['active', 'paused', 'expired'], showInTable: true },
-  { key: 'scan_count', label: 'Scans', type: 'number' as const, showInTable: true },
+const columns: ColumnDef[] = [
+  { key: 'name', label: 'Name', type: 'text', required: true, showInTable: true },
+  { key: 'qr_type', label: 'Type', type: 'select', options: ['review', 'menu', 'wifi', 'custom'], required: true, showInTable: true },
+  { key: 'target_url', label: 'Target URL', type: 'text', showInTable: true },
+  { key: 'scan_count', label: 'Scans', type: 'number', showInTable: true, editable: false },
+  { key: 'is_active', label: 'Active', type: 'boolean', showInTable: true },
+  { key: 'created_at', label: 'Created', type: 'date', showInTable: true, editable: false },
 ];
 
-export default function QrCodesModule({ businessId }: { businessId: string }) {
-  return <DataManager table="qr_codes" businessId={businessId} columns={columns} defaultValues={{ scan_count: 0, status: 'active', qr_type: 'review' }} />;
+interface Props { businessId: string; }
+
+export default function QrCodesModule({ businessId }: Props) {
+  return <DataManager table="qr_codes" businessId={businessId} columns={columns} defaultValues={{ is_active: true, qr_type: 'review', scan_count: 0 }} />;
 }

@@ -1,50 +1,56 @@
 import DataManager from '../components/DataManager';
+import type { ColumnDef } from '../components/DataManager';
 
-const planColumns = [
-  { key: 'name', label: 'Plan Name', type: 'text' as const, required: true, showInTable: true },
-  { key: 'slug', label: 'Slug', type: 'text' as const, showInTable: true },
-  { key: 'monthly_price', label: 'Monthly', type: 'number' as const, required: true, showInTable: true },
-  { key: 'annual_price', label: 'Annual', type: 'number' as const, showInTable: true },
-  { key: 'max_businesses', label: 'Max Businesses', type: 'number' as const, showInTable: true },
-  { key: 'max_review_sessions', label: 'Max Reviews', type: 'number' as const, showInTable: true },
-  { key: 'is_active', label: 'Active', type: 'boolean' as const, showInTable: true },
+const planColumns: ColumnDef[] = [
+  { key: 'name', label: 'Plan Name', type: 'text', required: true, showInTable: true },
+  { key: 'slug', label: 'Slug', type: 'text', required: true, showInTable: true },
+  { key: 'tier', label: 'Tier', type: 'select', options: ['free', 'starter', 'pro', 'business', 'enterprise'], required: true, showInTable: true },
+  { key: 'monthly_price', label: 'Monthly Price', type: 'number', required: true, showInTable: true },
+  { key: 'annual_price', label: 'Annual Price', type: 'number', required: true, showInTable: true },
+  { key: 'features', label: 'Features (one per line)', type: 'array', showInTable: false },
+  { key: 'limits', label: 'Limits (JSON)', type: 'json', showInTable: false },
+  { key: 'is_active', label: 'Active', type: 'boolean', showInTable: true },
 ];
 
-const subColumns = [
-  { key: 'plan_id', label: 'Plan ID', type: 'text' as const, showInTable: true },
-  { key: 'status', label: 'Status', type: 'select' as const, options: ['active', 'trialing', 'past_due', 'cancelled', 'expired'], showInTable: true },
-  { key: 'billing_cycle', label: 'Billing Cycle', type: 'select' as const, options: ['monthly', 'annual'], showInTable: true },
-  { key: 'current_period_end', label: 'Period End', type: 'date' as const, showInTable: true },
+const subColumns: ColumnDef[] = [
+  { key: 'status', label: 'Status', type: 'select', options: ['active', 'trialing', 'past_due', 'canceled', 'unpaid'], required: true, showInTable: true },
+  { key: 'billing_cycle', label: 'Billing Cycle', type: 'select', options: ['monthly', 'annual'], required: true, showInTable: true },
+  { key: 'current_period_start', label: 'Period Start', type: 'date', showInTable: true, editable: false },
+  { key: 'current_period_end', label: 'Period End', type: 'date', showInTable: true, editable: false },
+  { key: 'created_at', label: 'Created', type: 'date', showInTable: true, editable: false },
 ];
 
-const paymentColumns = [
-  { key: 'amount', label: 'Amount', type: 'number' as const, required: true, showInTable: true },
-  { key: 'payment_method', label: 'Method', type: 'text' as const, showInTable: true },
-  { key: 'status', label: 'Status', type: 'select' as const, options: ['pending', 'completed', 'failed', 'refunded'], showInTable: true },
-  { key: 'utr_reference', label: 'UTR Reference', type: 'text' as const, showInTable: true },
-  { key: 'payment_date', label: 'Payment Date', type: 'date' as const, showInTable: true },
+const paymentColumns: ColumnDef[] = [
+  { key: 'amount', label: 'Amount', type: 'number', required: true, showInTable: true },
+  { key: 'currency', label: 'Currency', type: 'text', required: true, showInTable: true },
+  { key: 'status', label: 'Status', type: 'select', options: ['pending', 'succeeded', 'failed', 'refunded'], required: true, showInTable: true },
+  { key: 'payment_method', label: 'Method', type: 'text', showInTable: true },
+  { key: 'created_at', label: 'Date', type: 'date', showInTable: true, editable: false },
 ];
 
-const invoiceColumns = [
-  { key: 'invoice_number', label: 'Invoice #', type: 'text' as const, showInTable: true },
-  { key: 'total_amount', label: 'Amount', type: 'number' as const, required: true, showInTable: true },
-  { key: 'status', label: 'Status', type: 'select' as const, options: ['draft', 'sent', 'paid', 'overdue', 'void'], showInTable: true },
-  { key: 'due_date', label: 'Due Date', type: 'date' as const, showInTable: true },
-  { key: 'billing_cycle', label: 'Billing Cycle', type: 'text' as const, showInTable: true },
+const invoiceColumns: ColumnDef[] = [
+  { key: 'invoice_number', label: 'Invoice #', type: 'text', required: true, showInTable: true },
+  { key: 'amount', label: 'Amount', type: 'number', required: true, showInTable: true },
+  { key: 'currency', label: 'Currency', type: 'text', required: true, showInTable: true },
+  { key: 'status', label: 'Status', type: 'select', options: ['draft', 'open', 'paid', 'void', 'uncollectible'], required: true, showInTable: true },
+  { key: 'due_date', label: 'Due Date', type: 'date', showInTable: true },
+  { key: 'paid_at', label: 'Paid At', type: 'date', showInTable: true, editable: false },
 ];
 
-export function PlansModule({ businessId }: { businessId: string }) {
-  return <DataManager table="plans" businessId={businessId} columns={planColumns} defaultValues={{ is_active: true, monthly_price: 0, annual_price: 0, max_businesses: 1, max_review_sessions: 100 }} />;
+interface Props { businessId: string; }
+
+export function PlansModule({ businessId }: Props) {
+  return <DataManager table="plans" businessId={businessId} columns={planColumns} defaultValues={{ is_active: true, tier: 'free', monthly_price: 0, annual_price: 0, features: [], limits: {} }} />;
 }
 
-export function SubscriptionsModule({ businessId }: { businessId: string }) {
+export function SubscriptionsModule({ businessId }: Props) {
   return <DataManager table="subscriptions" businessId={businessId} columns={subColumns} defaultValues={{ status: 'active', billing_cycle: 'monthly' }} />;
 }
 
-export function PaymentsModule({ businessId }: { businessId: string }) {
-  return <DataManager table="payments" businessId={businessId} columns={paymentColumns} defaultValues={{ amount: 0, status: 'pending' }} />;
+export function PaymentsModule({ businessId }: Props) {
+  return <DataManager table="payments" businessId={businessId} columns={paymentColumns} defaultValues={{ currency: 'USD', status: 'pending' }} />;
 }
 
-export function InvoicesModule({ businessId }: { businessId: string }) {
-  return <DataManager table="invoices" businessId={businessId} columns={invoiceColumns} defaultValues={{ total_amount: 0, status: 'draft' }} />;
+export function InvoicesModule({ businessId }: Props) {
+  return <DataManager table="invoices" businessId={businessId} columns={invoiceColumns} defaultValues={{ currency: 'USD', status: 'draft' }} />;
 }

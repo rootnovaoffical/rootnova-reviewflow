@@ -27,10 +27,12 @@ Deno.serve(async (req: Request) => {
       return await handleFollowUpWriter(body, apiKey);
     } else if (task === "customer_insights") {
       return await handleCustomerInsights(body, apiKey);
+    } else if (task === "customer_360") {
+      return await handleCustomer360(body, apiKey);
     }
 
     return new Response(
-      JSON.stringify({ error: "Unknown task. Use 'write_followup' or 'customer_insights'." }),
+      JSON.stringify({ error: "Unknown task. Use 'write_followup', 'customer_insights', or 'customer_360'." }),
       { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error) {
@@ -182,6 +184,103 @@ ${JSON.stringify(customerSummary, null, 2)}
 
 REVIEWS WITH CONTENT (${reviewSummary.length}):
 ${JSON.stringify(reviewSummary, null, 2)}
+
+Base your analysis ONLY on the data above. Return the JSON object as specified.`;
+
+  return await callGroq(apiKey, systemPrompt, userPrompt, 1500, 0.4);
+}
+
+// =========================================================
+// CUSTOMER 360 AI INSIGHTS
+// =========================================================
+
+async function handleCustomer360(body: any, apiKey: string): Promise<Response> {
+  const { customer, reviews, messages, healthScore, relationshipScore } = body;
+
+  if (!customer) {
+    return new Response(
+      JSON.stringify({ error: "customer object is required" }),
+      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  }
+
+  const dataPoints = (reviews?.length ?? 0) + (messages?.length ?? 0);
+  if (dataPoints === 0) {
+    return new Response(
+      JSON.stringify({
+        insights: [],
+        message: "Not enough interaction data for AI-generated insights. Client-side insights are available.",
+      }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 },
+    );
+  }
+
+  const customerProfile = {
+    name: customer.display_name || "Anonymous",
+    segment: customer.segment,
+    visits: customer.total_visits,
+    reviews: customer.total_reviews,
+    avg_rating: customer.avg_rating,
+    last_visit: customer.last_visit_at?.slice(0, 10) ?? "never",
+    first_seen: customer.first_seen_at?.slice(0, 10) ?? "unknown",
+  };
+
+  const reviewSummaries = (reviews ?? [])
+    .filter((r: any) => r.ai_generated_review && r.ai_generated_review.trim().length > 0)
+    .slice(0, 10)
+    .map((r: any, i: number) => ({
+      id: i + 1,
+      rating: r.rating,
+      review: r.ai_generated_review?.slice(0, 200),
+      date: r.created_at?.slice(0, 10),
+      responded: !!r.business_response,
+    }));
+
+  const messageSummaries = (messages ?? []).slice(0, 20).map((m: any, i: number) => ({
+    id: i + 1,
+    channel: m.channel,
+    status: m.status,
+    subject: m.subject ?? "",
+    date: m.created_at?.slice(0, 10),
+  }));
+
+  const systemPrompt = `You are a customer intelligence analyst for a business platform. You analyze REAL customer interaction data and produce structured, actionable insights for a Customer 360 dashboard.
+
+You NEVER fabricate data. You only identify patterns clearly present in the provided data. If data is insufficient for a specific insight, do not include it.
+
+Return a JSON object with this exact structure:
+{
+  "insights": [
+    {
+      "title": "Short title (5-10 words)",
+      "insight": "1-2 sentence description grounded in the data",
+      "recommendation": "1 concrete action the business should take",
+      "confidence": "high" | "medium" | "low",
+      "category": "churn_risk" | "upsell" | "reward" | "review_potential" | "recovery" | "communication" | "general"
+    }
+  ]
+}
+
+Rules:
+- Generate 1-5 insights maximum — only include insights you are confident about.
+- Base every insight on specific data points provided.
+- Be specific and practical, not generic.
+- If there are no clear insights, return an empty array.
+- Do not include any text outside the JSON object.`;
+
+  const userPrompt = `Analyze this customer for a Customer 360 intelligence view:
+
+CUSTOMER PROFILE:
+${JSON.stringify(customerProfile, null, 2)}
+
+HEALTH SCORE: ${healthScore?.score ?? "N/A"}/100 (${healthScore?.band ?? "unknown"})
+RELATIONSHIP SCORE: ${relationshipScore?.score ?? "N/A"}/100 (${relationshipScore?.band ?? "unknown"})
+
+REVIEWS (${reviewSummaries.length}):
+${JSON.stringify(reviewSummaries, null, 2)}
+
+MESSAGES (${messageSummaries.length}):
+${JSON.stringify(messageSummaries, null, 2)}
 
 Base your analysis ONLY on the data above. Return the JSON object as specified.`;
 

@@ -44,6 +44,7 @@ import BusinessQRCodes from "./pages/business/QRCodes";
 import BusinessActions from "./pages/business/Actions";
 import BusinessEngagement from "./pages/business/Engagement";
 import BusinessCustomers from "./pages/business/Customers";
+import BusinessCustomer360 from "./pages/business/Customer360";
 import BusinessAutomations from "./pages/business/Automations";
 import BusinessCampaigns from "./pages/business/Campaigns";
 import BusinessLoyalty from "./pages/business/Loyalty";
@@ -121,6 +122,7 @@ export default function App() {
                 <Route path="/business/actions" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><BusinessActions /></ProtectedRoute>} />
                 <Route path="/business/engagement" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><BusinessEngagement /></ProtectedRoute>} />
                 <Route path="/business/engagement/customers" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><BusinessCustomers /></ProtectedRoute>} />
+                <Route path="/business/customer-360" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><BusinessCustomer360 /></ProtectedRoute>} />
                 <Route path="/business/engagement/automations" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><BusinessAutomations /></ProtectedRoute>} />
                 <Route path="/business/engagement/campaigns" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><BusinessCampaigns /></ProtectedRoute>} />
                 <Route path="/business/engagement/loyalty" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><BusinessLoyalty /></ProtectedRoute>} />

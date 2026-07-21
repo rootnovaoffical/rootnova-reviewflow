@@ -7,6 +7,7 @@ const businessNav: NavItem[] = [
   { label: "Reviews", to: "/business/reviews", icon: "⭐" },
   { label: "Actions", to: "/business/actions", icon: "🎯" },
   { label: "Engagement", to: "/business/engagement", icon: "💬" },
+  { label: "Customer 360", to: "/business/customer-360", icon: "🎯" },
   { label: "Communication", to: "/business/communication", icon: "📨" },
   { label: "Workflows", to: "/business/workflows", icon: "⚡" },
   { label: "AI Command", to: "/business/ai-command", icon: "🤖" },

@@ -60,7 +60,6 @@ export default function DashboardPage() {
           <div className="md:hidden flex gap-1 mb-6 glass rounded-xl p-1 overflow-x-auto">
             {navItems.map((item) => <button key={item.key} onClick={() => setTab(item.key)} className={`flex-1 min-w-fit py-2 px-3 rounded-lg text-xs font-medium flex items-center gap-1.5 ${tab === item.key ? "bg-primary-600 text-white" : "text-slate-400"}`}>{item.icon} {item.label}</button>)}
           </div>
-
           {tab === "overview" && <OverviewTab businessId={business.id} businessName={business.name} />}
           {tab === "reviews" && <ReviewsTab businessId={business.id} />}
           {tab === "questions" && <QuestionsTab businessId={business.id} />}
@@ -73,10 +72,8 @@ export default function DashboardPage() {
   );
 }
 
-// === OVERVIEW ===
 function OverviewTab({ businessId, businessName }: { businessId: string; businessName: string }) {
   const [stats, setStats] = useState({ totalReviews: 0, avgRating: 0, totalViews: 0, totalCompletions: 0, ratingDist: [0,0,0,0,0], recentReviews: [] as ReviewSession[] });
-
   useEffect(() => {
     const load = async () => {
       try {
@@ -90,9 +87,7 @@ function OverviewTab({ businessId, businessName }: { businessId: string; busines
     };
     load();
   }, [businessId]);
-
   const maxDist = Math.max(...stats.ratingDist, 1);
-
   return (
     <div className="space-y-6 screen-enter">
       <div><h1 className="text-2xl font-bold text-white mb-1">Dashboard Overview</h1><p className="text-slate-400 text-sm">Real-time analytics for {businessName}</p></div>
@@ -122,21 +117,11 @@ function OverviewTab({ businessId, businessName }: { businessId: string; busines
   );
 }
 
-// === REVIEWS ===
 function ReviewsTab({ businessId }: { businessId: string }) {
   const [reviews, setReviews] = useState<ReviewSession[]>([]);
   const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const load = async () => {
-      try { const { data } = await supabase.from("review_sessions").select("*").eq("business_id", businessId).order("created_at", { ascending: false }); setReviews((data || []) as ReviewSession[]); } catch {}
-      setLoading(false);
-    };
-    load();
-  }, [businessId]);
-
+  useEffect(() => { const load = async () => { try { const { data } = await supabase.from("review_sessions").select("*").eq("business_id", businessId).order("created_at", { ascending: false }); setReviews((data || []) as ReviewSession[]); } catch {} setLoading(false); }; load(); }, [businessId]);
   if (loading) return <div className="flex justify-center py-20"><div className="w-8 h-8 border-4 border-primary-500/30 border-t-primary-500 rounded-full animate-spin" /></div>;
-
   return (
     <div className="space-y-6 screen-enter">
       <div><h1 className="text-2xl font-bold text-white mb-1">All Reviews</h1><p className="text-slate-400 text-sm">{reviews.length} total reviews</p></div>
@@ -145,7 +130,6 @@ function ReviewsTab({ businessId }: { businessId: string }) {
   );
 }
 
-// === QUESTIONS ===
 function QuestionsTab({ businessId }: { businessId: string }) {
   const { showToast } = useToast();
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -153,59 +137,37 @@ function QuestionsTab({ businessId }: { businessId: string }) {
   const [editing, setEditing] = useState<Question | null>(null);
   const [showNew, setShowNew] = useState(false);
   const [form, setForm] = useState({ question_text: "", flow_type: "ALWAYS", optionsText: "", sort_order: 0 });
-
-  const load = useCallback(async () => {
-    try { const { data } = await supabase.from("questions").select("*").eq("business_id", businessId).order("sort_order"); setQuestions((data || []) as Question[]); } catch {}
-    setLoading(false);
-  }, [businessId]);
-
+  const load = useCallback(async () => { try { const { data } = await supabase.from("questions").select("*").eq("business_id", businessId).order("sort_order"); setQuestions((data || []) as Question[]); } catch {} setLoading(false); }, [businessId]);
   useEffect(() => { load(); }, [load]);
-
   const handleSave = async () => {
     const options = form.optionsText.split("\n").map((s) => s.trim()).filter(Boolean);
     if (!form.question_text || options.length === 0) { showToast("Question text and options are required", "error"); return; }
     try {
-      if (editing) {
-        const { error } = await supabase.from("questions").update({ question_text: form.question_text, flow_type: form.flow_type, options, sort_order: form.sort_order }).eq("id", editing.id);
-        if (error) throw error;
-        showToast("Question updated!", "success");
-      } else {
-        const { error } = await supabase.from("questions").insert({ business_id: businessId, question_text: form.question_text, question_type: "multiple_choice", flow_type: form.flow_type, options, is_required: true, is_active: true, sort_order: form.sort_order });
-        if (error) throw error;
-        showToast("Question created!", "success");
-      }
+      if (editing) { const { error } = await supabase.from("questions").update({ question_text: form.question_text, flow_type: form.flow_type, options, sort_order: form.sort_order }).eq("id", editing.id); if (error) throw error; showToast("Question updated!", "success"); }
+      else { const { error } = await supabase.from("questions").insert({ business_id: businessId, question_text: form.question_text, question_type: "multiple_choice", flow_type: form.flow_type, options, is_required: true, is_active: true, sort_order: form.sort_order }); if (error) throw error; showToast("Question created!", "success"); }
       setEditing(null); setShowNew(false); setForm({ question_text: "", flow_type: "ALWAYS", optionsText: "", sort_order: 0 }); load();
     } catch { showToast("Failed to save question", "error"); }
   };
-
-  const handleDelete = async (id: string) => {
-    try { await supabase.from("questions").delete().eq("id", id); showToast("Question deleted", "success"); load(); } catch { showToast("Failed to delete", "error"); }
-  };
-
+  const handleDelete = async (id: string) => { try { await supabase.from("questions").delete().eq("id", id); showToast("Question deleted", "success"); load(); } catch { showToast("Failed to delete", "error"); } };
   const handleToggleActive = async (q: Question) => { try { await supabase.from("questions").update({ is_active: !q.is_active }).eq("id", q.id); load(); } catch {} };
-
   const startEdit = (q: Question) => { setEditing(q); setForm({ question_text: q.question_text, flow_type: q.flow_type, optionsText: q.options.join("\n"), sort_order: q.sort_order }); setShowNew(true); };
-
   if (loading) return <div className="flex justify-center py-20"><div className="w-8 h-8 border-4 border-primary-500/30 border-t-primary-500 rounded-full animate-spin" /></div>;
-
   return (
     <div className="space-y-6 screen-enter">
       <div className="flex items-center justify-between">
         <div><h1 className="text-2xl font-bold text-white mb-1">Review Questions</h1><p className="text-slate-400 text-sm">{questions.length} questions configured</p></div>
         <button onClick={() => { setShowNew(true); setEditing(null); setForm({ question_text: "", flow_type: "ALWAYS", optionsText: "", sort_order: questions.length }); }} className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-primary-600 to-primary-500 text-white text-sm font-medium hover:-translate-y-0.5 transition-all"><Plus className="w-4 h-4" /> Add Question</button>
       </div>
-
       {showNew && (
         <div className="glass-card rounded-2xl p-6 space-y-4">
           <div className="flex items-center justify-between"><h3 className="text-lg font-bold text-white">{editing ? "Edit Question" : "New Question"}</h3><button onClick={() => { setShowNew(false); setEditing(null); }} className="text-slate-400 hover:text-white"><X className="w-5 h-5" /></button></div>
-          <div><label className="block text-sm font-medium text-slate-300 mb-2">Question Text</label><input type="text" value={form.question_text} onChange={(e) => setForm({ ...form, question_text: e.target.value })} className="w-full px-4 py-3 rounded-xl bg-slate-900/50 border border-white/10 text-white text-sm focus:outline-none focus:border-primary-500" placeholder="e.g. How did you hear about us?" /></div>
+          <Field label="Question Text" value={form.question_text} onChange={(v) => setForm({ ...form, question_text: v })} />
           <div><label className="block text-sm font-medium text-slate-300 mb-2">Flow Type</label><select value={form.flow_type} onChange={(e) => setForm({ ...form, flow_type: e.target.value })} className="w-full px-4 py-3 rounded-xl bg-slate-900/50 border border-white/10 text-white text-sm focus:outline-none focus:border-primary-500"><option value="ALWAYS">Always show</option><option value="POSITIVE">Positive only (4-5 stars)</option><option value="NEGATIVE">Negative only (1-3 stars)</option></select></div>
-          <div><label className="block text-sm font-medium text-slate-300 mb-2">Options (one per line)</label><textarea value={form.optionsText} onChange={(e) => setForm({ ...form, optionsText: e.target.value })} rows={5} className="w-full px-4 py-3 rounded-xl bg-slate-900/50 border border-white/10 text-white text-sm focus:outline-none focus:border-primary-500 resize-none" placeholder="Instagram&#10;Google&#10;Friend or family" /></div>
+          <Field label="Options (one per line)" value={form.optionsText} onChange={(v) => setForm({ ...form, optionsText: v })} textarea />
           <div><label className="block text-sm font-medium text-slate-300 mb-2">Sort Order</label><input type="number" value={form.sort_order} onChange={(e) => setForm({ ...form, sort_order: parseInt(e.target.value) || 0 })} className="w-full px-4 py-3 rounded-xl bg-slate-900/50 border border-white/10 text-white text-sm focus:outline-none focus:border-primary-500" /></div>
           <button onClick={handleSave} className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-primary-600 to-primary-500 text-white text-sm font-medium hover:-translate-y-0.5 transition-all"><Save className="w-4 h-4" /> Save Question</button>
         </div>
       )}
-
       <div className="space-y-3">
         {questions.map((q) => (
           <div key={q.id} className="glass rounded-xl p-4 border border-white/5">
@@ -228,54 +190,37 @@ function QuestionsTab({ businessId }: { businessId: string }) {
   );
 }
 
-// === QR CODES ===
 function QrTab({ businessId, slug }: { businessId: string; slug: string }) {
   const { showToast } = useToast();
   const [qrCodes, setQrCodes] = useState<QrCode[]>([]);
   const [loading, setLoading] = useState(true);
   const [showNew, setShowNew] = useState(false);
   const [form, setForm] = useState({ name: "", qr_type: "review", destination_url: "" });
-
-  const load = useCallback(async () => {
-    try { const { data } = await supabase.from("qr_codes").select("*").eq("business_id", businessId).order("created_at", { ascending: false }); setQrCodes((data || []) as QrCode[]); } catch {}
-    setLoading(false);
-  }, [businessId]);
-
+  const load = useCallback(async () => { try { const { data } = await supabase.from("qr_codes").select("*").eq("business_id", businessId).order("created_at", { ascending: false }); setQrCodes((data || []) as QrCode[]); } catch {} setLoading(false); }, [businessId]);
   useEffect(() => { load(); }, [load]);
-
   const handleCreate = async () => {
     if (!form.name) { showToast("Name is required", "error"); return; }
     const dest = form.destination_url || `${window.location.origin}/#/review/${slug}`;
-    try {
-      const { error } = await supabase.from("qr_codes").insert({ business_id: businessId, name: form.name, qr_type: form.qr_type, destination_url: dest, status: "active", scan_count: 0, metadata: {} });
-      if (error) throw error;
-      showToast("QR code created!", "success"); setShowNew(false); setForm({ name: "", qr_type: "review", destination_url: "" }); load();
-    } catch { showToast("Failed to create QR code", "error"); }
+    try { const { error } = await supabase.from("qr_codes").insert({ business_id: businessId, name: form.name, qr_type: form.qr_type, destination_url: dest, status: "active", scan_count: 0, metadata: {} }); if (error) throw error; showToast("QR code created!", "success"); setShowNew(false); setForm({ name: "", qr_type: "review", destination_url: "" }); load(); } catch { showToast("Failed to create QR code", "error"); }
   };
-
   const handleDelete = async (id: string) => { try { await supabase.from("qr_codes").delete().eq("id", id); showToast("QR code deleted", "success"); load(); } catch { showToast("Failed to delete", "error"); } };
-
   const copyUrl = (url: string) => { navigator.clipboard.writeText(url); showToast("URL copied!", "success"); };
-
   if (loading) return <div className="flex justify-center py-20"><div className="w-8 h-8 border-4 border-primary-500/30 border-t-primary-500 rounded-full animate-spin" /></div>;
-
   return (
     <div className="space-y-6 screen-enter">
       <div className="flex items-center justify-between">
         <div><h1 className="text-2xl font-bold text-white mb-1">QR Codes</h1><p className="text-slate-400 text-sm">{qrCodes.length} QR codes created</p></div>
         <button onClick={() => setShowNew(true)} className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-primary-600 to-primary-500 text-white text-sm font-medium hover:-translate-y-0.5 transition-all"><Plus className="w-4 h-4" /> Create QR Code</button>
       </div>
-
       {showNew && (
         <div className="glass-card rounded-2xl p-6 space-y-4">
           <div className="flex items-center justify-between"><h3 className="text-lg font-bold text-white">New QR Code</h3><button onClick={() => setShowNew(false)} className="text-slate-400 hover:text-white"><X className="w-5 h-5" /></button></div>
-          <div><label className="block text-sm font-medium text-slate-300 mb-2">Name</label><input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="w-full px-4 py-3 rounded-xl bg-slate-900/50 border border-white/10 text-white text-sm focus:outline-none focus:border-primary-500" placeholder="e.g. Table Top QR" /></div>
+          <Field label="Name" value={form.name} onChange={(v) => setForm({ ...form, name: v })} placeholder="e.g. Table Top QR" />
           <div><label className="block text-sm font-medium text-slate-300 mb-2">Type</label><select value={form.qr_type} onChange={(e) => setForm({ ...form, qr_type: e.target.value })} className="w-full px-4 py-3 rounded-xl bg-slate-900/50 border border-white/10 text-white text-sm focus:outline-none focus:border-primary-500"><option value="review">Review Page</option><option value="menu">Menu</option><option value="custom">Custom URL</option></select></div>
-          <div><label className="block text-sm font-medium text-slate-300 mb-2">Destination URL (optional — defaults to review page)</label><input type="text" value={form.destination_url} onChange={(e) => setForm({ ...form, destination_url: e.target.value })} className="w-full px-4 py-3 rounded-xl bg-slate-900/50 border border-white/10 text-white text-sm focus:outline-none focus:border-primary-500" placeholder="https://..." /></div>
+          <Field label="Destination URL (optional)" value={form.destination_url} onChange={(v) => setForm({ ...form, destination_url: v })} placeholder="https://..." />
           <button onClick={handleCreate} className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-primary-600 to-primary-500 text-white text-sm font-medium hover:-translate-y-0.5 transition-all"><Save className="w-4 h-4" /> Create</button>
         </div>
       )}
-
       {qrCodes.length === 0 ? <div className="glass-card rounded-2xl p-12 text-center"><QrCodeIcon className="w-12 h-12 text-slate-600 mx-auto mb-3" /><p className="text-slate-400">No QR codes yet. Create one to track scans!</p></div> : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {qrCodes.map((qr) => (
@@ -291,53 +236,37 @@ function QrTab({ businessId, slug }: { businessId: string; slug: string }) {
   );
 }
 
-// === AUTOMATION ===
 function AutomationTab({ businessId }: { businessId: string }) {
   const { showToast } = useToast();
   const [rules, setRules] = useState<AutomationRule[]>([]);
   const [loading, setLoading] = useState(true);
   const [showNew, setShowNew] = useState(false);
   const [form, setForm] = useState({ name: "", trigger_type: "low_rating", action_type: "send_sms", delay_hours: 1 });
-
-  const load = useCallback(async () => {
-    try { const { data } = await supabase.from("automation_rules").select("*").eq("business_id", businessId).order("created_at", { ascending: false }); setRules((data || []) as AutomationRule[]); } catch {}
-    setLoading(false);
-  }, [businessId]);
-
+  const load = useCallback(async () => { try { const { data } = await supabase.from("automation_rules").select("*").eq("business_id", businessId).order("created_at", { ascending: false }); setRules((data || []) as AutomationRule[]); } catch {} setLoading(false); }, [businessId]);
   useEffect(() => { load(); }, [load]);
-
   const handleCreate = async () => {
     if (!form.name) { showToast("Name is required", "error"); return; }
-    try {
-      const { error } = await supabase.from("automation_rules").insert({ business_id: businessId, name: form.name, trigger_type: form.trigger_type, trigger_config: {}, action_type: form.action_type, action_config: {}, delay_hours: form.delay_hours, status: "active", trigger_count: 0 });
-      if (error) throw error;
-      showToast("Automation rule created!", "success"); setShowNew(false); setForm({ name: "", trigger_type: "low_rating", action_type: "send_sms", delay_hours: 1 }); load();
-    } catch { showToast("Failed to create rule", "error"); }
+    try { const { error } = await supabase.from("automation_rules").insert({ business_id: businessId, name: form.name, trigger_type: form.trigger_type, trigger_config: {}, action_type: form.action_type, action_config: {}, delay_hours: form.delay_hours, status: "active", trigger_count: 0 }); if (error) throw error; showToast("Automation rule created!", "success"); setShowNew(false); setForm({ name: "", trigger_type: "low_rating", action_type: "send_sms", delay_hours: 1 }); load(); } catch { showToast("Failed to create rule", "error"); }
   };
-
   const handleToggle = async (r: AutomationRule) => { try { await supabase.from("automation_rules").update({ status: r.status === "active" ? "paused" : "active" }).eq("id", r.id); load(); } catch {} };
   const handleDelete = async (id: string) => { try { await supabase.from("automation_rules").delete().eq("id", id); showToast("Rule deleted", "success"); load(); } catch { showToast("Failed to delete", "error"); } };
-
   if (loading) return <div className="flex justify-center py-20"><div className="w-8 h-8 border-4 border-primary-500/30 border-t-primary-500 rounded-full animate-spin" /></div>;
-
   return (
     <div className="space-y-6 screen-enter">
       <div className="flex items-center justify-between">
         <div><h1 className="text-2xl font-bold text-white mb-1">Automation Rules</h1><p className="text-slate-400 text-sm">{rules.length} rules configured</p></div>
         <button onClick={() => setShowNew(true)} className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-primary-600 to-primary-500 text-white text-sm font-medium hover:-translate-y-0.5 transition-all"><Plus className="w-4 h-4" /> Add Rule</button>
       </div>
-
       {showNew && (
         <div className="glass-card rounded-2xl p-6 space-y-4">
           <div className="flex items-center justify-between"><h3 className="text-lg font-bold text-white">New Automation Rule</h3><button onClick={() => setShowNew(false)} className="text-slate-400 hover:text-white"><X className="w-5 h-5" /></button></div>
-          <div><label className="block text-sm font-medium text-slate-300 mb-2">Rule Name</label><input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="w-full px-4 py-3 rounded-xl bg-slate-900/50 border border-white/10 text-white text-sm focus:outline-none focus:border-primary-500" placeholder="e.g. Alert on low rating" /></div>
+          <Field label="Rule Name" value={form.name} onChange={(v) => setForm({ ...form, name: v })} placeholder="e.g. Alert on low rating" />
           <div><label className="block text-sm font-medium text-slate-300 mb-2">Trigger</label><select value={form.trigger_type} onChange={(e) => setForm({ ...form, trigger_type: e.target.value })} className="w-full px-4 py-3 rounded-xl bg-slate-900/50 border border-white/10 text-white text-sm focus:outline-none focus:border-primary-500"><option value="low_rating">Low Rating (1-3 stars)</option><option value="high_rating">High Rating (4-5 stars)</option><option value="new_review">Any New Review</option></select></div>
           <div><label className="block text-sm font-medium text-slate-300 mb-2">Action</label><select value={form.action_type} onChange={(e) => setForm({ ...form, action_type: e.target.value })} className="w-full px-4 py-3 rounded-xl bg-slate-900/50 border border-white/10 text-white text-sm focus:outline-none focus:border-primary-500"><option value="send_sms">Send SMS Alert</option><option value="send_email">Send Email</option><option value="webhook">Trigger Webhook</option></select></div>
           <div><label className="block text-sm font-medium text-slate-300 mb-2">Delay (hours)</label><input type="number" value={form.delay_hours} onChange={(e) => setForm({ ...form, delay_hours: parseInt(e.target.value) || 0 })} className="w-full px-4 py-3 rounded-xl bg-slate-900/50 border border-white/10 text-white text-sm focus:outline-none focus:border-primary-500" /></div>
           <button onClick={handleCreate} className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-primary-600 to-primary-500 text-white text-sm font-medium hover:-translate-y-0.5 transition-all"><Save className="w-4 h-4" /> Create Rule</button>
         </div>
       )}
-
       {rules.length === 0 ? <div className="glass-card rounded-2xl p-12 text-center"><Zap className="w-12 h-12 text-slate-600 mx-auto mb-3" /><p className="text-slate-400">No automation rules yet. Create one to automate responses!</p></div> : (
         <div className="space-y-3">
           {rules.map((r) => (
@@ -346,7 +275,7 @@ function AutomationTab({ businessId }: { businessId: string }) {
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1"><span className="text-xs px-2 py-0.5 rounded-full bg-primary-500/15 text-primary-300">{r.trigger_type}</span><span className="text-xs px-2 py-0.5 rounded-full bg-accent-500/15 text-accent-300">{r.action_type}</span><span className="text-xs text-slate-500">Delay: {r.delay_hours}h</span></div>
                   <h3 className="text-sm font-semibold text-white">{r.name}</h3>
-                  <p className="text-xs text-slate-500 mt-1">Triggered {r.trigger_count} times{r.last_triggered_at ? ` · Last: ${new Date(r.last_triggered_at).toLocaleDateString()}` : ""}</p>
+                  <p className="text-xs text-slate-500 mt-1">Triggered {r.trigger_count} times{r.last_triggered_at ? ` - Last: ${new Date(r.last_triggered_at).toLocaleDateString()}` : ""}</p>
                 </div>
                 <div className="flex gap-2 shrink-0">
                   <button onClick={() => handleToggle(r)} className={`px-3 py-1.5 rounded-lg text-xs font-medium ${r.status === "active" ? "bg-success-500/15 text-success-400" : "bg-slate-700 text-slate-400"}`}>{r.status === "active" ? "Active" : "Paused"}</button>
@@ -361,26 +290,19 @@ function AutomationTab({ businessId }: { businessId: string }) {
   );
 }
 
-// === SETTINGS ===
 function SettingsTab({ business, onUpdate }: { business: Business; onUpdate: (b: Business) => void }) {
   const { showToast } = useToast();
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ name: business.name, welcome_message: business.welcome_message, google_place_id: business.google_place_id || "", public_review_enabled: business.public_review_enabled, business_category: business.business_category || "", contact_email: business.contact_email || "", contact_phone: business.contact_phone || "", location_city: business.location_city || "" });
-
   const handleSave = async () => {
     try {
-      const { error } = await supabase.from("businesses").update({
-        name: form.name, welcome_message: form.welcome_message, google_place_id: form.google_place_id || null, public_review_enabled: form.public_review_enabled,
-        business_category: form.business_category || null, contact_email: form.contact_email || null, contact_phone: form.contact_phone || null, location_city: form.location_city || null,
-      }).eq("id", business.id);
+      const { error } = await supabase.from("businesses").update({ name: form.name, welcome_message: form.welcome_message, google_place_id: form.google_place_id || null, public_review_enabled: form.public_review_enabled, business_category: form.business_category || null, contact_email: form.contact_email || null, contact_phone: form.contact_phone || null, location_city: form.location_city || null }).eq("id", business.id);
       if (error) throw error;
       onUpdate({ ...business, ...form, google_place_id: form.google_place_id || null, business_category: form.business_category || null, contact_email: form.contact_email || null, contact_phone: form.contact_phone || null, location_city: form.location_city || null });
       setEditing(false); showToast("Settings saved successfully!", "success");
     } catch { showToast("Failed to save settings", "error"); }
   };
-
   const copyReviewLink = () => { const url = `${window.location.origin}/#/review/${business.slug}`; navigator.clipboard.writeText(url); showToast("Review link copied!", "success"); };
-
   return (
     <div className="space-y-6 screen-enter">
       <div><h1 className="text-2xl font-bold text-white mb-1">Business Settings</h1><p className="text-slate-400 text-sm">Configure your review flow and business profile</p></div>
@@ -406,7 +328,6 @@ function SettingsTab({ business, onUpdate }: { business: Business; onUpdate: (b:
   );
 }
 
-// === SHARED COMPONENTS ===
 function StatCard({ icon, label, value, color, bg }: { icon: React.ReactNode; label: string; value: string; color: string; bg: string }) {
   return <div className="stat-card glass-card rounded-2xl p-5"><div className="flex items-center justify-between mb-3"><div className={`w-10 h-10 rounded-xl ${bg} flex items-center justify-center ${color}`}>{icon}</div></div><p className="text-2xl font-bold text-white">{value}</p><p className="text-xs text-slate-400 mt-1">{label}</p></div>;
 }

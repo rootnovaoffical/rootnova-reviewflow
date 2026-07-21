@@ -51,7 +51,7 @@ export default function PublicReviewPage() {
     load();
   }, [slug]);
 
-  const activeQuestions = dbQuestions.length > 0 ? dbQuestions.filter(q => q.flow_type === "ALWAYS" || (rating >= 4 && q.flow_type === "POSITIVE") || (rating <= 3 && q.flow_type === "NEGATIVE")) : [];
+  const activeQuestions = dbQuestions.filter(q => q.flow_type === "ALWAYS" || (rating >= 4 && q.flow_type === "POSITIVE") || (rating <= 3 && q.flow_type === "NEGATIVE"));
   const smoothTransition = useCallback((next: Stage) => { if (transitioning) return; setTransitioning(true); if (transitionTimer.current) clearTimeout(transitionTimer.current); transitionTimer.current = setTimeout(() => { setStage(next); setTransitioning(false); }, 300); }, [transitioning]);
 
   const handleStart = () => { if (!business) return; smoothTransition("rating"); safeInsert("analytics_events", { business_id: business.id, event_type: "review_start", metadata: {} }); };
@@ -86,7 +86,7 @@ export default function PublicReviewPage() {
     if (!business || !sessionId) return;
     const ans = Object.entries(selectedChips).flatMap(([qid, opts]) => opts.map((o) => ({ question_id: qid, answer: o })));
     if (!sessionId.startsWith("local-")) { try { await withTimeout(supabase.from("review_sessions").update({ answers: ans }).eq("id", sessionId).then(), 4000); } catch {} }
-    safeInsert("analytics_events", { business_id: business.id, session_id: activeQuestions.length });
+    safeInsert("analytics_events", { business_id: business.id, session_id: sessionId, event_type: "questions_submitted", metadata: { count: ans.length } });
     smoothTransition("generating"); setTimeout(() => generateReview(sessionId, rating, ans, 0), 600);
   };
 

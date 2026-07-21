@@ -62,6 +62,11 @@ import AIGoals from "./pages/business/AIGoals";
 import AIBriefings from "./pages/business/AIBriefings";
 import AISimulations from "./pages/business/AISimulations";
 
+import BusinessIntegrations from "./pages/business/Integrations";
+import IntegrationMarketplace from "./pages/business/IntegrationMarketplace";
+import IntegrationDeveloper from "./pages/business/IntegrationDeveloper";
+import IntegrationWebhooks from "./pages/business/IntegrationWebhooks";
+
 const ADMIN_ROLES = ["ROOTNOVA_SUPER_ADMIN", "ROOTNOVA_ADMIN"] as const;
 const PARTNER_ROLES = ["PARTNER_OWNER", "PARTNER_ADMIN", "PARTNER_TEAM_MEMBER"] as const;
 const PARTNER_MANAGE_ROLES = ["PARTNER_OWNER", "PARTNER_ADMIN"] as const;
@@ -140,6 +145,11 @@ export default function App() {
                 <Route path="/business/ai-goals" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><AIGoals /></ProtectedRoute>} />
                 <Route path="/business/ai-briefings" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><AIBriefings /></ProtectedRoute>} />
                 <Route path="/business/ai-simulations" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><AISimulations /></ProtectedRoute>} />
+
+                <Route path="/business/integrations" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><BusinessIntegrations /></ProtectedRoute>} />
+                <Route path="/business/integrations/marketplace" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><IntegrationMarketplace /></ProtectedRoute>} />
+                <Route path="/business/integrations/developer" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><IntegrationDeveloper /></ProtectedRoute>} />
+                <Route path="/business/integrations/webhooks" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><IntegrationWebhooks /></ProtectedRoute>} />
 
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>

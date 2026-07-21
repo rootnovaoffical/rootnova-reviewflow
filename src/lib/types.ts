@@ -692,3 +692,199 @@ export interface BusinessAdmin {
   user_id: string;
   created_at: string;
 }
+
+// ---- Module 11: Integrations & Developer Platform ----
+export type IntegrationCategory =
+  | "reviews"
+  | "marketing"
+  | "sms"
+  | "email"
+  | "payments"
+  | "pos"
+  | "crm"
+  | "erp"
+  | "accounting"
+  | "analytics"
+  | "automation"
+  | "communication"
+  | "productivity"
+  | "ai"
+  | "general";
+
+export type AuthType = "oauth2" | "api_key" | "bearer" | "webhook" | "basic";
+export type IntegrationStatus = "active" | "inactive" | "error" | "syncing";
+export type SyncFrequency = "realtime" | "hourly" | "daily" | "weekly" | "manual";
+export type CredentialType =
+  | "oauth_token"
+  | "api_key"
+  | "bearer_token"
+  | "webhook_secret"
+  | "refresh_token"
+  | "basic_auth";
+export type WebhookEventStatus = "pending" | "delivered" | "failed" | "retrying" | "dead_letter";
+export type SyncType = "full" | "incremental" | "one_way" | "two_way";
+export type SyncStatus = "queued" | "running" | "completed" | "failed" | "partial";
+export type SyncDirection = "inbound" | "outbound" | "bidirectional";
+
+export interface IntegrationProvider {
+  id: string;
+  provider_key: string;
+  name: string;
+  category: string;
+  description: string | null;
+  logo_url: string | null;
+  auth_type: string;
+  auth_config: Record<string, unknown> | null;
+  supported_features: string[];
+  api_base_url: string | null;
+  webhook_url_template: string | null;
+  rate_limit_per_minute: number;
+  is_active: boolean;
+  is_featured: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InstalledIntegration {
+  id: string;
+  business_id: string;
+  provider_id: string;
+  status: IntegrationStatus;
+  config: Record<string, unknown> | null;
+  sync_frequency: SyncFrequency;
+  last_sync_at: string | null;
+  last_sync_status: string | null;
+  last_error: string | null;
+  health_score: number;
+  enabled_features: string[];
+  installed_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProviderCredential {
+  id: string;
+  business_id: string;
+  integration_id: string | null;
+  credential_type: CredentialType;
+  encrypted_value: string;
+  metadata: Record<string, unknown> | null;
+  expires_at: string | null;
+  is_valid: boolean;
+  last_validated_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ApiKey {
+  id: string;
+  business_id: string;
+  key_name: string;
+  key_prefix: string;
+  key_hash: string;
+  scopes: string[];
+  rate_limit_per_hour: number;
+  last_used_at: string | null;
+  expires_at: string | null;
+  is_active: boolean;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ApiUsageRecord {
+  id: string;
+  business_id: string;
+  api_key_id: string | null;
+  endpoint: string;
+  method: string;
+  status_code: number | null;
+  response_time_ms: number | null;
+  created_at: string;
+}
+
+export interface Webhook {
+  id: string;
+  business_id: string;
+  name: string;
+  url: string;
+  events: string[];
+  secret: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WebhookEvent {
+  id: string;
+  business_id: string;
+  webhook_id: string | null;
+  event_type: string;
+  payload: Record<string, unknown> | null;
+  status: WebhookEventStatus;
+  attempt_count: number;
+  max_attempts: number;
+  next_retry_at: string | null;
+  response_status: number | null;
+  response_body: string | null;
+  delivered_at: string | null;
+  created_at: string;
+}
+
+export interface SyncJob {
+  id: string;
+  business_id: string;
+  integration_id: string | null;
+  sync_type: SyncType;
+  status: SyncStatus;
+  direction: SyncDirection;
+  total_records: number;
+  processed_records: number;
+  failed_records: number;
+  conflict_count: number;
+  error_message: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  duration_ms: number | null;
+  created_at: string;
+}
+
+export interface SyncLog {
+  id: string;
+  business_id: string;
+  sync_job_id: string | null;
+  level: "info" | "warn" | "error" | "debug";
+  entity_type: string | null;
+  entity_id: string | null;
+  message: string;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export interface DeveloperApp {
+  id: string;
+  business_id: string;
+  app_name: string;
+  description: string | null;
+  client_id: string;
+  client_secret_hash: string;
+  redirect_uris: string[];
+  scopes: string[];
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DeveloperToken {
+  id: string;
+  business_id: string;
+  app_id: string | null;
+  access_token_hash: string;
+  refresh_token_hash: string | null;
+  scopes: string[];
+  expires_at: string | null;
+  is_revoked: boolean;
+  created_at: string;
+  updated_at: string;
+}

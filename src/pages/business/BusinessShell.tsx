@@ -16,6 +16,7 @@ const businessNav: NavItem[] = [
   { label: "AI Briefings", to: "/business/ai-briefings", icon: "📋" },
   { label: "AI Simulations", to: "/business/ai-simulations", icon: "🔮" },
   { label: "QR Codes", to: "/business/qr-codes", icon: "📱" },
+  { label: "Integrations", to: "/business/integrations", icon: "🔌" },
   { label: "Analytics", to: "/business/analytics", icon: "📈" },
   { label: "Settings", to: "/business/settings", icon: "⚙️" },
 ];

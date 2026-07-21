@@ -1,55 +1,22 @@
-export type Role = "ROOTNOVA_SUPER_ADMIN" | "ROOTNOVA_ADMIN" | "PARTNER_OWNER" | "PARTNER_ADMIN" | "PARTNER_TEAM_MEMBER" | "BUSINESS_ADMIN";
+// ============================================================
+// ROOTNOVA REVIEWFLOW — SHARED TYPE DEFINITIONS
+// ============================================================
 
-export type AccountStatus = "ACTIVE" | "SUSPENDED" | "INACTIVE";
-
-export interface Profile {
-  id: string;
-  full_name: string;
-  email: string;
-  role: Role;
-  account_status: AccountStatus;
-  avatar_url: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface Organization {
-  id: string;
-  name: string;
-  slug: string;
-  type: string;
-  contact_email: string | null;
-  contact_phone: string | null;
-  status: string;
-  metadata: Record<string, unknown>;
-  logo_url: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface OrganizationMember {
-  id: string;
-  organization_id: string;
-  user_id: string;
-  role: string;
-  status: string;
-  created_at: string;
-  updated_at: string;
-  profile?: Profile;
-}
+// ---- Module 1: Customer Review Core ----
+export type ReviewStatus = "pending" | "completed" | "abandoned";
+export type AIStatus = "pending" | "processing" | "done" | "failed";
 
 export interface Business {
   id: string;
   name: string;
   slug: string;
   logo_url: string | null;
-  primary_color: string;
-  secondary_color: string;
-  welcome_message: string;
+  primary_color: string | null;
+  secondary_color: string | null;
+  welcome_message: string | null;
   google_place_id: string | null;
   google_maps_url: string | null;
   google_review_url: string | null;
-  google_review_url_derived: string | null;
   public_review_enabled: boolean;
   status: string;
   organization_id: string | null;
@@ -62,229 +29,100 @@ export interface Business {
   updated_at: string;
 }
 
-export interface BusinessAdmin {
-  id: string;
-  business_id: string;
-  user_id: string;
-  created_at: string;
-  profile?: Profile;
-}
-
-export interface Question {
-  id: string;
-  business_id: string;
-  question_text: string;
-  question_type: string;
-  flow_type: string;
-  options: string[];
-  is_required: boolean;
-  is_active: boolean;
-  sort_order: number;
-  created_at: string;
-  updated_at: string;
-}
-
 export interface ReviewSession {
   id: string;
   business_id: string;
-  rating: number;
-  answers: Record<string, unknown>[];
+  rating: number | null;
+  answers: Record<string, unknown> | null;
   ai_generated_review: string | null;
-  ai_status: string;
+  ai_status: AIStatus;
   google_place_id_snapshot: string | null;
-  business_response: string | null;
-  business_response_at: string | null;
   created_at: string;
   completed_at: string | null;
+  business_response: string | null;
+  business_response_at: string | null;
 }
 
-export interface Plan {
-  id: string;
-  name: string;
-  slug: string;
-  description: string | null;
-  monthly_price: number;
-  annual_price: number;
-  setup_fee: number;
-  max_businesses: number;
-  max_review_sessions: number;
-  max_team_members: number;
-  ai_usage_allowance: number;
-  trial_duration_days: number;
-  features: Record<string, unknown>;
-  is_active: boolean;
-  sort_order: number;
-}
-
-export interface Subscription {
-  id: string;
-  organization_id: string;
-  plan_id: string;
-  status: string;
-  billing_cycle: string;
-  custom_monthly_price: number | null;
-  custom_setup_fee: number | null;
-  discount_percent: number | null;
-  discount_duration_months: number | null;
-  is_founding_partner: boolean;
-  pricing_lock_months: number | null;
-  pricing_lock_until: string | null;
-  contract_start_date: string | null;
-  contract_end_date: string | null;
-  trial_ends_at: string | null;
-  current_period_start: string | null;
-  current_period_end: string | null;
-  grace_period_ends_at: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface Payment {
-  id: string;
-  organization_id: string;
-  subscription_id: string | null;
-  amount: number;
-  payment_purpose: string;
-  payment_method: string;
-  plan_id: string | null;
-  billing_cycle: string | null;
-  upi_id: string | null;
-  screenshot_path: string | null;
-  utr_reference: string | null;
-  payment_date: string | null;
-  status: string;
-  rejection_reason: string | null;
-  reviewed_by: string | null;
-  reviewed_at: string | null;
-  approved_by: string | null;
-  approved_at: string | null;
-  metadata: Record<string, unknown>;
-  submitted_by: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface PlatformAsset {
-  id: string;
-  key: string;
-  label: string;
-  asset_type: string;
-  storage_path: string | null;
-  public_url: string | null;
-  metadata: Record<string, unknown>;
-  is_active: boolean;
-}
-
-export interface FeatureFlag {
-  id: string;
-  key: string;
-  label: string;
-  description: string | null;
-  is_enabled: boolean;
-  category: string;
-}
-
-export interface AuditLog {
-  id: string;
-  actor_id: string | null;
-  actor_email: string | null;
-  action: string;
-  target_type: string | null;
-  target_id: string | null;
-  organization_id: string | null;
-  metadata: Record<string, unknown>;
-  created_at: string;
-}
-
-export interface AnalyticsEvent {
-  id: string;
-  business_id: string | null;
-  session_id: string | null;
-  event_type: string;
-  metadata: Record<string, unknown>;
-  created_at: string;
-}
-
-export interface AdminInvitation {
-  id: string;
-  email: string;
-  role: string;
-  business_id: string | null;
-  status: string;
-  invited_by: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export type QRType = "reviewflow" | "menu" | "whatsapp" | "website" | "campaign" | "custom";
-
+// ---- Module 3: QR Management ----
 export interface QRCode {
   id: string;
   business_id: string;
   name: string;
-  qr_type: QRType;
-  destination_url: string;
-  status: "active" | "inactive";
+  slug: string;
+  qr_code_url: string | null;
   scan_count: number;
-  metadata: Record<string, unknown>;
+  is_active: boolean;
+  location_label: string | null;
   created_at: string;
   updated_at: string;
 }
 
-export type UserRole = Role;
+// ---- Module 4: Review Intelligence ----
+export type IntelligenceInsightType =
+  | "sentiment"
+  | "rating_trend"
+  | "volume_spike"
+  | "keyword_cluster"
+  | "response_gap"
+  | "comparison"
+  | "recommendation";
 
-export type FlowType = "RATING_ONLY" | "QUESTIONS" | "DETAILED";
+export interface IntelligenceInsight {
+  id: string;
+  business_id: string;
+  insight_type: IntelligenceInsightType;
+  title: string;
+  summary: string;
+  evidence: Record<string, unknown>;
+  confidence: number;
+  severity: "info" | "warning" | "critical" | "positive";
+  created_at: string;
+}
 
-export type ActionItemStatus = "open" | "in_progress" | "resolved" | "dismissed";
-export type PriorityLevel = "critical" | "high" | "medium" | "low";
-export type ConfidenceLevel = "high" | "medium" | "low";
+// ---- Module 5: Action Center ----
+export type ActionPriority = "critical" | "high" | "medium" | "low";
+export type ActionStatus = "open" | "in_progress" | "completed" | "dismissed";
 
 export interface ActionItem {
   id: string;
   business_id: string;
   title: string;
-  explanation: string | null;
-  why_it_matters: string | null;
-  recommended_action: string | null;
-  priority_level: PriorityLevel;
-  confidence: ConfidenceLevel;
-  status: ActionItemStatus;
-  evidence: Record<string, unknown>;
+  explanation: string;
+  why_it_matters: string;
+  recommended_action: string;
+  priority_level: ActionPriority;
+  confidence: string;
+  status: ActionStatus;
+  evidence: Record<string, unknown> | null;
   internal_notes: string | null;
-  ai_generated_at: string;
+  ai_generated_at: string | null;
   created_at: string;
   updated_at: string;
 }
 
-// =========================================================
-// Module 6: Customer Engagement & Automation
-// =========================================================
-
+// ---- Module 6: Customer Engagement ----
 export type CustomerSegment =
   | "new"
-  | "returning"
-  | "loyal"
-  | "promoter"
-  | "passive"
-  | "detractor"
+  | "active"
+  | "repeat"
   | "vip"
-  | "inactive"
-  | "needs_followup"
-  | "returning_after_long_time";
+  | "at_risk"
+  | "churned"
+  | "inactive";
 
 export interface Customer {
   id: string;
   business_id: string;
-  identifier: string | null;
+  identifier: string;
   display_name: string | null;
   total_visits: number;
   total_reviews: number;
-  avg_rating: number;
+  avg_rating: number | null;
   last_visit_at: string | null;
-  first_seen_at: string;
+  first_seen_at: string | null;
   segment: CustomerSegment;
   segment_updated_at: string | null;
-  metadata: Record<string, unknown>;
+  metadata: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
 }
@@ -292,80 +130,49 @@ export interface Customer {
 export interface CustomerEvent {
   id: string;
   business_id: string;
-  customer_id: string | null;
+  customer_id: string;
   review_session_id: string | null;
   event_type: string;
-  event_data: Record<string, unknown>;
+  event_data: Record<string, unknown> | null;
   created_at: string;
 }
 
-export type AutomationTriggerType =
-  | "review_submitted"
-  | "rating_threshold"
-  | "customer_segment"
-  | "campaign_response";
-
-export type AutomationActionType =
-  | "send_message"
-  | "notify_manager"
-  | "open_recovery"
-  | "add_points"
-  | "send_coupon";
-
-export type AutomationStatus = "active" | "paused" | "archived";
+export interface EngagementNotification {
+  id: string;
+  business_id: string;
+  notification_type: string;
+  title: string;
+  message: string;
+  severity: string;
+  related_id: string | null;
+  related_type: string | null;
+  is_read: boolean;
+  read_at: string | null;
+  created_at: string;
+}
 
 export interface AutomationRule {
   id: string;
   business_id: string;
   name: string;
-  trigger_type: AutomationTriggerType;
-  trigger_config: Record<string, unknown>;
-  action_type: AutomationActionType;
-  action_config: Record<string, unknown>;
-  delay_hours: number;
-  status: AutomationStatus;
+  trigger_type: string;
+  trigger_config: Record<string, unknown> | null;
+  action_type: string;
+  action_config: Record<string, unknown> | null;
+  delay_hours: number | null;
+  status: string;
   trigger_count: number;
   last_triggered_at: string | null;
   created_at: string;
   updated_at: string;
 }
 
-export type CampaignType =
-  | "review"
-  | "discount"
-  | "festival"
-  | "referral"
-  | "weekend_offer"
-  | "happy_hour"
-  | "new_menu";
-
-export type CampaignStatus = "draft" | "active" | "paused" | "completed";
-
-export interface Campaign {
-  id: string;
-  business_id: string;
-  name: string;
-  description: string | null;
-  campaign_type: CampaignType;
-  audience_segment: string | null;
-  status: CampaignStatus;
-  schedule_start: string | null;
-  schedule_end: string | null;
-  reach_count: number;
-  response_count: number;
-  conversion_count: number;
-  metadata: Record<string, unknown>;
-  created_at: string;
-  updated_at: string;
-}
-
-export type LoyaltyProgramType = "visit_based" | "review_based" | "birthday" | "festival";
-
+// ---- Module 6b: Loyalty ----
 export interface LoyaltyProgram {
   id: string;
   business_id: string;
   name: string;
-  program_type: LoyaltyProgramType;
+  program_type: string;
   target_count: number;
   reward_description: string;
   points_per_action: number;
@@ -379,7 +186,7 @@ export interface CustomerLoyalty {
   id: string;
   business_id: string;
   customer_id: string;
-  program_id: string | null;
+  program_id: string;
   points: number;
   visits_counted: number;
   reward_unlocked: boolean;
@@ -388,28 +195,27 @@ export interface CustomerLoyalty {
   updated_at: string;
 }
 
-export type NotificationSeverity = "info" | "warning" | "critical" | "success";
-
-export interface EngagementNotification {
+// ---- Module 6c: Campaigns ----
+export interface Campaign {
   id: string;
   business_id: string;
-  notification_type: string;
-  title: string;
-  message: string;
-  severity: NotificationSeverity;
-  related_id: string | null;
-  related_type: string | null;
-  is_read: boolean;
-  read_at: string | null;
+  name: string;
+  description: string | null;
+  campaign_type: string;
+  audience_segment: string | null;
+  status: string;
+  schedule_start: string | null;
+  schedule_end: string | null;
+  reach_count: number;
+  response_count: number;
+  conversion_count: number;
+  metadata: Record<string, unknown> | null;
   created_at: string;
+  updated_at: string;
 }
 
-// =========================================================
-// Module 7: Communication Hub & Omnichannel Messaging
-// =========================================================
-
+// ---- Module 7: Communication Hub ----
 export type CommunicationChannel = "whatsapp" | "sms" | "email" | "push" | "in_app";
-
 export type MessageStatus =
   | "created"
   | "queued"
@@ -421,9 +227,7 @@ export type MessageStatus =
   | "failed"
   | "retrying"
   | "archived";
-
 export type ScheduleType = "immediate" | "scheduled" | "recurring" | "delayed";
-
 export type TemplateCategory =
   | "review_request"
   | "thank_you"
@@ -437,12 +241,11 @@ export type TemplateCategory =
 
 export interface CommunicationProvider {
   id: string;
-  provider_key: string;
-  display_name: string;
+  name: string;
   channel: CommunicationChannel;
+  provider_type: string;
   is_active: boolean;
-  capabilities: Record<string, unknown>;
-  metadata: Record<string, unknown>;
+  supported_features: string[];
   created_at: string;
   updated_at: string;
 }
@@ -451,9 +254,8 @@ export interface ProviderConfig {
   id: string;
   business_id: string;
   provider_id: string;
-  config: Record<string, unknown>;
   is_enabled: boolean;
-  is_default: boolean;
+  config: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
 }
@@ -462,16 +264,15 @@ export interface MessageTemplate {
   id: string;
   business_id: string;
   name: string;
-  category: TemplateCategory;
   channel: CommunicationChannel;
+  category: TemplateCategory;
   subject: string | null;
   body: string;
   variables: string[];
-  locale: string;
-  version: number;
-  ai_optimized: boolean;
-  ai_optimization_score: number;
+  language: string;
   is_active: boolean;
+  is_ai_optimized: boolean;
+  ai_optimization_notes: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -501,9 +302,9 @@ export interface Message {
   max_retries: number;
   next_retry_at: string | null;
   provider_message_id: string | null;
-  provider_response: Record<string, unknown>;
+  provider_response: Record<string, unknown> | null;
   error_message: string | null;
-  metadata: Record<string, unknown>;
+  metadata: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
 }
@@ -513,7 +314,7 @@ export interface MessageEvent {
   business_id: string;
   message_id: string;
   event_type: string;
-  event_data: Record<string, unknown>;
+  event_data: Record<string, unknown> | null;
   provider_response: Record<string, unknown> | null;
   latency_ms: number | null;
   created_at: string;
@@ -522,62 +323,40 @@ export interface MessageEvent {
 export interface CommunicationAuditLog {
   id: string;
   business_id: string;
-  message_id: string | null;
-  actor_id: string | null;
-  actor_type: string;
   action: string;
-  channel: string | null;
-  provider_id: string | null;
-  trigger_source: string | null;
-  automation_rule_id: string | null;
-  campaign_id: string | null;
-  ai_involved: boolean;
-  retry_count: number | null;
-  execution_duration_ms: number | null;
-  outcome: string | null;
-  metadata: Record<string, unknown>;
+  entity_type: string;
+  entity_id: string;
+  actor_id: string | null;
+  metadata: Record<string, unknown> | null;
   created_at: string;
 }
 
 export interface ScheduledMessage {
   id: string;
   business_id: string;
-  message_id: string | null;
+  message_id: string;
   schedule_type: ScheduleType;
   scheduled_for: string;
-  recurrence_rule: Record<string, unknown> | null;
-  timezone: string;
-  business_hours_only: boolean;
-  quiet_hours_start: string | null;
-  quiet_hours_end: string | null;
-  expiry_at: string | null;
+  recurrence_rule: string | null;
   is_processed: boolean;
   processed_at: string | null;
   created_at: string;
-  updated_at: string;
 }
 
 export interface DeliveryLog {
   id: string;
   business_id: string;
   message_id: string;
-  provider_id: string | null;
-  attempt_number: number;
+  provider_id: string;
   status: string;
-  provider_message_id: string | null;
-  provider_response: Record<string, unknown>;
+  provider_response: Record<string, unknown> | null;
   latency_ms: number | null;
-  error_code: string | null;
   error_message: string | null;
   created_at: string;
 }
 
-// =========================================================
-// Module 8: Visual Automation Flow Builder
-// =========================================================
-
+// ---- Module 8: Workflow Builder ----
 export type WorkflowStatus = "draft" | "active" | "paused" | "archived";
-
 export type WorkflowTriggerType =
   | "qr_scanned"
   | "review_submitted"
@@ -595,9 +374,7 @@ export type WorkflowTriggerType =
   | "scheduled"
   | "webhook"
   | "api_event";
-
 export type NodeCategory = "trigger" | "condition" | "action" | "delay" | "ai_decision";
-
 export type NodeType =
   | "trigger"
   | "action"
@@ -610,7 +387,6 @@ export type NodeType =
   | "communication"
   | "review"
   | "action_center";
-
 export type ExecutionStatus = "running" | "completed" | "failed" | "paused" | "cancelled";
 
 export interface Workflow {
@@ -620,9 +396,9 @@ export interface Workflow {
   description: string | null;
   status: WorkflowStatus;
   trigger_type: WorkflowTriggerType;
-  trigger_config: Record<string, unknown>;
-  canvas_data: Record<string, unknown>;
-  variables: string[];
+  trigger_config: Record<string, unknown> | null;
+  canvas_data: Record<string, unknown> | null;
+  variables: Record<string, unknown>[] | null;
   version: number;
   is_ai_generated: boolean;
   ai_explanation: string | null;
@@ -637,12 +413,11 @@ export interface Workflow {
 export interface WorkflowNode {
   id: string;
   workflow_id: string;
-  business_id: string;
   node_key: string;
-  node_type: NodeType;
-  node_category: NodeCategory;
+  type: NodeType;
+  category: NodeCategory;
   label: string;
-  config: Record<string, unknown>;
+  config: Record<string, unknown> | null;
   position_x: number;
   position_y: number;
   is_collapsed: boolean;
@@ -654,12 +429,13 @@ export interface WorkflowNode {
 export interface WorkflowEdge {
   id: string;
   workflow_id: string;
-  business_id: string;
   source_node_key: string;
   target_node_key: string;
-  edge_label: string | null;
-  edge_data: Record<string, unknown>;
+  label: string | null;
+  condition_config: Record<string, unknown> | null;
+  sort_order: number;
   created_at: string;
+  updated_at: string;
 }
 
 export interface WorkflowExecution {
@@ -668,7 +444,7 @@ export interface WorkflowExecution {
   workflow_id: string;
   workflow_version: number;
   trigger_source: string;
-  trigger_data: Record<string, unknown>;
+  trigger_data: Record<string, unknown> | null;
   status: ExecutionStatus;
   current_node_key: string | null;
   started_at: string;
@@ -676,8 +452,8 @@ export interface WorkflowExecution {
   duration_ms: number | null;
   retry_count: number;
   error_message: string | null;
-  node_history: Record<string, unknown>[];
-  metadata: Record<string, unknown>;
+  node_history: Record<string, unknown>[] | null;
+  metadata: Record<string, unknown> | null;
   created_at: string;
 }
 
@@ -685,13 +461,9 @@ export interface WorkflowLog {
   id: string;
   business_id: string;
   execution_id: string;
-  workflow_id: string;
   node_key: string;
-  node_type: string;
-  node_label: string;
-  log_level: string;
+  level: "info" | "warn" | "error" | "debug";
   message: string;
-  log_data: Record<string, unknown>;
   ai_reasoning: string | null;
   provider_used: string | null;
   latency_ms: number | null;
@@ -705,10 +477,10 @@ export interface WorkflowTemplate {
   description: string;
   category: string;
   trigger_type: WorkflowTriggerType;
-  trigger_config: Record<string, unknown>;
+  trigger_config: Record<string, unknown> | null;
   nodes: Record<string, unknown>[];
   edges: Record<string, unknown>[];
-  variables: string[];
+  variables: Record<string, unknown>[];
   is_ai_generated: boolean;
   is_active: boolean;
   use_count: number;
@@ -719,13 +491,204 @@ export interface WorkflowTemplate {
 export interface WorkflowVersion {
   id: string;
   workflow_id: string;
-  business_id: string;
-  version: number;
-  canvas_data: Record<string, unknown>;
+  version_number: number;
+  canvas_data: Record<string, unknown> | null;
   nodes: Record<string, unknown>[];
   edges: Record<string, unknown>[];
-  variables: string[];
-  change_note: string | null;
+  variables: Record<string, unknown>[];
+  change_notes: string | null;
   created_by: string | null;
+  created_at: string;
+}
+
+// ---- Module 9: AI Business Agent ----
+export type AITaskStatus =
+  | "recommended"
+  | "accepted"
+  | "running"
+  | "waiting"
+  | "completed"
+  | "dismissed";
+export type AITaskType =
+  | "recover_customer"
+  | "reward_loyalty"
+  | "improve_response_rate"
+  | "launch_campaign"
+  | "pause_automation"
+  | "adjust_workflow"
+  | "improve_communication"
+  | "increase_review_conversion"
+  | "respond_to_review"
+  | "create_workflow"
+  | "send_message"
+  | "create_action_item"
+  | "update_segment"
+  | "general";
+export type AITaskPriority = "critical" | "high" | "medium" | "low";
+export type GoalStatus = "active" | "achieved" | "paused" | "archived";
+export type GoalType =
+  | "rating_target"
+  | "review_conversion"
+  | "repeat_customers"
+  | "retention"
+  | "reduce_negative"
+  | "increase_loyalty"
+  | "increase_engagement"
+  | "custom";
+export type BriefingPeriod = "daily" | "weekly" | "monthly";
+export type MemoryType =
+  | "recommendation_accepted"
+  | "recommendation_rejected"
+  | "workflow_completed"
+  | "campaign_success"
+  | "communication_performance"
+  | "automation_success"
+  | "customer_trend"
+  | "business_preference"
+  | "pattern_detected"
+  | "goal_progress";
+export type SimulationType =
+  | "review_response"
+  | "loyalty_improvement"
+  | "review_conversion"
+  | "campaign_launch"
+  | "communication_strategy"
+  | "workflow_automation"
+  | "custom";
+export type AgentLogLevel = "info" | "warn" | "error" | "debug" | "ai_reasoning";
+
+export interface AITask {
+  id: string;
+  business_id: string;
+  task_type: AITaskType;
+  title: string;
+  description: string;
+  reasoning: string;
+  evidence: Record<string, unknown>;
+  confidence: number;
+  priority: AITaskPriority;
+  status: AITaskStatus;
+  expected_impact: string;
+  affected_customers: number;
+  affected_workflows: string[] | null;
+  related_entity_id: string | null;
+  related_entity_type: string | null;
+  scheduled_for: string | null;
+  accepted_at: string | null;
+  completed_at: string | null;
+  dismissed_at: string | null;
+  result: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AIRecommendation {
+  id: string;
+  business_id: string;
+  task_id: string | null;
+  title: string;
+  description: string;
+  reasoning: string;
+  evidence: Record<string, unknown>;
+  confidence: number;
+  expected_outcome: string;
+  business_impact: string;
+  category: string;
+  status: "pending" | "accepted" | "rejected" | "expired";
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AIMemory {
+  id: string;
+  business_id: string;
+  memory_type: MemoryType;
+  key: string;
+  value: Record<string, unknown>;
+  confidence: number;
+  source: string;
+  times_referenced: number;
+  last_referenced_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BusinessGoal {
+  id: string;
+  business_id: string;
+  goal_type: GoalType;
+  title: string;
+  description: string | null;
+  target_value: number;
+  current_value: number;
+  unit: string;
+  status: GoalStatus;
+  deadline: string | null;
+  ai_strategy: string | null;
+  progress_history: Record<string, number>[] | null;
+  achieved_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AIBriefing {
+  id: string;
+  business_id: string;
+  period: BriefingPeriod;
+  briefing_date: string;
+  summary: string;
+  wins: string[];
+  risks: string[];
+  recommendations: string[];
+  progress: string[];
+  upcoming_opportunities: string[];
+  metrics_snapshot: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface AISimulation {
+  id: string;
+  business_id: string;
+  simulation_type: SimulationType;
+  scenario: string;
+  current_state: Record<string, unknown>;
+  projected_state: Record<string, unknown>;
+  assumptions: string[];
+  projected_outcome: string;
+  confidence: number;
+  is_labelled_estimate: boolean;
+  created_at: string;
+}
+
+export interface AIAgentLog {
+  id: string;
+  business_id: string;
+  log_level: AgentLogLevel;
+  action: string;
+  entity_type: string | null;
+  entity_id: string | null;
+  reasoning: string | null;
+  input_data: Record<string, unknown> | null;
+  output_data: Record<string, unknown> | null;
+  duration_ms: number | null;
+  created_at: string;
+}
+
+// ---- Auth ----
+export interface Profile {
+  id: string;
+  full_name: string | null;
+  email: string | null;
+  role: string;
+  created_at: string;
+  updated_at: string;
+  account_status: string;
+  avatar_url: string | null;
+}
+
+export interface BusinessAdmin {
+  id: string;
+  business_id: string;
+  user_id: string;
   created_at: string;
 }

@@ -1,17 +1,19 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
-import { useToast } from '../context/ToastContext';
 import { LoadingSpinner, EmptyState, PageHeader, Card, Badge } from '../components/UI';
-import { Building2, Users, GitBranch, Map, ShieldCheck, Mail, Globe } from 'lucide-react';
+import { useToast } from '../context/ToastContext';
+import { Building2, Users, GitBranch, MapPin, Shield, Mail } from 'lucide-react';
 
 /* ============================================================
  * OrganizationsModule
+ * Show the single organization record. Read-only display.
+ * Show: name, slug, type, contact_email, status
  * ============================================================ */
 
 interface Organization {
   id: string;
   name: string;
-  slug: string;
+  slug: string | null;
   type: string | null;
   contact_email: string | null;
   status: string | null;
@@ -24,62 +26,75 @@ export function OrganizationsModule({ organizationId }: { organizationId: string
 
   useEffect(() => {
     (async () => {
-      const { data, error } = await supabase.from('organizations').select('*').eq('id', organizationId).single();
-      if (error) showToast('error', `Failed to load organization: ${error.message}`);
-      else setOrg(data as Organization);
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('organizations')
+        .select('*')
+        .eq('id', organizationId)
+        .maybeSingle();
+      if (error) {
+        showToast('error', `Failed to load organization: ${error.message}`);
+      } else {
+        setOrg(data);
+      }
       setLoading(false);
     })();
   }, [organizationId, showToast]);
 
-  if (loading) return <LoadingSpinner label="Loading organization…" />;
-
-  if (!org) {
-    return <EmptyState icon={Building2} title="Organization not found" description="The organization record could not be loaded." />;
-  }
+  const statusColor = (s: string | null): string => {
+    if (!s) return 'gray';
+    if (['active', 'verified'].includes(s)) return 'green';
+    if (['suspended', 'banned'].includes(s)) return 'red';
+    if (['pending', 'trial'].includes(s)) return 'yellow';
+    return 'gray';
+  };
 
   return (
     <div>
       <PageHeader title="Organization" description="Organization details" />
-      <Card className="p-6">
-        <div className="flex items-start gap-4 mb-6">
-          <div className="w-14 h-14 rounded-xl bg-blue-500/10 flex items-center justify-center shrink-0">
-            <Building2 className="w-7 h-7 text-blue-400" />
+      {loading ? (
+        <LoadingSpinner label="Loading organization..." />
+      ) : !org ? (
+        <EmptyState icon={Building2} title="Organization not found" description="The organization record could not be loaded." />
+      ) : (
+        <Card className="p-6">
+          <div className="flex items-start gap-4 mb-6">
+            <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center shrink-0">
+              <Building2 className="w-6 h-6 text-blue-400" />
+            </div>
+            <div className="min-w-0">
+              <h3 className="text-lg font-bold text-white">{org.name}</h3>
+              {org.slug && <p className="text-sm text-zinc-500 font-mono">{org.slug}</p>}
+              {org.status && <div className="mt-1"><Badge color={statusColor(org.status)}>{org.status}</Badge></div>}
+            </div>
           </div>
-          <div className="min-w-0">
-            <h3 className="text-xl font-bold text-white">{org.name}</h3>
-            <p className="text-sm text-zinc-500 font-mono">{org.slug}</p>
-          </div>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="flex items-center gap-3">
-            <Globe className="w-4 h-4 text-zinc-500 shrink-0" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <p className="text-xs text-zinc-500">Type</p>
+              <p className="text-xs text-zinc-500 mb-1">Type</p>
               <p className="text-sm text-white">{org.type || '—'}</p>
             </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <Mail className="w-4 h-4 text-zinc-500 shrink-0" />
             <div>
-              <p className="text-xs text-zinc-500">Contact Email</p>
-              <p className="text-sm text-white">{org.contact_email || '—'}</p>
+              <p className="text-xs text-zinc-500 mb-1">Contact Email</p>
+              <p className="text-sm text-white flex items-center gap-1.5">
+                {org.contact_email ? (
+                  <>
+                    <Mail className="w-3.5 h-3.5 text-zinc-500" />
+                    {org.contact_email}
+                  </>
+                ) : '—'}
+              </p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <ShieldCheck className="w-4 h-4 text-zinc-500 shrink-0" />
-            <div>
-              <p className="text-xs text-zinc-500">Status</p>
-              {org.status ? <Badge color={org.status === 'active' ? 'green' : 'gray'}>{org.status}</Badge> : <span className="text-sm text-zinc-600">—</span>}
-            </div>
-          </div>
-        </div>
-      </Card>
+        </Card>
+      )}
     </div>
   );
 }
 
 /* ============================================================
  * OrganizationMembersModule
+ * List organization_members filtered by organization_id. Read-only.
+ * Show: user_id, role, status
  * ============================================================ */
 
 interface OrganizationMember {
@@ -95,42 +110,57 @@ export function OrganizationMembersModule({ organizationId }: { organizationId: 
   const [members, setMembers] = useState<OrganizationMember[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const load = useCallback(async () => {
+  const fetchMembers = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase
       .from('organization_members')
       .select('*')
       .eq('organization_id', organizationId)
       .order('created_at', { ascending: false });
-    if (error) showToast('error', `Failed to load members: ${error.message}`);
-    else setMembers((data as OrganizationMember[]) || []);
+    if (error) {
+      showToast('error', `Failed to load members: ${error.message}`);
+    } else {
+      setMembers(data || []);
+    }
     setLoading(false);
   }, [organizationId, showToast]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { fetchMembers(); }, [fetchMembers]);
 
-  if (loading) return <LoadingSpinner label="Loading members…" />;
+  const statusColor = (s: string | null): string => {
+    if (!s) return 'gray';
+    if (['active', 'confirmed'].includes(s)) return 'green';
+    if (['invited', 'pending'].includes(s)) return 'yellow';
+    if (['removed', 'disabled'].includes(s)) return 'red';
+    return 'gray';
+  };
+
+  const roleColor = (r: string | null): string => {
+    if (!r) return 'gray';
+    if (['owner', 'admin'].includes(r)) return 'purple';
+    if (['manager'].includes(r)) return 'blue';
+    return 'gray';
+  };
 
   return (
     <div>
       <PageHeader title="Organization Members" description="Members of this organization" />
-
-      {members.length === 0 ? (
+      {loading ? (
+        <LoadingSpinner label="Loading members..." />
+      ) : members.length === 0 ? (
         <EmptyState icon={Users} title="No members" description="Organization members will appear here." />
       ) : (
-        <div className="space-y-3">
+        <div className="grid gap-3">
           {members.map((m) => (
             <Card key={m.id} className="p-4">
               <div className="flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-lg bg-white/5 flex items-center justify-center shrink-0">
-                    <Users className="w-5 h-5 text-zinc-400" />
-                  </div>
+                  <Users className="w-4 h-4 text-blue-400 shrink-0" />
                   <div className="min-w-0">
-                    <p className="text-sm font-mono text-white truncate">{m.user_id}</p>
-                    <div className="flex items-center gap-2 mt-1">
-                      {m.role && <Badge color="blue">{m.role}</Badge>}
-                      {m.status && <Badge color={m.status === 'active' ? 'green' : 'gray'}>{m.status}</Badge>}
+                    <p className="text-sm text-white font-mono truncate">{m.user_id}</p>
+                    <div className="flex gap-2 mt-1">
+                      {m.role && <Badge color={roleColor(m.role)}>{m.role}</Badge>}
+                      {m.status && <Badge color={statusColor(m.status)}>{m.status}</Badge>}
                     </div>
                   </div>
                 </div>
@@ -145,6 +175,8 @@ export function OrganizationMembersModule({ organizationId }: { organizationId: 
 
 /* ============================================================
  * EnterpriseBranchesModule
+ * List enterprise_branches filtered by organization_id. Read-only.
+ * Show: name, branch_code, city, state, status, health_score
  * ============================================================ */
 
 interface EnterpriseBranch {
@@ -158,56 +190,71 @@ interface EnterpriseBranch {
   health_score: number | null;
 }
 
-function healthColor(score: number | null): string {
-  if (score === null) return 'gray';
-  if (score >= 80) return 'green';
-  if (score >= 50) return 'yellow';
-  return 'red';
-}
-
 export function EnterpriseBranchesModule({ organizationId }: { organizationId: string }) {
   const { showToast } = useToast();
   const [branches, setBranches] = useState<EnterpriseBranch[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const load = useCallback(async () => {
+  const fetchBranches = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase
       .from('enterprise_branches')
       .select('*')
       .eq('organization_id', organizationId)
       .order('name', { ascending: true });
-    if (error) showToast('error', `Failed to load branches: ${error.message}`);
-    else setBranches((data as EnterpriseBranch[]) || []);
+    if (error) {
+      showToast('error', `Failed to load branches: ${error.message}`);
+    } else {
+      setBranches(data || []);
+    }
     setLoading(false);
   }, [organizationId, showToast]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { fetchBranches(); }, [fetchBranches]);
 
-  if (loading) return <LoadingSpinner label="Loading branches…" />;
+  const statusColor = (s: string | null): string => {
+    if (!s) return 'gray';
+    if (['active', 'operational'].includes(s)) return 'green';
+    if (['inactive', 'closed'].includes(s)) return 'red';
+    if (['maintenance', 'pending'].includes(s)) return 'yellow';
+    return 'gray';
+  };
+
+  const healthColor = (score: number | null): string => {
+    if (score === null) return 'gray';
+    if (score >= 80) return 'green';
+    if (score >= 50) return 'yellow';
+    return 'red';
+  };
 
   return (
     <div>
       <PageHeader title="Enterprise Branches" description="Branch locations for this organization" />
-
-      {branches.length === 0 ? (
+      {loading ? (
+        <LoadingSpinner label="Loading branches..." />
+      ) : branches.length === 0 ? (
         <EmptyState icon={GitBranch} title="No branches" description="Enterprise branches will appear here." />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {branches.map((b) => (
             <Card key={b.id} className="p-4">
-              <div className="flex items-start justify-between gap-3 mb-2">
-                <div className="min-w-0">
+              <div className="flex items-start justify-between gap-2 mb-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <GitBranch className="w-4 h-4 text-blue-400 shrink-0" />
                   <h3 className="font-semibold text-white truncate">{b.name}</h3>
-                  {b.branch_code && <p className="text-xs text-zinc-500 font-mono">{b.branch_code}</p>}
                 </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  {b.status && <Badge color={b.status === 'active' ? 'green' : 'gray'}>{b.status}</Badge>}
-                  {b.health_score !== null && <Badge color={healthColor(b.health_score)}>{b.health_score}</Badge>}
-                </div>
+                {b.status && <Badge color={statusColor(b.status)}>{b.status}</Badge>}
               </div>
-              {(b.city || b.state) && (
-                <p className="text-sm text-zinc-400">{[b.city, b.state].filter(Boolean).join(', ')}</p>
+              {b.branch_code && <p className="text-xs text-zinc-500 font-mono mb-2">{b.branch_code}</p>}
+              <div className="flex items-center gap-1.5 text-sm text-zinc-400 mb-2">
+                <MapPin className="w-3.5 h-3.5" />
+                <span>{[b.city, b.state].filter(Boolean).join(', ') || '—'}</span>
+              </div>
+              {b.health_score !== null && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-zinc-500">Health:</span>
+                  <Badge color={healthColor(b.health_score)}>{b.health_score}%</Badge>
+                </div>
               )}
             </Card>
           ))}
@@ -219,6 +266,8 @@ export function EnterpriseBranchesModule({ organizationId }: { organizationId: s
 
 /* ============================================================
  * EnterpriseRegionsModule
+ * List enterprise_regions filtered by organization_id. Read-only.
+ * Show: name, region_type, code, status
  * ============================================================ */
 
 interface EnterpriseRegion {
@@ -235,46 +284,51 @@ export function EnterpriseRegionsModule({ organizationId }: { organizationId: st
   const [regions, setRegions] = useState<EnterpriseRegion[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const load = useCallback(async () => {
+  const fetchRegions = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase
       .from('enterprise_regions')
       .select('*')
       .eq('organization_id', organizationId)
       .order('name', { ascending: true });
-    if (error) showToast('error', `Failed to load regions: ${error.message}`);
-    else setRegions((data as EnterpriseRegion[]) || []);
+    if (error) {
+      showToast('error', `Failed to load regions: ${error.message}`);
+    } else {
+      setRegions(data || []);
+    }
     setLoading(false);
   }, [organizationId, showToast]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { fetchRegions(); }, [fetchRegions]);
 
-  if (loading) return <LoadingSpinner label="Loading regions…" />;
+  const statusColor = (s: string | null): string => {
+    if (!s) return 'gray';
+    if (['active'].includes(s)) return 'green';
+    if (['inactive', 'archived'].includes(s)) return 'red';
+    return 'gray';
+  };
 
   return (
     <div>
       <PageHeader title="Enterprise Regions" description="Regional groupings for this organization" />
-
-      {regions.length === 0 ? (
-        <EmptyState icon={Map} title="No regions" description="Enterprise regions will appear here." />
+      {loading ? (
+        <LoadingSpinner label="Loading regions..." />
+      ) : regions.length === 0 ? (
+        <EmptyState icon={MapPin} title="No regions" description="Enterprise regions will appear here." />
       ) : (
-        <div className="space-y-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {regions.map((r) => (
             <Card key={r.id} className="p-4">
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-lg bg-white/5 flex items-center justify-center shrink-0">
-                    <Map className="w-5 h-5 text-zinc-400" />
-                  </div>
-                  <div className="min-w-0">
-                    <h3 className="font-semibold text-white truncate">{r.name}</h3>
-                    <div className="flex items-center gap-2 mt-1">
-                      {r.region_type && <Badge color="blue">{r.region_type}</Badge>}
-                      {r.code && <span className="text-xs text-zinc-500 font-mono">{r.code}</span>}
-                    </div>
-                  </div>
+              <div className="flex items-start justify-between gap-2 mb-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <MapPin className="w-4 h-4 text-blue-400 shrink-0" />
+                  <h3 className="font-semibold text-white truncate">{r.name}</h3>
                 </div>
-                {r.status && <Badge color={r.status === 'active' ? 'green' : 'gray'}>{r.status}</Badge>}
+                {r.status && <Badge color={statusColor(r.status)}>{r.status}</Badge>}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {r.region_type && <Badge color="blue">{r.region_type}</Badge>}
+                {r.code && <Badge color="purple">{r.code}</Badge>}
               </div>
             </Card>
           ))}
@@ -286,6 +340,8 @@ export function EnterpriseRegionsModule({ organizationId }: { organizationId: st
 
 /* ============================================================
  * OrganizationPoliciesModule
+ * List organization_policies filtered by organization_id. Read-only.
+ * Show: policy_key, policy_type, name, description, status
  * ============================================================ */
 
 interface OrganizationPolicy {
@@ -303,42 +359,53 @@ export function OrganizationPoliciesModule({ organizationId }: { organizationId:
   const [policies, setPolicies] = useState<OrganizationPolicy[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const load = useCallback(async () => {
+  const fetchPolicies = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase
       .from('organization_policies')
       .select('*')
       .eq('organization_id', organizationId)
       .order('name', { ascending: true });
-    if (error) showToast('error', `Failed to load policies: ${error.message}`);
-    else setPolicies((data as OrganizationPolicy[]) || []);
+    if (error) {
+      showToast('error', `Failed to load policies: ${error.message}`);
+    } else {
+      setPolicies(data || []);
+    }
     setLoading(false);
   }, [organizationId, showToast]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { fetchPolicies(); }, [fetchPolicies]);
 
-  if (loading) return <LoadingSpinner label="Loading policies…" />;
+  const statusColor = (s: string | null): string => {
+    if (!s) return 'gray';
+    if (['active', 'enabled', 'enforced'].includes(s)) return 'green';
+    if (['disabled', 'revoked'].includes(s)) return 'red';
+    if (['draft', 'pending'].includes(s)) return 'yellow';
+    return 'gray';
+  };
 
   return (
     <div>
-      <PageHeader title="Organization Policies" description="Policy configurations for this organization" />
-
-      {policies.length === 0 ? (
-        <EmptyState icon={ShieldCheck} title="No policies" description="Organization policies will appear here." />
+      <PageHeader title="Organization Policies" description="Policies configured for this organization" />
+      {loading ? (
+        <LoadingSpinner label="Loading policies..." />
+      ) : policies.length === 0 ? (
+        <EmptyState icon={Shield} title="No policies" description="Organization policies will appear here." />
       ) : (
-        <div className="space-y-3">
+        <div className="grid gap-3">
           {policies.map((p) => (
             <Card key={p.id} className="p-4">
               <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0 flex-1">
+                <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
+                    <Shield className="w-4 h-4 text-blue-400 shrink-0" />
                     <h3 className="font-semibold text-white truncate">{p.name}</h3>
-                    {p.status && <Badge color={p.status === 'active' ? 'green' : 'gray'}>{p.status}</Badge>}
+                    {p.status && <Badge color={statusColor(p.status)}>{p.status}</Badge>}
                   </div>
-                  {p.description && <p className="text-sm text-zinc-400 mb-2">{p.description}</p>}
+                  {p.description && <p className="text-sm text-zinc-400 mb-2 line-clamp-2">{p.description}</p>}
                   <div className="flex flex-wrap gap-2">
-                    {p.policy_key && <Badge color="purple">{p.policy_key}</Badge>}
-                    {p.policy_type && <Badge color="blue">{p.policy_type}</Badge>}
+                    <Badge color="blue">{p.policy_key}</Badge>
+                    {p.policy_type && <Badge color="purple">{p.policy_type}</Badge>}
                   </div>
                 </div>
               </div>

@@ -1,38 +1,28 @@
 import { useEffect, useState } from 'react';
-import { Plus, Pencil, Trash2, HelpCircle, GripVertical } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, PageHeader, Card, Badge, Button, Input, TextArea, Select, Modal } from '../components/UI';
 import { useToast } from '../context/ToastContext';
+import { HelpCircle, Plus, Pencil, Trash2, GripVertical } from 'lucide-react';
 
 interface Question {
   id: string;
   question_text: string;
   question_type: string;
   flow_type: string;
-  options: string[];
+  options: string[] | null;
   is_required: boolean;
   is_active: boolean;
   sort_order: number;
 }
 
-type FormState = {
-  question_text: string;
-  question_type: string;
-  flow_type: string;
-  options: string;
-  is_required: boolean;
-  is_active: boolean;
-  sort_order: string;
-};
-
-const EMPTY_FORM: FormState = {
+const emptyForm = {
   question_text: '',
   question_type: 'text',
   flow_type: 'ALWAYS',
   options: '',
-  is_required: true,
+  is_required: false,
   is_active: true,
-  sort_order: '0',
+  sort_order: 0,
 };
 
 export default function QuestionsModule({ businessId }: { businessId: string }) {
@@ -42,9 +32,13 @@ export default function QuestionsModule({ businessId }: { businessId: string }) 
   const [questions, setQuestions] = useState<Question[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [editing, setEditing] = useState<Question | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<Question | null>(null);
-  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [form, setForm] = useState(emptyForm);
+
+  useEffect(() => {
+    fetchQuestions();
+  }, [businessId]);
 
   async function fetchQuestions() {
     setLoading(true);
@@ -54,45 +48,33 @@ export default function QuestionsModule({ businessId }: { businessId: string }) 
         .select('id, question_text, question_type, flow_type, options, is_required, is_active, sort_order')
         .eq('business_id', businessId)
         .order('sort_order', { ascending: true });
-
       if (error) throw error;
-      setQuestions((data as Question[]) ?? []);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to load questions';
-      showToast('error', msg);
+      setQuestions((data ?? []) as Question[]);
+    } catch {
+      showToast('error', 'Failed to load questions');
     } finally {
       setLoading(false);
     }
   }
 
-  useEffect(() => {
-    void fetchQuestions();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [businessId]);
-
   function openCreate() {
-    setEditing(null);
-    setForm(EMPTY_FORM);
+    setEditingId(null);
+    setForm({ ...emptyForm, sort_order: questions.length });
     setModalOpen(true);
   }
 
   function openEdit(q: Question) {
-    setEditing(q);
+    setEditingId(q.id);
     setForm({
       question_text: q.question_text,
       question_type: q.question_type,
       flow_type: q.flow_type,
-      options: Array.isArray(q.options) ? q.options.join('\n') : '',
+      options: q.options ? q.options.join(', ') : '',
       is_required: q.is_required,
       is_active: q.is_active,
-      sort_order: String(q.sort_order),
+      sort_order: q.sort_order,
     });
     setModalOpen(true);
-  }
-
-  function openDelete(q: Question) {
-    setDeleteTarget(q);
-    setDeleteOpen(true);
   }
 
   async function handleSave() {
@@ -100,27 +82,25 @@ export default function QuestionsModule({ businessId }: { businessId: string }) 
       showToast('error', 'Question text is required');
       return;
     }
-
     setSaving(true);
     try {
-      const optionsArray =
-        form.question_type === 'multiple_choice'
-          ? form.options.split('\n').map((o) => o.trim()).filter(Boolean)
-          : [];
-
-      const payload = {
+      const payload: Record<string, unknown> = {
         business_id: businessId,
-        question_text: form.question_text.trim(),
+        question_text: form.question_text,
         question_type: form.question_type,
         flow_type: form.flow_type,
-        options: optionsArray,
         is_required: form.is_required,
         is_active: form.is_active,
-        sort_order: parseInt(form.sort_order || '0', 10) || 0,
+        sort_order: form.sort_order,
       };
+      if (form.question_type === 'multiple_choice') {
+        payload.options = form.options.split(',').map((o) => o.trim()).filter(Boolean);
+      } else {
+        payload.options = null;
+      }
 
-      if (editing) {
-        const { error } = await supabase.from('questions').update(payload).eq('id', editing.id);
+      if (editingId) {
+        const { error } = await supabase.from('questions').update(payload).eq('id', editingId);
         if (error) throw error;
         showToast('success', 'Question updated');
       } else {
@@ -130,34 +110,29 @@ export default function QuestionsModule({ businessId }: { businessId: string }) 
       }
       setModalOpen(false);
       await fetchQuestions();
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to save question';
-      showToast('error', msg);
+    } catch {
+      showToast('error', 'Failed to save question');
     } finally {
       setSaving(false);
     }
   }
 
   async function handleDelete() {
-    if (!deleteTarget) return;
+    if (!deleteId) return;
     setSaving(true);
     try {
-      const { error } = await supabase.from('questions').delete().eq('id', deleteTarget.id);
+      const { error } = await supabase.from('questions').delete().eq('id', deleteId);
       if (error) throw error;
       showToast('success', 'Question deleted');
       setDeleteOpen(false);
-      setDeleteTarget(null);
+      setDeleteId(null);
       await fetchQuestions();
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to delete question';
-      showToast('error', msg);
+    } catch {
+      showToast('error', 'Failed to delete question');
     } finally {
       setSaving(false);
     }
   }
-
-  const typeColor = (t: string) => (t === 'rating' ? 'yellow' : t === 'multiple_choice' ? 'purple' : 'blue');
-  const flowColor = (f: string) => (f === 'POSITIVE' ? 'green' : f === 'NEGATIVE' ? 'red' : 'gray');
 
   if (loading) return <LoadingSpinner label="Loading questions..." />;
 
@@ -165,43 +140,34 @@ export default function QuestionsModule({ businessId }: { businessId: string }) 
     <div>
       <PageHeader
         title="Questions"
-        description="Manage your review flow questions"
-        action={<Button onClick={openCreate}><Plus className="w-4 h-4" /> New Question</Button>}
+        description="Manage review questions for this business"
+        action={<Button onClick={openCreate}><Plus className="w-4 h-4" /> Add Question</Button>}
       />
 
       {questions.length === 0 ? (
-        <EmptyState
-          icon={HelpCircle}
-          title="No questions yet"
-          description="Create questions to build your review flow."
-          action={<Button onClick={openCreate}><Plus className="w-4 h-4" /> New Question</Button>}
-        />
+        <EmptyState icon={HelpCircle} title="No questions yet" description="Create questions to collect customer feedback." action={<Button onClick={openCreate}><Plus className="w-4 h-4" /> Add Question</Button>} />
       ) : (
         <div className="space-y-3">
           {questions.map((q) => (
             <Card key={q.id} className="p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-2 flex-wrap">
-                    <GripVertical className="w-4 h-4 text-zinc-600 shrink-0" />
-                    <Badge color="gray">#{q.sort_order}</Badge>
-                    <Badge color={typeColor(q.question_type)}>{q.question_type}</Badge>
-                    <Badge color={flowColor(q.flow_type)}>{q.flow_type}</Badge>
+                    <GripVertical className="w-4 h-4 text-zinc-600" />
+                    <span className="text-sm text-zinc-500">#{q.sort_order}</span>
+                    <Badge color="blue">{q.question_type}</Badge>
+                    <Badge color={q.flow_type === 'ALWAYS' ? 'gray' : q.flow_type === 'POSITIVE' ? 'green' : 'red'}>{q.flow_type}</Badge>
                     {q.is_required && <Badge color="yellow">Required</Badge>}
                     <Badge color={q.is_active ? 'green' : 'gray'}>{q.is_active ? 'Active' : 'Inactive'}</Badge>
                   </div>
                   <p className="text-sm text-white font-medium mb-1">{q.question_text}</p>
-                  {q.question_type === 'multiple_choice' && Array.isArray(q.options) && q.options.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 mt-2">
-                      {q.options.map((opt, i) => (
-                        <span key={i} className="px-2 py-0.5 rounded-md bg-white/5 border border-white/10 text-xs text-zinc-300">{opt}</span>
-                      ))}
-                    </div>
+                  {q.options && q.options.length > 0 && (
+                    <p className="text-xs text-zinc-500">Options: {q.options.join(', ')}</p>
                   )}
                 </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  <Button variant="ghost" size="sm" onClick={() => openEdit(q)}><Pencil className="w-3.5 h-3.5" /></Button>
-                  <Button variant="ghost" size="sm" onClick={() => openDelete(q)}><Trash2 className="w-3.5 h-3.5 text-red-400" /></Button>
+                <div className="flex items-center gap-1">
+                  <Button variant="ghost" size="sm" onClick={() => openEdit(q)}><Pencil className="w-4 h-4" /></Button>
+                  <Button variant="ghost" size="sm" onClick={() => { setDeleteId(q.id); setDeleteOpen(true); }}><Trash2 className="w-4 h-4 text-red-400" /></Button>
                 </div>
               </div>
             </Card>
@@ -209,15 +175,15 @@ export default function QuestionsModule({ businessId }: { businessId: string }) 
         </div>
       )}
 
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editing ? 'Edit Question' : 'New Question'}>
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editingId ? 'Edit Question' : 'Add Question'}>
         <div className="space-y-4">
           <div>
-            <label className="block text-xs font-medium text-zinc-400 mb-1.5">Question Text</label>
-            <TextArea value={form.question_text} onChange={(v) => setForm({ ...form, question_text: v })} placeholder="e.g. How was your experience today?" rows={2} />
+            <label className="text-xs text-zinc-400 mb-1 block">Question Text</label>
+            <TextArea value={form.question_text} onChange={(v) => setForm({ ...form, question_text: v })} placeholder="Enter your question..." rows={2} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-zinc-400 mb-1.5">Question Type</label>
+              <label className="text-xs text-zinc-400 mb-1 block">Question Type</label>
               <Select value={form.question_type} onChange={(v) => setForm({ ...form, question_type: v })}>
                 <option value="text">Text</option>
                 <option value="multiple_choice">Multiple Choice</option>
@@ -225,7 +191,7 @@ export default function QuestionsModule({ businessId }: { businessId: string }) 
               </Select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-zinc-400 mb-1.5">Flow Type</label>
+              <label className="text-xs text-zinc-400 mb-1 block">Flow Type</label>
               <Select value={form.flow_type} onChange={(v) => setForm({ ...form, flow_type: v })}>
                 <option value="ALWAYS">Always</option>
                 <option value="POSITIVE">Positive</option>
@@ -235,38 +201,35 @@ export default function QuestionsModule({ businessId }: { businessId: string }) 
           </div>
           {form.question_type === 'multiple_choice' && (
             <div>
-              <label className="block text-xs font-medium text-zinc-400 mb-1.5">Options (one per line)</label>
-              <TextArea value={form.options} onChange={(v) => setForm({ ...form, options: v })} placeholder="Great&#10;Good&#10;Okay&#10;Poor" rows={4} />
+              <label className="text-xs text-zinc-400 mb-1 block">Options (comma-separated)</label>
+              <Input value={form.options} onChange={(v) => setForm({ ...form, options: v })} placeholder="Option 1, Option 2, Option 3" />
             </div>
           )}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-zinc-400 mb-1.5">Sort Order</label>
-              <Input type="number" value={form.sort_order} onChange={(v) => setForm({ ...form, sort_order: v })} />
+              <label className="text-xs text-zinc-400 mb-1 block">Sort Order</label>
+              <Input type="number" value={String(form.sort_order)} onChange={(v) => setForm({ ...form, sort_order: parseInt(v) || 0 })} />
             </div>
-            <div className="flex items-end gap-4">
+            <div className="flex items-end gap-4 pb-1">
               <label className="flex items-center gap-2 text-sm text-zinc-300 cursor-pointer">
-                <input type="checkbox" checked={form.is_required} onChange={(e) => setForm({ ...form, is_required: e.target.checked })} className="w-4 h-4 rounded accent-blue-500" />
+                <input type="checkbox" checked={form.is_required} onChange={(e) => setForm({ ...form, is_required: e.target.checked })} className="accent-blue-500" />
                 Required
               </label>
               <label className="flex items-center gap-2 text-sm text-zinc-300 cursor-pointer">
-                <input type="checkbox" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} className="w-4 h-4 rounded accent-blue-500" />
+                <input type="checkbox" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} className="accent-blue-500" />
                 Active
               </label>
             </div>
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="secondary" onClick={() => setModalOpen(false)}>Cancel</Button>
-            <Button onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : 'Save'}</Button>
+            <Button onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : editingId ? 'Update' : 'Create'}</Button>
           </div>
         </div>
       </Modal>
 
-      <Modal open={deleteOpen} onClose={() => setDeleteOpen(false)} title="Delete Question" maxWidth="max-w-md">
-        <p className="text-sm text-zinc-300 mb-6">
-          Are you sure you want to delete this question? This action cannot be undone.
-        </p>
-        {deleteTarget && <p className="text-sm text-white bg-white/5 border border-white/10 rounded-lg p-3 mb-6">"{deleteTarget.question_text}"</p>}
+      <Modal open={deleteOpen} onClose={() => setDeleteOpen(false)} title="Delete Question" maxWidth="max-w-sm">
+        <p className="text-sm text-zinc-300 mb-4">Are you sure you want to delete this question? This action cannot be undone.</p>
         <div className="flex justify-end gap-2">
           <Button variant="secondary" onClick={() => setDeleteOpen(false)}>Cancel</Button>
           <Button variant="danger" onClick={handleDelete} disabled={saving}>{saving ? 'Deleting...' : 'Delete'}</Button>

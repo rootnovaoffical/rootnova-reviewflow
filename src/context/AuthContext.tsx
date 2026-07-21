@@ -31,119 +31,66 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loadBusinesses = useCallback(async (p: Profile) => {
     let businessList: Business[] = [];
-
     if (p.role === 'ROOTNOVA_SUPER_ADMIN' || p.role === 'ROOTNOVA_ADMIN') {
       const { data, error } = await supabase.from('businesses').select('*').order('name');
       if (error) { setBusinesses([]); setBusiness(null); return; }
       businessList = (data as Business[]) || [];
     } else {
-      // Step 1: fetch business_admins rows for this user (RLS allows user_id = auth.uid())
-      const { data: adminRows, error: adminErr } = await supabase
-        .from('business_admins')
-        .select('business_id')
-        .eq('user_id', p.id);
-      if (adminErr || !adminRows || adminRows.length === 0) {
-        setBusinesses([]);
-        setBusiness(null);
-        return;
-      }
-      // Step 2: fetch businesses by those IDs (RLS allows via is_business_admin(id))
+      const { data: adminRows, error: adminErr } = await supabase.from('business_admins').select('business_id').eq('user_id', p.id);
+      if (adminErr || !adminRows || adminRows.length === 0) { setBusinesses([]); setBusiness(null); return; }
       const businessIds = adminRows.map((r) => (r as { business_id: string }).business_id);
-      const { data: bizData, error: bizErr } = await supabase
-        .from('businesses')
-        .select('*')
-        .in('id', businessIds)
-        .order('name');
-      if (bizErr || !bizData) {
-        setBusinesses([]);
-        setBusiness(null);
-        return;
-      }
+      const { data: bizData, error: bizErr } = await supabase.from('businesses').select('*').in('id', businessIds).order('name');
+      if (bizErr || !bizData) { setBusinesses([]); setBusiness(null); return; }
       businessList = bizData as Business[];
     }
-
     setBusinesses(businessList);
     const stored = localStorage.getItem('selectedBusinessId');
     const target = businessList.find((b) => b.id === stored) || businessList[0] || null;
     setBusiness(target);
     if (target) localStorage.setItem('selectedBusinessId', target.id);
-
     if (target?.organization_id) {
-      const { data: org } = await supabase
-        .from('organizations')
-        .select('*')
-        .eq('id', target.organization_id)
-        .maybeSingle();
+      const { data: org } = await supabase.from('organizations').select('*').eq('id', target.organization_id).maybeSingle();
       setOrganization(org as Organization | null);
-    } else {
-      setOrganization(null);
-    }
+    } else { setOrganization(null); }
   }, []);
 
   const loadProfile = useCallback(async (uid: string) => {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', uid)
-      .maybeSingle();
+    const { data, error } = await supabase.from('profiles').select('*').eq('id', uid).maybeSingle();
     if (error || !data) return null;
     return data as Profile;
   }, []);
 
   useEffect(() => {
     let mounted = true;
-
     supabase.auth.getSession().then(async ({ data: { session: s } }) => {
       if (!mounted) return;
-      setSession(s);
-      setUser(s?.user ?? null);
+      setSession(s); setUser(s?.user ?? null);
       if (s?.user) {
         const p = await loadProfile(s.user.id);
-        if (p && mounted) {
-          setProfile(p);
-          await loadBusinesses(p);
-        }
+        if (p && mounted) { setProfile(p); await loadBusinesses(p); }
       }
       if (mounted) setLoading(false);
     });
-
     const { data: sub } = supabase.auth.onAuthStateChange(async (_event, s) => {
       if (!mounted) return;
-      setSession(s);
-      setUser(s?.user ?? null);
+      setSession(s); setUser(s?.user ?? null);
       if (s?.user) {
         const p = await loadProfile(s.user.id);
-        if (p && mounted) {
-          setProfile(p);
-          await loadBusinesses(p);
-        }
-      } else {
-        setProfile(null);
-        setBusinesses([]);
-        setBusiness(null);
-        setOrganization(null);
-      }
+        if (p && mounted) { setProfile(p); await loadBusinesses(p); }
+      } else { setProfile(null); setBusinesses([]); setBusiness(null); setOrganization(null); }
       if (mounted) setLoading(false);
     });
-
     return () => { mounted = false; sub.subscription.unsubscribe(); };
   }, [loadProfile, loadBusinesses]);
 
   const switchBusiness = useCallback(async (businessId: string) => {
     const b = businesses.find((x) => x.id === businessId);
     if (b) {
-      setBusiness(b);
-      localStorage.setItem('selectedBusinessId', b.id);
+      setBusiness(b); localStorage.setItem('selectedBusinessId', b.id);
       if (b.organization_id) {
-        const { data: org } = await supabase
-          .from('organizations')
-          .select('*')
-          .eq('id', b.organization_id)
-          .maybeSingle();
+        const { data: org } = await supabase.from('organizations').select('*').eq('id', b.organization_id).maybeSingle();
         setOrganization(org as Organization | null);
-      } else {
-        setOrganization(null);
-      }
+      } else { setOrganization(null); }
     }
   }, [businesses]);
 
@@ -153,15 +100,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signUp = useCallback(async (email: string, password: string, fullName: string) => {
-    const { data, error } = await supabase.auth.signUp({
-      email, password, options: { data: { full_name: fullName } },
-    });
+    const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { full_name: fullName } } });
     if (error) return { error: error.message };
-    if (data.user) {
-      await supabase.from('profiles').upsert({
-        id: data.user.id, email, full_name: fullName, role: 'BUSINESS_ADMIN',
-      });
-    }
+    if (data.user) { await supabase.from('profiles').upsert({ id: data.user.id, email, full_name: fullName, role: 'BUSINESS_ADMIN' }); }
     return { error: null };
   }, []);
 
@@ -172,11 +113,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{
-      session, user, profile, businesses, business, organization,
-      role: profile?.role ?? 'BUSINESS_ADMIN',
-      loading, signIn, signUp, signOut, switchBusiness,
-    }}>
+    <AuthContext.Provider value={{ session, user, profile, businesses, business, organization, role: profile?.role ?? 'BUSINESS_ADMIN', loading, signIn, signUp, signOut, switchBusiness }}>
       {children}
     </AuthContext.Provider>
   );

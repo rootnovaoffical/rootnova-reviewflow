@@ -1,24 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Save, ExternalLink, QrCode as QrIcon, Link2, Building2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { LoadingSpinner, EmptyState, PageHeader, Card, Button, Input, TextArea } from '../components/UI';
+import { LoadingSpinner, PageHeader, Card, Button, Input, TextArea } from '../components/UI';
 import { useToast } from '../context/ToastContext';
+import { Save, ExternalLink, QrCode, Copy } from 'lucide-react';
 
-interface BusinessRecord {
-  id: string;
-  name: string;
-  slug: string;
-  logo_url: string | null;
-  welcome_message: string | null;
-  google_review_url: string | null;
-  public_review_enabled: boolean;
-  business_category: string | null;
-  contact_email: string | null;
-  contact_phone: string | null;
-  location_city: string | null;
-}
-
-type FormState = {
+interface BusinessSettings {
   name: string;
   slug: string;
   logo_url: string;
@@ -29,181 +15,183 @@ type FormState = {
   contact_email: string;
   contact_phone: string;
   location_city: string;
-};
+}
 
 export default function BusinessSettingsModule({ businessId }: { businessId: string }) {
   const { showToast } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [business, setBusiness] = useState<BusinessRecord | null>(null);
-  const [form, setForm] = useState<FormState>({
-    name: '', slug: '', logo_url: '', welcome_message: '', google_review_url: '',
-    public_review_enabled: true, business_category: '', contact_email: '', contact_phone: '', location_city: '',
+  const [form, setForm] = useState<BusinessSettings>({
+    name: '',
+    slug: '',
+    logo_url: '',
+    welcome_message: '',
+    google_review_url: '',
+    public_review_enabled: true,
+    business_category: '',
+    contact_email: '',
+    contact_phone: '',
+    location_city: '',
   });
+
+  useEffect(() => {
+    fetchBusiness();
+  }, [businessId]);
 
   async function fetchBusiness() {
     setLoading(true);
     try {
       const { data, error } = await supabase
         .from('businesses')
-        .select('id, name, slug, logo_url, welcome_message, google_review_url, public_review_enabled, business_category, contact_email, contact_phone, location_city')
+        .select('name, slug, logo_url, welcome_message, google_review_url, public_review_enabled, business_category, contact_email, contact_phone, location_city')
         .eq('id', businessId)
         .single();
-
       if (error) throw error;
-      const b = data as BusinessRecord;
-      setBusiness(b);
-      setForm({
-        name: b.name ?? '',
-        slug: b.slug ?? '',
-        logo_url: b.logo_url ?? '',
-        welcome_message: b.welcome_message ?? '',
-        google_review_url: b.google_review_url ?? '',
-        public_review_enabled: b.public_review_enabled,
-        business_category: b.business_category ?? '',
-        contact_email: b.contact_email ?? '',
-        contact_phone: b.contact_phone ?? '',
-        location_city: b.location_city ?? '',
-      });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to load business settings';
-      showToast('error', msg);
+      if (data) {
+        setForm({
+          name: data.name ?? '',
+          slug: data.slug ?? '',
+          logo_url: data.logo_url ?? '',
+          welcome_message: data.welcome_message ?? '',
+          google_review_url: data.google_review_url ?? '',
+          public_review_enabled: data.public_review_enabled ?? true,
+          business_category: data.business_category ?? '',
+          contact_email: data.contact_email ?? '',
+          contact_phone: data.contact_phone ?? '',
+          location_city: data.location_city ?? '',
+        });
+      }
+    } catch {
+      showToast('error', 'Failed to load business settings');
     } finally {
       setLoading(false);
     }
   }
-
-  useEffect(() => {
-    void fetchBusiness();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [businessId]);
 
   async function handleSave() {
     if (!form.name.trim()) {
       showToast('error', 'Business name is required');
       return;
     }
-    if (!form.slug.trim()) {
-      showToast('error', 'Slug is required');
-      return;
-    }
-
     setSaving(true);
     try {
-      const payload = {
-        name: form.name.trim(),
-        slug: form.slug.trim(),
-        logo_url: form.logo_url.trim() || null,
-        welcome_message: form.welcome_message.trim() || null,
-        google_review_url: form.google_review_url.trim() || null,
+      const { error } = await supabase.from('businesses').update({
+        name: form.name,
+        slug: form.slug,
+        logo_url: form.logo_url || null,
+        welcome_message: form.welcome_message || null,
+        google_review_url: form.google_review_url || null,
         public_review_enabled: form.public_review_enabled,
-        business_category: form.business_category.trim() || null,
-        contact_email: form.contact_email.trim() || null,
-        contact_phone: form.contact_phone.trim() || null,
-        location_city: form.location_city.trim() || null,
-      };
-
-      const { error } = await supabase.from('businesses').update(payload).eq('id', businessId);
+        business_category: form.business_category || null,
+        contact_email: form.contact_email || null,
+        contact_phone: form.contact_phone || null,
+        location_city: form.location_city || null,
+      }).eq('id', businessId);
       if (error) throw error;
-      showToast('success', 'Business settings saved');
-      await fetchBusiness();
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to save settings';
-      showToast('error', msg);
+      showToast('success', 'Settings saved successfully');
+    } catch {
+      showToast('error', 'Failed to save settings');
     } finally {
       setSaving(false);
     }
   }
 
-  function qrImageUrl(url: string) {
-    return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(url)}`;
+  function copyLink() {
+    const link = `${window.location.origin}/review/${form.slug}`;
+    navigator.clipboard.writeText(link);
+    showToast('success', 'Link copied to clipboard');
   }
 
   if (loading) return <LoadingSpinner label="Loading settings..." />;
-  if (!business) return <EmptyState icon={Building2} title="Business not found" description="Could not load this business record." />;
 
   const reviewUrl = `${window.location.origin}/review/${form.slug}`;
+  const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(reviewUrl)}`;
 
   return (
     <div>
       <PageHeader
         title="Business Settings"
-        description="Configure your business profile and public review page"
+        description="Configure your business profile and review page"
         action={<Button onClick={handleSave} disabled={saving}><Save className="w-4 h-4" /> {saving ? 'Saving...' : 'Save Changes'}</Button>}
       />
 
-      {/* Public review link + QR */}
-      <Card className="p-5 mb-6">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-          <div className="shrink-0">
-            <img src={qrImageUrl(reviewUrl)} alt="Review link QR code" className="w-32 h-32 rounded-lg bg-white p-1.5" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 mb-1">
-              <Link2 className="w-4 h-4 text-blue-400" />
-              <h3 className="text-sm font-semibold text-white">Public Review Link</h3>
+      {/* Public Review Link */}
+      {form.slug && (
+        <Card className="p-5 mb-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+            <img src={qrImageUrl} alt="QR Code" className="w-28 h-28 rounded-lg bg-white p-1 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <QrCode className="w-4 h-4 text-blue-400" />
+                <h3 className="text-sm font-semibold text-white">Public Review Link</h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <code className="text-sm text-blue-300 truncate">{reviewUrl}</code>
+                <button onClick={copyLink} className="text-zinc-400 hover:text-white shrink-0"><Copy className="w-4 h-4" /></button>
+                <a href={reviewUrl} target="_blank" rel="noopener noreferrer" className="text-zinc-400 hover:text-white shrink-0"><ExternalLink className="w-4 h-4" /></a>
+              </div>
+              <p className="text-xs text-zinc-500 mt-1">Share this link or QR code with customers to collect reviews.</p>
             </div>
-            <div className="flex items-center gap-2">
-              <code className="flex-1 px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm text-blue-300 break-all">{reviewUrl}</code>
-              <a href={reviewUrl} target="_blank" rel="noopener noreferrer" className="shrink-0 p-2 rounded-lg bg-white/5 border border-white/10 text-zinc-300 hover:bg-white/10">
-                <ExternalLink className="w-4 h-4" />
-              </a>
-            </div>
-            <p className="text-xs text-zinc-500 mt-2">Customers scan this QR code or visit the link to leave a review.</p>
           </div>
-        </div>
-      </Card>
+        </Card>
+      )}
 
-      <Card className="p-5">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card className="p-5 space-y-4">
+          <h3 className="text-sm font-semibold text-white">General Information</h3>
           <div>
-            <label className="block text-xs font-medium text-zinc-400 mb-1.5">Business Name</label>
-            <Input value={form.name} onChange={(v) => setForm({ ...form, name: v })} placeholder="Acme Corp" />
+            <label className="text-xs text-zinc-400 mb-1 block">Business Name</label>
+            <Input value={form.name} onChange={(v) => setForm({ ...form, name: v })} placeholder="Business name" />
           </div>
           <div>
-            <label className="block text-xs font-medium text-zinc-400 mb-1.5">Slug</label>
-            <Input value={form.slug} onChange={(v) => setForm({ ...form, slug: v })} placeholder="acme-corp" />
-            <p className="text-xs text-zinc-500 mt-1">Used in your public review URL</p>
+            <label className="text-xs text-zinc-400 mb-1 block">Slug</label>
+            <Input value={form.slug} onChange={(v) => setForm({ ...form, slug: v })} placeholder="my-business" />
           </div>
-          <div className="sm:col-span-2">
-            <label className="block text-xs font-medium text-zinc-400 mb-1.5">Logo URL</label>
+          <div>
+            <label className="text-xs text-zinc-400 mb-1 block">Business Category</label>
+            <Input value={form.business_category} onChange={(v) => setForm({ ...form, business_category: v })} placeholder="Restaurant, Salon, etc." />
+          </div>
+          <div>
+            <label className="text-xs text-zinc-400 mb-1 block">Logo URL</label>
             <Input value={form.logo_url} onChange={(v) => setForm({ ...form, logo_url: v })} placeholder="https://..." />
           </div>
-          <div className="sm:col-span-2">
-            <label className="block text-xs font-medium text-zinc-400 mb-1.5">Welcome Message</label>
-            <TextArea value={form.welcome_message} onChange={(v) => setForm({ ...form, welcome_message: v })} placeholder="We'd love to hear about your experience!" rows={3} />
+          <div>
+            <label className="text-xs text-zinc-400 mb-1 block">Welcome Message</label>
+            <TextArea value={form.welcome_message} onChange={(v) => setForm({ ...form, welcome_message: v })} placeholder="Welcome message for customers..." rows={3} />
+          </div>
+        </Card>
+
+        <Card className="p-5 space-y-4">
+          <h3 className="text-sm font-semibold text-white">Contact & Review Settings</h3>
+          <div>
+            <label className="text-xs text-zinc-400 mb-1 block">Google Review URL</label>
+            <Input value={form.google_review_url} onChange={(v) => setForm({ ...form, google_review_url: v })} placeholder="https://..." />
           </div>
           <div>
-            <label className="block text-xs font-medium text-zinc-400 mb-1.5">Google Review URL</label>
-            <Input value={form.google_review_url} onChange={(v) => setForm({ ...form, google_review_url: v })} placeholder="https://google.com/maps/..." />
+            <label className="text-xs text-zinc-400 mb-1 block">Contact Email</label>
+            <Input value={form.contact_email} onChange={(v) => setForm({ ...form, contact_email: v })} placeholder="contact@business.com" />
           </div>
           <div>
-            <label className="block text-xs font-medium text-zinc-400 mb-1.5">Business Category</label>
-            <Input value={form.business_category} onChange={(v) => setForm({ ...form, business_category: v })} placeholder="Restaurant" />
+            <label className="text-xs text-zinc-400 mb-1 block">Contact Phone</label>
+            <Input value={form.contact_phone} onChange={(v) => setForm({ ...form, contact_phone: v })} placeholder="+1..." />
           </div>
           <div>
-            <label className="block text-xs font-medium text-zinc-400 mb-1.5">Contact Email</label>
-            <Input type="email" value={form.contact_email} onChange={(v) => setForm({ ...form, contact_email: v })} placeholder="hello@acme.com" />
+            <label className="text-xs text-zinc-400 mb-1 block">Location City</label>
+            <Input value={form.location_city} onChange={(v) => setForm({ ...form, location_city: v })} placeholder="City" />
           </div>
-          <div>
-            <label className="block text-xs font-medium text-zinc-400 mb-1.5">Contact Phone</label>
-            <Input value={form.contact_phone} onChange={(v) => setForm({ ...form, contact_phone: v })} placeholder="+1 555-0100" />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-zinc-400 mb-1.5">Location City</label>
-            <Input value={form.location_city} onChange={(v) => setForm({ ...form, location_city: v })} placeholder="San Francisco" />
-          </div>
-          <div className="flex items-end">
+          <div className="pt-1">
             <label className="flex items-center gap-2 text-sm text-zinc-300 cursor-pointer">
-              <input type="checkbox" checked={form.public_review_enabled} onChange={(e) => setForm({ ...form, public_review_enabled: e.target.checked })} className="w-4 h-4 rounded accent-blue-500" />
+              <input type="checkbox" checked={form.public_review_enabled} onChange={(e) => setForm({ ...form, public_review_enabled: e.target.checked })} className="accent-blue-500 w-4 h-4" />
               Public Review Enabled
             </label>
+            <p className="text-xs text-zinc-500 mt-1 ml-6">When enabled, customers can submit reviews via the public review page.</p>
           </div>
-        </div>
-        <div className="flex justify-end mt-5">
-          <Button onClick={handleSave} disabled={saving}><Save className="w-4 h-4" /> {saving ? 'Saving...' : 'Save Changes'}</Button>
-        </div>
-      </Card>
+        </Card>
+      </div>
+
+      <div className="flex justify-end mt-6">
+        <Button onClick={handleSave} disabled={saving}><Save className="w-4 h-4" /> {saving ? 'Saving...' : 'Save Changes'}</Button>
+      </div>
     </div>
   );
 }

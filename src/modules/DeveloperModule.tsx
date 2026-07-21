@@ -1,16 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
+import { LoadingSpinner, EmptyState, PageHeader, Card, Badge, Button, Input, TextArea, Modal } from '../components/UI';
 import { useToast } from '../context/ToastContext';
-import { LoadingSpinner, EmptyState, PageHeader, Card, Badge, Button, Input, Modal } from '../components/UI';
-import { KeyRound, AppWindow, Webhook, Plus, Pencil, Trash2, Power } from 'lucide-react';
-
-function formatDate(value: string | null): string {
-  if (!value) return '—';
-  try { return new Date(value).toLocaleString(); } catch { return value; }
-}
+import { KeyRound, AppWindow, Webhook, Plus, Pencil, Trash2, Copy } from 'lucide-react';
 
 /* ============================================================
  * ApiKeysModule
+ * CRUD for api_keys filtered by business_id
+ * Show: key_name, key_prefix, scopes, is_active, last_used_at, expires_at
+ * Create modal with key_name, scopes (comma-separated input), rate_limit_per_hour
  * ============================================================ */
 
 interface ApiKey {
@@ -26,66 +24,89 @@ interface ApiKey {
   created_at?: string;
 }
 
+function formatDate(d: string | null): string {
+  if (!d) return '—';
+  try { return new Date(d).toLocaleString(); } catch { return d; }
+}
+
 export function ApiKeysModule({ businessId }: { businessId: string }) {
   const { showToast } = useToast();
   const [keys, setKeys] = useState<ApiKey[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
+  const [editing, setEditing] = useState<ApiKey | null>(null);
   const [form, setForm] = useState({ key_name: '', scopes: '', rate_limit_per_hour: '1000' });
   const [saving, setSaving] = useState(false);
 
-  const load = useCallback(async () => {
+  const fetchKeys = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase
       .from('api_keys')
       .select('*')
       .eq('business_id', businessId)
       .order('created_at', { ascending: false });
-    if (error) showToast('error', `Failed to load API keys: ${error.message}`);
-    else setKeys((data as ApiKey[]) || []);
+    if (error) {
+      showToast('error', `Failed to load API keys: ${error.message}`);
+    } else {
+      setKeys(data || []);
+    }
     setLoading(false);
   }, [businessId, showToast]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { fetchKeys(); }, [fetchKeys]);
 
   const openCreate = () => {
+    setEditing(null);
     setForm({ key_name: '', scopes: '', rate_limit_per_hour: '1000' });
     setModalOpen(true);
   };
 
-  const save = async () => {
+  const openEdit = (k: ApiKey) => {
+    setEditing(k);
+    setForm({
+      key_name: k.key_name || '',
+      scopes: (k.scopes || []).join(', '),
+      rate_limit_per_hour: k.rate_limit_per_hour?.toString() || '1000',
+    });
+    setModalOpen(true);
+  };
+
+  const handleSave = async () => {
     if (!form.key_name.trim()) { showToast('error', 'Key name is required'); return; }
     setSaving(true);
+    const scopes = form.scopes.split(',').map((s) => s.trim()).filter(Boolean);
     const payload = {
       business_id: businessId,
       key_name: form.key_name.trim(),
-      scopes: form.scopes.trim() ? form.scopes.split(',').map((s) => s.trim()).filter(Boolean) : [],
+      scopes: scopes.length ? scopes : null,
       rate_limit_per_hour: parseInt(form.rate_limit_per_hour, 10) || null,
     };
-    const { error } = await supabase.from('api_keys').insert(payload);
+    let error;
+    if (editing) {
+      ({ error } = await supabase.from('api_keys').update(payload).eq('id', editing.id));
+    } else {
+      ({ error } = await supabase.from('api_keys').insert(payload));
+    }
     setSaving(false);
-    if (error) { showToast('error', `Save failed: ${error.message}`); return; }
-    showToast('success', 'API key created');
-    setModalOpen(false);
-    load();
+    if (error) {
+      showToast('error', `Save failed: ${error.message}`);
+    } else {
+      showToast('success', editing ? 'API key updated' : 'API key created');
+      setModalOpen(false);
+      fetchKeys();
+    }
   };
 
-  const toggleActive = async (k: ApiKey) => {
-    const { error } = await supabase.from('api_keys').update({ is_active: !k.is_active }).eq('id', k.id);
-    if (error) { showToast('error', `Update failed: ${error.message}`); return; }
-    showToast('success', `Key ${!k.is_active ? 'activated' : 'deactivated'}`);
-    load();
-  };
-
-  const remove = async (k: ApiKey) => {
+  const handleDelete = async (k: ApiKey) => {
     if (!confirm(`Delete API key "${k.key_name}"?`)) return;
     const { error } = await supabase.from('api_keys').delete().eq('id', k.id);
-    if (error) { showToast('error', `Delete failed: ${error.message}`); return; }
-    showToast('success', 'API key deleted');
-    load();
+    if (error) {
+      showToast('error', `Delete failed: ${error.message}`);
+    } else {
+      showToast('success', 'API key deleted');
+      fetchKeys();
+    }
   };
-
-  if (loading) return <LoadingSpinner label="Loading API keys…" />;
 
   return (
     <div>
@@ -94,34 +115,41 @@ export function ApiKeysModule({ businessId }: { businessId: string }) {
         description="Manage API keys for this business"
         action={<Button onClick={openCreate}><Plus className="w-4 h-4" /> New Key</Button>}
       />
-
-      {keys.length === 0 ? (
+      {loading ? (
+        <LoadingSpinner label="Loading API keys..." />
+      ) : keys.length === 0 ? (
         <EmptyState icon={KeyRound} title="No API keys" description="Create an API key to access the platform programmatically." action={<Button onClick={openCreate}><Plus className="w-4 h-4" /> New Key</Button>} />
       ) : (
-        <div className="space-y-3">
+        <div className="grid gap-3">
           {keys.map((k) => (
             <Card key={k.id} className="p-4">
               <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 mb-1">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-2">
+                    <KeyRound className="w-4 h-4 text-blue-400 shrink-0" />
                     <h3 className="font-semibold text-white truncate">{k.key_name}</h3>
-                    <Badge color={k.is_active ? 'green' : 'gray'}>{k.is_active ? 'Active' : 'Inactive'}</Badge>
+                    {k.is_active ? <Badge color="green">Active</Badge> : <Badge color="gray">Inactive</Badge>}
                   </div>
-                  {k.key_prefix && <p className="text-sm font-mono text-zinc-400 mb-2">{k.key_prefix}…</p>}
-                  {k.scopes && k.scopes.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mb-2">
-                      {k.scopes.map((s) => <Badge key={s} color="blue">{s}</Badge>)}
+                  {k.key_prefix && (
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <code className="text-xs font-mono text-zinc-300 bg-white/5 px-2 py-0.5 rounded">{k.key_prefix}...</code>
+                      <button onClick={() => { navigator.clipboard?.writeText(k.key_prefix || ''); showToast('info', 'Prefix copied'); }} className="text-zinc-500 hover:text-white"><Copy className="w-3.5 h-3.5" /></button>
                     </div>
                   )}
-                  <div className="flex flex-wrap gap-4 text-xs text-zinc-500">
-                    <span>Last used: {formatDate(k.last_used_at)}</span>
-                    <span>Expires: {formatDate(k.expires_at)}</span>
-                    {k.rate_limit_per_hour !== null && <span>Limit: {k.rate_limit_per_hour}/hr</span>}
+                  {k.scopes && k.scopes.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mb-2">
+                      {k.scopes.map((s) => <Badge key={s} color="purple">{s}</Badge>)}
+                    </div>
+                  )}
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-zinc-400">
+                    <span>Last used: <span className="text-zinc-200">{formatDate(k.last_used_at)}</span></span>
+                    <span>Expires: <span className="text-zinc-200">{formatDate(k.expires_at)}</span></span>
+                    {k.rate_limit_per_hour !== null && <span>Rate limit: <span className="text-zinc-200">{k.rate_limit_per_hour}/hr</span></span>}
                   </div>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
-                  <Button variant="ghost" size="sm" onClick={() => toggleActive(k)}><Power className="w-4 h-4" /></Button>
-                  <Button variant="ghost" size="sm" onClick={() => remove(k)}><Trash2 className="w-4 h-4" /></Button>
+                  <Button variant="ghost" size="sm" onClick={() => openEdit(k)}><Pencil className="w-4 h-4" /></Button>
+                  <Button variant="ghost" size="sm" onClick={() => handleDelete(k)}><Trash2 className="w-4 h-4 text-red-400" /></Button>
                 </div>
               </div>
             </Card>
@@ -129,24 +157,23 @@ export function ApiKeysModule({ businessId }: { businessId: string }) {
         </div>
       )}
 
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="New API Key">
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editing ? 'Edit API Key' : 'New API Key'}>
         <div className="space-y-4">
           <div>
-            <label className="block text-xs font-medium text-zinc-400 mb-1.5">Key Name</label>
-            <Input value={form.key_name} onChange={(v) => setForm({ ...form, key_name: v })} placeholder="Production server key" />
+            <label className="block text-sm font-medium text-zinc-300 mb-1.5">Key Name</label>
+            <Input value={form.key_name} onChange={(v) => setForm({ ...form, key_name: v })} placeholder="Production API Key" />
           </div>
           <div>
-            <label className="block text-xs font-medium text-zinc-400 mb-1.5">Scopes</label>
-            <Input value={form.scopes} onChange={(v) => setForm({ ...form, scopes: v })} placeholder="read:reviews, write:reports" />
-            <p className="text-xs text-zinc-600 mt-1">Comma-separated list of scopes</p>
+            <label className="block text-sm font-medium text-zinc-300 mb-1.5">Scopes (comma-separated)</label>
+            <Input value={form.scopes} onChange={(v) => setForm({ ...form, scopes: v })} placeholder="read:reviews, write:messages" />
           </div>
           <div>
-            <label className="block text-xs font-medium text-zinc-400 mb-1.5">Rate Limit (per hour)</label>
+            <label className="block text-sm font-medium text-zinc-300 mb-1.5">Rate Limit (per hour)</label>
             <Input type="number" value={form.rate_limit_per_hour} onChange={(v) => setForm({ ...form, rate_limit_per_hour: v })} placeholder="1000" />
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="secondary" onClick={() => setModalOpen(false)}>Cancel</Button>
-            <Button onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Create'}</Button>
+            <Button onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : editing ? 'Update' : 'Create'}</Button>
           </div>
         </div>
       </Modal>
@@ -156,6 +183,9 @@ export function ApiKeysModule({ businessId }: { businessId: string }) {
 
 /* ============================================================
  * DeveloperAppsModule
+ * CRUD for developer_apps filtered by business_id
+ * Show: app_name, description, client_id, is_active
+ * Create modal with app_name, description
  * ============================================================ */
 
 interface DeveloperApp {
@@ -173,29 +203,40 @@ export function DeveloperAppsModule({ businessId }: { businessId: string }) {
   const [apps, setApps] = useState<DeveloperApp[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
+  const [editing, setEditing] = useState<DeveloperApp | null>(null);
   const [form, setForm] = useState({ app_name: '', description: '' });
   const [saving, setSaving] = useState(false);
 
-  const load = useCallback(async () => {
+  const fetchApps = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase
       .from('developer_apps')
       .select('*')
       .eq('business_id', businessId)
       .order('created_at', { ascending: false });
-    if (error) showToast('error', `Failed to load apps: ${error.message}`);
-    else setApps((data as DeveloperApp[]) || []);
+    if (error) {
+      showToast('error', `Failed to load apps: ${error.message}`);
+    } else {
+      setApps(data || []);
+    }
     setLoading(false);
   }, [businessId, showToast]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { fetchApps(); }, [fetchApps]);
 
   const openCreate = () => {
+    setEditing(null);
     setForm({ app_name: '', description: '' });
     setModalOpen(true);
   };
 
-  const save = async () => {
+  const openEdit = (a: DeveloperApp) => {
+    setEditing(a);
+    setForm({ app_name: a.app_name || '', description: a.description || '' });
+    setModalOpen(true);
+  };
+
+  const handleSave = async () => {
     if (!form.app_name.trim()) { showToast('error', 'App name is required'); return; }
     setSaving(true);
     const payload = {
@@ -203,57 +244,67 @@ export function DeveloperAppsModule({ businessId }: { businessId: string }) {
       app_name: form.app_name.trim(),
       description: form.description.trim() || null,
     };
-    const { error } = await supabase.from('developer_apps').insert(payload);
+    let error;
+    if (editing) {
+      ({ error } = await supabase.from('developer_apps').update(payload).eq('id', editing.id));
+    } else {
+      ({ error } = await supabase.from('developer_apps').insert(payload));
+    }
     setSaving(false);
-    if (error) { showToast('error', `Save failed: ${error.message}`); return; }
-    showToast('success', 'App created');
-    setModalOpen(false);
-    load();
+    if (error) {
+      showToast('error', `Save failed: ${error.message}`);
+    } else {
+      showToast('success', editing ? 'App updated' : 'App created');
+      setModalOpen(false);
+      fetchApps();
+    }
   };
 
-  const toggleActive = async (a: DeveloperApp) => {
-    const { error } = await supabase.from('developer_apps').update({ is_active: !a.is_active }).eq('id', a.id);
-    if (error) { showToast('error', `Update failed: ${error.message}`); return; }
-    showToast('success', `App ${!a.is_active ? 'activated' : 'deactivated'}`);
-    load();
-  };
-
-  const remove = async (a: DeveloperApp) => {
+  const handleDelete = async (a: DeveloperApp) => {
     if (!confirm(`Delete app "${a.app_name}"?`)) return;
     const { error } = await supabase.from('developer_apps').delete().eq('id', a.id);
-    if (error) { showToast('error', `Delete failed: ${error.message}`); return; }
-    showToast('success', 'App deleted');
-    load();
+    if (error) {
+      showToast('error', `Delete failed: ${error.message}`);
+    } else {
+      showToast('success', 'App deleted');
+      fetchApps();
+    }
   };
-
-  if (loading) return <LoadingSpinner label="Loading developer apps…" />;
 
   return (
     <div>
       <PageHeader
         title="Developer Apps"
-        description="OAuth applications for this business"
+        description="Manage developer applications for this business"
         action={<Button onClick={openCreate}><Plus className="w-4 h-4" /> New App</Button>}
       />
-
-      {apps.length === 0 ? (
-        <EmptyState icon={AppWindow} title="No developer apps" description="Create an app to enable OAuth integrations." action={<Button onClick={openCreate}><Plus className="w-4 h-4" /> New App</Button>} />
+      {loading ? (
+        <LoadingSpinner label="Loading apps..." />
+      ) : apps.length === 0 ? (
+        <EmptyState icon={AppWindow} title="No developer apps" description="Register a developer app to get started." action={<Button onClick={openCreate}><Plus className="w-4 h-4" /> New App</Button>} />
       ) : (
-        <div className="space-y-3">
+        <div className="grid gap-3">
           {apps.map((a) => (
             <Card key={a.id} className="p-4">
               <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0 flex-1">
+                <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
+                    <AppWindow className="w-4 h-4 text-blue-400 shrink-0" />
                     <h3 className="font-semibold text-white truncate">{a.app_name}</h3>
-                    <Badge color={a.is_active ? 'green' : 'gray'}>{a.is_active ? 'Active' : 'Inactive'}</Badge>
+                    {a.is_active ? <Badge color="green">Active</Badge> : <Badge color="gray">Inactive</Badge>}
                   </div>
-                  {a.description && <p className="text-sm text-zinc-400 mb-1">{a.description}</p>}
-                  {a.client_id && <p className="text-xs font-mono text-zinc-500">client_id: {a.client_id}</p>}
+                  {a.description && <p className="text-sm text-zinc-400 mb-2 line-clamp-2">{a.description}</p>}
+                  {a.client_id && (
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs text-zinc-500">Client ID:</span>
+                      <code className="text-xs font-mono text-zinc-300 bg-white/5 px-2 py-0.5 rounded">{a.client_id}</code>
+                      <button onClick={() => { navigator.clipboard?.writeText(a.client_id || ''); showToast('info', 'Client ID copied'); }} className="text-zinc-500 hover:text-white"><Copy className="w-3.5 h-3.5" /></button>
+                    </div>
+                  )}
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
-                  <Button variant="ghost" size="sm" onClick={() => toggleActive(a)}><Power className="w-4 h-4" /></Button>
-                  <Button variant="ghost" size="sm" onClick={() => remove(a)}><Trash2 className="w-4 h-4" /></Button>
+                  <Button variant="ghost" size="sm" onClick={() => openEdit(a)}><Pencil className="w-4 h-4" /></Button>
+                  <Button variant="ghost" size="sm" onClick={() => handleDelete(a)}><Trash2 className="w-4 h-4 text-red-400" /></Button>
                 </div>
               </div>
             </Card>
@@ -261,19 +312,19 @@ export function DeveloperAppsModule({ businessId }: { businessId: string }) {
         </div>
       )}
 
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="New Developer App">
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editing ? 'Edit App' : 'New Developer App'}>
         <div className="space-y-4">
           <div>
-            <label className="block text-xs font-medium text-zinc-400 mb-1.5">App Name</label>
+            <label className="block text-sm font-medium text-zinc-300 mb-1.5">App Name</label>
             <Input value={form.app_name} onChange={(v) => setForm({ ...form, app_name: v })} placeholder="My Review App" />
           </div>
           <div>
-            <label className="block text-xs font-medium text-zinc-400 mb-1.5">Description</label>
-            <Input value={form.description} onChange={(v) => setForm({ ...form, description: v })} placeholder="What this app does…" />
+            <label className="block text-sm font-medium text-zinc-300 mb-1.5">Description</label>
+            <TextArea value={form.description} onChange={(v) => setForm({ ...form, description: v })} placeholder="Describe your application..." />
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="secondary" onClick={() => setModalOpen(false)}>Cancel</Button>
-            <Button onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Create'}</Button>
+            <Button onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : editing ? 'Update' : 'Create'}</Button>
           </div>
         </div>
       </Modal>
@@ -283,13 +334,16 @@ export function DeveloperAppsModule({ businessId }: { businessId: string }) {
 
 /* ============================================================
  * WebhooksModule
+ * CRUD for webhooks filtered by business_id
+ * Show: name, url, events, is_active
+ * Create/edit modal with name, url, events (comma-separated)
  * ============================================================ */
 
 interface Webhook {
   id: string;
   business_id: string;
   name: string;
-  url: string;
+  url: string | null;
   events: string[] | null;
   is_active: boolean;
   created_at?: string;
@@ -304,19 +358,22 @@ export function WebhooksModule({ businessId }: { businessId: string }) {
   const [form, setForm] = useState({ name: '', url: '', events: '' });
   const [saving, setSaving] = useState(false);
 
-  const load = useCallback(async () => {
+  const fetchWebhooks = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase
       .from('webhooks')
       .select('*')
       .eq('business_id', businessId)
       .order('created_at', { ascending: false });
-    if (error) showToast('error', `Failed to load webhooks: ${error.message}`);
-    else setWebhooks((data as Webhook[]) || []);
+    if (error) {
+      showToast('error', `Failed to load webhooks: ${error.message}`);
+    } else {
+      setWebhooks(data || []);
+    }
     setLoading(false);
   }, [businessId, showToast]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { fetchWebhooks(); }, [fetchWebhooks]);
 
   const openCreate = () => {
     setEditing(null);
@@ -326,85 +383,80 @@ export function WebhooksModule({ businessId }: { businessId: string }) {
 
   const openEdit = (w: Webhook) => {
     setEditing(w);
-    setForm({
-      name: w.name || '',
-      url: w.url || '',
-      events: (w.events || []).join(', '),
-    });
+    setForm({ name: w.name || '', url: w.url || '', events: (w.events || []).join(', ') });
     setModalOpen(true);
   };
 
-  const save = async () => {
+  const handleSave = async () => {
     if (!form.name.trim()) { showToast('error', 'Name is required'); return; }
     if (!form.url.trim()) { showToast('error', 'URL is required'); return; }
     setSaving(true);
+    const events = form.events.split(',').map((e) => e.trim()).filter(Boolean);
     const payload = {
       business_id: businessId,
       name: form.name.trim(),
       url: form.url.trim(),
-      events: form.events.trim() ? form.events.split(',').map((e) => e.trim()).filter(Boolean) : [],
+      events: events.length ? events : null,
     };
-    let result;
+    let error;
     if (editing) {
-      result = await supabase.from('webhooks').update(payload).eq('id', editing.id);
+      ({ error } = await supabase.from('webhooks').update(payload).eq('id', editing.id));
     } else {
-      result = await supabase.from('webhooks').insert(payload);
+      ({ error } = await supabase.from('webhooks').insert(payload));
     }
     setSaving(false);
-    if (result.error) { showToast('error', `Save failed: ${result.error.message}`); return; }
-    showToast('success', editing ? 'Webhook updated' : 'Webhook created');
-    setModalOpen(false);
-    load();
+    if (error) {
+      showToast('error', `Save failed: ${error.message}`);
+    } else {
+      showToast('success', editing ? 'Webhook updated' : 'Webhook created');
+      setModalOpen(false);
+      fetchWebhooks();
+    }
   };
 
-  const toggleActive = async (w: Webhook) => {
-    const { error } = await supabase.from('webhooks').update({ is_active: !w.is_active }).eq('id', w.id);
-    if (error) { showToast('error', `Update failed: ${error.message}`); return; }
-    showToast('success', `Webhook ${!w.is_active ? 'activated' : 'deactivated'}`);
-    load();
-  };
-
-  const remove = async (w: Webhook) => {
+  const handleDelete = async (w: Webhook) => {
     if (!confirm(`Delete webhook "${w.name}"?`)) return;
     const { error } = await supabase.from('webhooks').delete().eq('id', w.id);
-    if (error) { showToast('error', `Delete failed: ${error.message}`); return; }
-    showToast('success', 'Webhook deleted');
-    load();
+    if (error) {
+      showToast('error', `Delete failed: ${error.message}`);
+    } else {
+      showToast('success', 'Webhook deleted');
+      fetchWebhooks();
+    }
   };
-
-  if (loading) return <LoadingSpinner label="Loading webhooks…" />;
 
   return (
     <div>
       <PageHeader
         title="Webhooks"
-        description="Event webhook endpoints for this business"
+        description="Manage webhook endpoints for this business"
         action={<Button onClick={openCreate}><Plus className="w-4 h-4" /> New Webhook</Button>}
       />
-
-      {webhooks.length === 0 ? (
+      {loading ? (
+        <LoadingSpinner label="Loading webhooks..." />
+      ) : webhooks.length === 0 ? (
         <EmptyState icon={Webhook} title="No webhooks" description="Create a webhook to receive event notifications." action={<Button onClick={openCreate}><Plus className="w-4 h-4" /> New Webhook</Button>} />
       ) : (
-        <div className="space-y-3">
+        <div className="grid gap-3">
           {webhooks.map((w) => (
             <Card key={w.id} className="p-4">
               <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0 flex-1">
+                <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
+                    <Webhook className="w-4 h-4 text-blue-400 shrink-0" />
                     <h3 className="font-semibold text-white truncate">{w.name}</h3>
-                    <Badge color={w.is_active ? 'green' : 'gray'}>{w.is_active ? 'Active' : 'Inactive'}</Badge>
+                    {w.is_active ? <Badge color="green">Active</Badge> : <Badge color="gray">Inactive</Badge>}
                   </div>
-                  <p className="text-sm font-mono text-zinc-400 mb-2 truncate">{w.url}</p>
+                  {w.url && <p className="text-sm text-zinc-400 mb-2 truncate font-mono">{w.url}</p>}
                   {w.events && w.events.length > 0 && (
                     <div className="flex flex-wrap gap-1">
-                      {w.events.map((e) => <Badge key={e} color="purple">{e}</Badge>)}
+                      {w.events.map((e) => <Badge key={e} color="blue">{e}</Badge>)}
                     </div>
                   )}
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
-                  <Button variant="ghost" size="sm" onClick={() => toggleActive(w)}><Power className="w-4 h-4" /></Button>
                   <Button variant="ghost" size="sm" onClick={() => openEdit(w)}><Pencil className="w-4 h-4" /></Button>
-                  <Button variant="ghost" size="sm" onClick={() => remove(w)}><Trash2 className="w-4 h-4" /></Button>
+                  <Button variant="ghost" size="sm" onClick={() => handleDelete(w)}><Trash2 className="w-4 h-4 text-red-400" /></Button>
                 </div>
               </div>
             </Card>
@@ -415,21 +467,20 @@ export function WebhooksModule({ businessId }: { businessId: string }) {
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editing ? 'Edit Webhook' : 'New Webhook'}>
         <div className="space-y-4">
           <div>
-            <label className="block text-xs font-medium text-zinc-400 mb-1.5">Name</label>
-            <Input value={form.name} onChange={(v) => setForm({ ...form, name: v })} placeholder="Review created webhook" />
+            <label className="block text-sm font-medium text-zinc-300 mb-1.5">Name</label>
+            <Input value={form.name} onChange={(v) => setForm({ ...form, name: v })} placeholder="Review Created Webhook" />
           </div>
           <div>
-            <label className="block text-xs font-medium text-zinc-400 mb-1.5">URL</label>
+            <label className="block text-sm font-medium text-zinc-300 mb-1.5">URL</label>
             <Input value={form.url} onChange={(v) => setForm({ ...form, url: v })} placeholder="https://example.com/webhook" />
           </div>
           <div>
-            <label className="block text-xs font-medium text-zinc-400 mb-1.5">Events</label>
+            <label className="block text-sm font-medium text-zinc-300 mb-1.5">Events (comma-separated)</label>
             <Input value={form.events} onChange={(v) => setForm({ ...form, events: v })} placeholder="review.created, review.updated" />
-            <p className="text-xs text-zinc-600 mt-1">Comma-separated list of events</p>
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="secondary" onClick={() => setModalOpen(false)}>Cancel</Button>
-            <Button onClick={save} disabled={saving}>{saving ? 'Saving…' : editing ? 'Update' : 'Create'}</Button>
+            <Button onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : editing ? 'Update' : 'Create'}</Button>
           </div>
         </div>
       </Modal>

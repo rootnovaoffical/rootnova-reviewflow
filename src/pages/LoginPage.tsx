@@ -1,99 +1,60 @@
 import { useState } from "react";
-import { useAuth } from "../lib/auth";
+import { useNavigate } from "react-router-dom";
+import { Sparkles, Mail, Lock, ArrowRight } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
+import SpatialBackground from "../components/SpatialBackground";
 
 export default function LoginPage() {
-  const { signIn, signUp } = useAuth();
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const { signIn } = useAuth();
+  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [fullName, setFullName] = useState("");
-  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  async function handleSubmit(e: React.FormEvent) {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
-    setLoading(true);
-    if (mode === "signin") {
-      const { error } = await signIn(email, password);
-      if (error) setError(error);
-    } else {
-      const { error } = await signUp(email, password, fullName);
-      if (error) setError(error);
-    }
-    setLoading(false);
-  }
+    setLoading(true); setError(null);
+    const { error } = await signIn(email, password);
+    if (error) { setError(error); setLoading(false); }
+    else navigate("/dashboard");
+  };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-50 to-primary-50">
-      <div className="card w-full max-w-md p-8">
-        <div className="mb-8 text-center">
-          <div className="mb-3 text-3xl font-bold text-primary-600">RootNova</div>
-          <p className="text-sm text-slate-500">Review Intelligence Platform</p>
-        </div>
-
-        <div className="mb-6 flex rounded-lg bg-slate-100 p-1">
-          <button
-            className={`flex-1 rounded-md py-2 text-sm font-medium transition-colors ${
-              mode === "signin" ? "bg-white text-primary-600 shadow-sm" : "text-slate-500"
-            }`}
-            onClick={() => setMode("signin")}
-          >
-            Sign In
-          </button>
-          <button
-            className={`flex-1 rounded-md py-2 text-sm font-medium transition-colors ${
-              mode === "signup" ? "bg-white text-primary-600 shadow-sm" : "text-slate-500"
-            }`}
-            onClick={() => setMode("signup")}
-          >
-            Sign Up
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {mode === "signup" && (
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Full Name</label>
-              <input
-                className="input"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                required
-              />
+    <>
+      <SpatialBackground />
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <div className="w-full max-w-md">
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-primary-500 to-accent-500 mb-4 shadow-lg shadow-primary-500/40">
+              <Sparkles className="w-8 h-8 text-white" />
             </div>
-          )}
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Email</label>
-            <input
-              className="input"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
+            <h1 className="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-white via-slate-200 to-slate-400">RootNova</h1>
+            <p className="text-sm text-slate-400 mt-1">Complete Business Review & Growth Platform</p>
           </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Password</label>
-            <input
-              className="input"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={6}
-            />
-          </div>
-
-          {error && (
-            <div className="rounded-lg bg-red-50 px-4 py-2 text-sm text-red-600">{error}</div>
-          )}
-
-          <button type="submit" className="btn-primary w-full" disabled={loading}>
-            {loading ? "Please wait..." : mode === "signin" ? "Sign In" : "Create Account"}
-          </button>
-        </form>
+          <form onSubmit={handleSubmit} className="glass-card rounded-3xl p-8 space-y-5">
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Email</label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-900/50 border border-white/10 text-white text-sm focus:outline-none focus:border-primary-500" placeholder="you@business.com" />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Password</label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-900/50 border border-white/10 text-white text-sm focus:outline-none focus:border-primary-500" placeholder="••••••••" />
+              </div>
+            </div>
+            {error && <p className="text-sm text-error-400 bg-error-500/10 border border-error-500/20 rounded-lg px-4 py-2">{error}</p>}
+            <button type="submit" disabled={loading} className="w-full py-3.5 rounded-xl bg-gradient-to-r from-primary-600 via-primary-500 to-accent-500 text-white font-bold shadow-lg shadow-primary-500/40 hover:-translate-y-0.5 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50">
+              {loading ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <><span>Sign In</span><ArrowRight className="w-4 h-4" /></>}
+            </button>
+          </form>
+          <p className="text-center text-xs text-slate-500 mt-6">Super Admin · Partner Admin · Business Admin</p>
+        </div>
       </div>
-    </div>
+    </>
   );
 }

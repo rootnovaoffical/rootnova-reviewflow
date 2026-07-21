@@ -12,7 +12,7 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { sessionId, rating, answers, businessId } = await req.json();
+    const { sessionId, rating, answers, businessId, regenerate } = await req.json();
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
@@ -22,22 +22,44 @@ Deno.serve(async (req: Request) => {
     const businesses = await businessRes.json();
     const business = businesses[0];
 
-    const ratingText = rating >= 4 ? "excellent" : rating === 3 ? "good" : "poor";
+    const businessName = business?.name || "this business";
+    const ratingText = rating >= 4 ? "amazing" : rating === 3 ? "good" : "poor";
     const answerText = Array.isArray(answers) && answers.length > 0
       ? answers.map((a: any) => a.answer).join(", ")
-      : "No specific feedback provided";
+      : "great service and a wonderful atmosphere";
 
-    const review = rating >= 4
-      ? `I had an ${ratingText} experience at ${business?.name || "this business"}. ${answerText}. The service was attentive and I would definitely recommend it to others. Thank you for the wonderful experience!`
-      : rating === 3
-      ? `My experience at ${business?.name || "this business"} was ${ratingText}. ${answerText}. There is room for improvement but the staff was friendly.`
-      : `I had a ${ratingText} experience at ${business?.name || "this business"}. ${answerText}. I hope management can address these issues.`;
+    const regenVariant = (regenerate || 0) % 3;
 
-    return new Response(JSON.stringify({ review, sessionId }), {
+    let review: string;
+
+    if (rating >= 4) {
+      const templates = [
+        `I had an ${ratingText} experience at ${businessName}! ${answerText}. The staff was incredibly attentive and made sure everything was perfect. I would absolutely recommend this place to friends and family. Can't wait to come back!`,
+        `What a fantastic visit to ${businessName}! ${answerText}. From the moment I walked in, I felt welcomed. The team went above and beyond. Highly recommend to anyone looking for a great experience!`,
+        `Absolutely loved my time at ${businessName}. ${answerText}. The quality and service exceeded my expectations. This is now one of my favorite spots. Five stars well deserved!`,
+      ];
+      review = templates[regenVariant];
+    } else if (rating === 3) {
+      const templates = [
+        `My experience at ${businessName} was ${ratingText}. ${answerText}. There's some room for improvement, but the staff was friendly and I appreciate the effort. I'd consider giving it another try.`,
+        `Decent visit to ${businessName}. ${answerText}. It was a solid experience with a few highlights. With some small tweaks, this could be really great.`,
+        `Had an okay time at ${businessName}. ${answerText}. The service was decent and there were some good moments. Hope to see improvements on future visits.`,
+      ];
+      review = templates[regenVariant];
+    } else {
+      const templates = [
+        `Unfortunately, my experience at ${businessName} was ${ratingText}. ${answerText}. I hope management can look into these issues to improve future visits.`,
+        `I had a disappointing visit to ${businessName}. ${answerText}. There were several areas that need attention. I hope they take this feedback constructively.`,
+        `My visit to ${businessName} fell short of expectations. ${answerText}. I'm sharing this in hopes it helps them improve.`,
+      ];
+      review = templates[regenVariant];
+    }
+
+    return new Response(JSON.stringify({ review, sessionId, regenerate: regenVariant }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message, review: "Thank you for your feedback!" }), {
+    return new Response(JSON.stringify({ error: err.message, review: "Thank you for your feedback! We appreciate you sharing your experience." }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

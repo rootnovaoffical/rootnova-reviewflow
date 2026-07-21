@@ -17,6 +17,7 @@ import {
   type Customer360Data,
   type Customer360Insight,
   type TimelineEvent,
+  type FuturePrediction,
 } from "../../lib/customer360";
 import type { Customer, CustomerSegment } from "../../lib/types";
 
@@ -346,6 +347,21 @@ function Customer360Panel({ customer, detail, detailLoading, aiInsights, aiLoadi
               )}
             </div>
 
+            {/* Future Predictions */}
+            <div>
+              <h4 className="text-xs text-slate-500 uppercase tracking-wide mb-3">Future Predictions</h4>
+              {detail.predictions.length === 0 ? (
+                <p className="text-sm text-slate-500 py-2">Not enough data for predictions yet.</p>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {detail.predictions.map((pred, i) => (
+                    <PredictionCard key={i} prediction={pred} delay={i * 40} />
+                  ))}
+                </div>
+              )}
+              <p className="text-[10px] text-slate-600 mt-2 italic">Predictions are estimates based on existing data — not guarantees.</p>
+            </div>
+
             {/* Unified Timeline */}
             <div>
               <h4 className="text-xs text-slate-500 uppercase tracking-wide mb-3">Unified Timeline</h4>
@@ -408,6 +424,78 @@ function Customer360Panel({ customer, detail, detailLoading, aiInsights, aiLoadi
                       {l.reward_unlocked
                         ? <span className="text-xs text-warning-400 font-medium">Reward Unlocked</span>
                         : <span className="text-xs text-slate-500">In Progress</span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Campaigns */}
+            {detail.campaigns.length > 0 && (
+              <div>
+                <h4 className="text-xs text-slate-500 uppercase tracking-wide mb-3">Campaigns ({detail.campaigns.length})</h4>
+                <div className="space-y-2">
+                  {detail.campaigns.slice(0, 8).map((c) => (
+                    <div key={c.id} className="bg-slate-900/40 rounded-xl p-3 border border-white/5">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs text-accent-300 uppercase">{c.campaign_type}</span>
+                        <span className={`text-xs ${c.status === "sent" ? "text-success-400" : "text-slate-500"}`}>{c.status}</span>
+                        <span className="text-xs text-slate-500 ml-auto">{timeAgo(c.created_at)}</span>
+                      </div>
+                      <p className="text-sm text-slate-300 line-clamp-2">{c.name}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Workflow Executions */}
+            {detail.workflowExecutions.length > 0 && (
+              <div>
+                <h4 className="text-xs text-slate-500 uppercase tracking-wide mb-3">Workflows ({detail.workflowExecutions.length})</h4>
+                <div className="space-y-2">
+                  {detail.workflowExecutions.slice(0, 8).map((w) => (
+                    <div key={w.id} className="bg-slate-900/40 rounded-xl p-3 border border-white/5 flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-white font-medium">Workflow {w.workflow_id.slice(0, 8)}</p>
+                        <p className="text-xs text-slate-500">{w.status} · {timeAgo(w.started_at)}</p>
+                      </div>
+                      <span className={`text-xs font-medium ${w.status === "completed" ? "text-success-400" : w.status === "failed" ? "text-error-400" : "text-warning-400"}`}>{w.status}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* AI Tasks */}
+            {detail.aiTasks.length > 0 && (
+              <div>
+                <h4 className="text-xs text-slate-500 uppercase tracking-wide mb-3">AI Actions ({detail.aiTasks.length})</h4>
+                <div className="space-y-2">
+                  {detail.aiTasks.slice(0, 8).map((t) => (
+                    <div key={t.id} className="bg-slate-900/40 rounded-xl p-3 border border-white/5">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs text-primary-300 uppercase">{t.task_type}</span>
+                        <span className={`text-xs ${t.status === "completed" ? "text-success-400" : "text-slate-500"}`}>{t.status}</span>
+                        <span className="text-xs text-slate-500 ml-auto">{timeAgo(t.created_at)}</span>
+                      </div>
+                      <p className="text-sm text-slate-300 line-clamp-2">{t.description || t.title}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* AI Recommendations */}
+            {detail.aiRecommendations.length > 0 && (
+              <div>
+                <h4 className="text-xs text-slate-500 uppercase tracking-wide mb-3">AI Recommendations ({detail.aiRecommendations.length})</h4>
+                <div className="space-y-2">
+                  {detail.aiRecommendations.slice(0, 8).map((r) => (
+                    <div key={r.id} className="bg-slate-900/40 rounded-xl p-3 border border-white/5">
+                      <p className="text-sm text-white font-medium mb-1">{r.title}</p>
+                      <p className="text-xs text-slate-400 line-clamp-3">{r.description}</p>
+                      <span className="inline-block text-[10px] text-slate-600 mt-1">{timeAgo(r.created_at)}</span>
                     </div>
                   ))}
                 </div>
@@ -520,6 +608,45 @@ function InsightCard({ insight }: { insight: Customer360Insight }) {
       <p className="text-xs text-slate-400 leading-relaxed mb-2">{insight.insight}</p>
       <div className="bg-slate-900/40 rounded-lg p-2 border border-white/5">
         <p className="text-xs text-primary-300">{insight.recommendation}</p>
+      </div>
+    </div>
+  );
+}
+
+function PredictionCard({ prediction, delay }: { prediction: FuturePrediction; delay: number }) {
+  const confLevel = prediction.confidence >= 0.7 ? "high" : prediction.confidence >= 0.45 ? "medium" : "low";
+  const confMeta = confidenceMeta(confLevel);
+  const isHigh = prediction.numericEstimate > 0.7;
+  const accentColor = prediction.type === "churn_probability"
+    ? (isHigh ? "text-error-400" : "text-success-400")
+    : prediction.type === "expected_ltv"
+    ? "text-primary-300"
+    : isHigh ? "text-success-400" : "text-slate-300";
+
+  return (
+    <div className="glass rounded-xl p-4 border border-white/5 animate-fade-up" style={{ animationDelay: `${delay}ms` }}>
+      <div className="flex items-center justify-between mb-2">
+        <h5 className="text-sm font-semibold text-white">{prediction.label}</h5>
+        <span className={`text-[10px] font-medium ${confMeta.color}`}>{confMeta.label} confidence</span>
+      </div>
+      <p className={`text-2xl font-bold ${accentColor} mb-3`}>{prediction.estimated}</p>
+      <div className="space-y-1 mb-2">
+        <p className="text-[10px] text-slate-600 uppercase tracking-wide">Evidence</p>
+        {prediction.evidence.map((e, i) => (
+          <p key={i} className="text-xs text-slate-400 flex items-start gap-1">
+            <span className="text-slate-600 shrink-0">•</span>
+            <span>{e}</span>
+          </p>
+        ))}
+      </div>
+      <div className="space-y-1">
+        <p className="text-[10px] text-slate-600 uppercase tracking-wide">Assumptions</p>
+        {prediction.assumptions.map((a, i) => (
+          <p key={i} className="text-xs text-slate-500 italic flex items-start gap-1">
+            <span className="text-slate-600 shrink-0">•</span>
+            <span>{a}</span>
+          </p>
+        ))}
       </div>
     </div>
   );

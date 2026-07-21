@@ -45,6 +45,16 @@ export interface RelationshipScore {
   confidence: number;
 }
 
+export interface FuturePrediction {
+  type: "churn_probability" | "expected_ltv" | "next_visit_window" | "review_likelihood" | "upsell_probability";
+  label: string;
+  estimated: string;
+  numericEstimate: number;
+  confidence: number;
+  evidence: string[];
+  assumptions: string[];
+}
+
 export interface Customer360Data {
   customer: Customer;
   reviews: ReviewSession[];
@@ -59,6 +69,7 @@ export interface Customer360Data {
   healthScore: HealthScore;
   relationshipScore: RelationshipScore;
   insights: Customer360Insight[];
+  predictions: FuturePrediction[];
 }
 
 export interface Customer360Insight {
@@ -121,6 +132,9 @@ export async function fetchCustomer360(
     // Generate data-driven insights (client-side, grounded in real data)
     const insights = generateInsights(customer, customerReviews, messages, loyalty, healthScore);
 
+    // Generate future predictions (grounded in real data, never presented as facts)
+    const predictions = computePredictions(customer, customerReviews, messages, loyalty, events, healthScore, relationshipScore);
+
     return {
       data: {
         customer,
@@ -136,6 +150,7 @@ export async function fetchCustomer360(
         healthScore,
         relationshipScore,
         insights,
+        predictions,
       },
       error: null,
     };
@@ -523,6 +538,189 @@ function generateInsights(
   }
 
   return insights;
+}
+
+// =========================================================
+// FUTURE PREDICTIONS — grounded in real data, never presented as facts
+// =========================================================
+
+function computePredictions(
+  customer: Customer,
+  reviews: ReviewSession[],
+  messages: Message[],
+  loyalty: CustomerLoyalty[],
+  events: CustomerEvent[],
+  health: HealthScore,
+  relationship: RelationshipScore,
+): FuturePrediction[] {
+  const predictions: FuturePrediction[] = [];
+  const dataPoints = reviews.length + messages.length + loyalty.length + events.length;
+  const baseConfidence = dataPoints >= 10 ? 0.8 : dataPoints >= 5 ? 0.65 : dataPoints >= 2 ? 0.45 : 0.25;
+
+  const daysSinceLastVisit = customer.last_visit_at
+    ? (Date.now() - new Date(customer.last_visit_at).getTime()) / 86400000
+    : null;
+
+  // 1. Churn probability
+  {
+    let churnProb = 0.5;
+    const evidence: string[] = [];
+    const assumptions: string[] = [];
+
+    if (daysSinceLastVisit !== null) {
+      if (daysSinceLastVisit > 60) { churnProb += 0.25; evidence.push(`Last visit was ${Math.round(daysSinceLastVisit)} days ago`); }
+      else if (daysSinceLastVisit > 30) { churnProb += 0.12; evidence.push(`Last visit was ${Math.round(daysSinceLastVisit)} days ago`); }
+      else if (daysSinceLastVisit < 7) { churnProb -= 0.2; evidence.push(`Visited recently (${Math.round(daysSinceLastVisit)} days ago)`); }
+    } else {
+      churnProb += 0.15;
+      evidence.push("No recorded visit date");
+    }
+
+    if (health.band === "critical" || health.band === "at_risk") { churnProb += 0.15; evidence.push(`Health score is ${health.score}/100 (${health.band})`); }
+    else if (health.band === "excellent") { churnProb -= 0.15; evidence.push(`Health score is ${health.score}/100 (excellent)`); }
+
+    const readRate = messages.length > 0 ? messages.filter((m) => m.status === "read" || m.status === "clicked").length / messages.length : 1;
+    if (readRate < 0.3 && messages.length >= 3) { churnProb += 0.1; evidence.push(`Only ${Math.round(readRate * 100)}% of messages are read`); }
+
+    churnProb = Math.max(0.05, Math.min(0.95, churnProb));
+    assumptions.push("Churn is defined as no activity for 90+ days");
+    assumptions.push("Prediction is based on current engagement trajectory");
+
+    predictions.push({
+      type: "churn_probability",
+      label: "Churn Probability (90 days)",
+      estimated: `${Math.round(churnProb * 100)}%`,
+      numericEstimate: churnProb,
+      confidence: baseConfidence,
+      evidence,
+      assumptions,
+    });
+  }
+
+  // 2. Expected lifetime value
+  {
+    const avgRating = customer.avg_rating ?? 0;
+    const loyaltyPoints = loyalty.reduce((s, l) => s + l.points, 0);
+    const segmentMultiplier = customer.segment === "vip" ? 1.5 : customer.segment === "repeat" ? 1.2 : customer.segment === "new" ? 0.7 : 1.0;
+
+    const estimatedLTV = Math.round(customer.total_visits * 25 * segmentMultiplier + loyaltyPoints * 0.5 + (avgRating > 0 ? avgRating * 10 : 0));
+    const confidence = dataPoints >= 5 ? 0.7 : dataPoints >= 2 ? 0.5 : 0.3;
+    const evidence: string[] = [];
+    const assumptions: string[] = [];
+
+    evidence.push(`${customer.total_visits} visits recorded`);
+    if (loyaltyPoints > 0) evidence.push(`${loyaltyPoints} loyalty points`);
+    if (avgRating > 0) evidence.push(`${avgRating.toFixed(1)}/5 average rating`);
+    evidence.push(`Segment: ${customer.segment}`);
+
+    assumptions.push("Average visit value estimated at $25");
+    assumptions.push("Loyalty points valued at $0.50 each");
+    assumptions.push(`Segment multiplier of ${segmentMultiplier}x applied`);
+    assumptions.push("LTV projected over 12 months from current trajectory");
+
+    predictions.push({
+      type: "expected_ltv",
+      label: "Expected Lifetime Value (12 months)",
+      estimated: `${estimatedLTV.toLocaleString()}`,
+      numericEstimate: estimatedLTV,
+      confidence,
+      evidence,
+      assumptions,
+    });
+  }
+
+  // 3. Next visit window
+  {
+    let windowDays = 14;
+    const evidence: string[] = [];
+    const assumptions: string[] = [];
+
+    if (customer.total_visits >= 2 && customer.last_visit_at) {
+      const lastVisit = new Date(customer.last_visit_at).getTime();
+      const firstVisit = events.length > 0 ? new Date(events[events.length - 1].created_at).getTime() : lastVisit;
+      const span = Math.max(1, (lastVisit - firstVisit) / 86400000);
+      const avgGap = span / Math.max(1, customer.total_visits - 1);
+      windowDays = Math.round(avgGap);
+      evidence.push(`Average gap between visits: ${windowDays} days`);
+      evidence.push(`${customer.total_visits} visits total`);
+    } else {
+      evidence.push("Insufficient visit history for pattern detection");
+      assumptions.push("Default 14-day window assumed for new customers");
+    }
+
+    if (daysSinceLastVisit !== null) {
+      const daysUntilNext = Math.max(1, windowDays - Math.round(daysSinceLastVisit));
+      evidence.push(`${Math.round(daysSinceLastVisit)} days since last visit`);
+      predictions.push({
+        type: "next_visit_window",
+        label: "Next Expected Visit",
+        estimated: daysUntilNext <= 0 ? "Overdue" : `~${daysUntilNext} days`,
+        numericEstimate: daysUntilNext,
+        confidence: baseConfidence,
+        evidence,
+        assumptions: [...assumptions, "Assumes current visit pattern continues"],
+      });
+    }
+  }
+
+  // 4. Review likelihood
+  {
+    const reviewRatio = customer.total_visits > 0 ? customer.total_reviews / customer.total_visits : 0;
+    let likelihood = reviewRatio * 0.6;
+    const evidence: string[] = [];
+    const assumptions: string[] = [];
+
+    evidence.push(`${customer.total_reviews} reviews from ${customer.total_visits} visits (${Math.round(reviewRatio * 100)}% rate)`);
+
+    if (daysSinceLastVisit !== null && daysSinceLastVisit < 3) { likelihood += 0.2; evidence.push("Visited within last 3 days (prime review window)"); }
+    else if (daysSinceLastVisit !== null && daysSinceLastVisit > 14) { likelihood -= 0.1; evidence.push("Last visit was >14 days ago"); }
+
+    if (customer.avg_rating && customer.avg_rating >= 4) { likelihood += 0.1; evidence.push("High satisfaction (4+ rating)"); }
+
+    likelihood = Math.max(0.05, Math.min(0.95, likelihood));
+    assumptions.push("Review likelihood is highest within 72 hours of a visit");
+    assumptions.push("Assumes customer is prompted with a review request");
+
+    predictions.push({
+      type: "review_likelihood",
+      label: "Review Likelihood (next visit)",
+      estimated: `${Math.round(likelihood * 100)}%`,
+      numericEstimate: likelihood,
+      confidence: baseConfidence,
+      evidence,
+      assumptions,
+    });
+  }
+
+  // 5. Upsell probability
+  {
+    let upsellProb = 0.3;
+    const evidence: string[] = [];
+    const assumptions: string[] = [];
+
+    if (customer.segment === "vip") { upsellProb += 0.3; evidence.push("VIP segment customer"); }
+    else if (customer.segment === "repeat") { upsellProb += 0.2; evidence.push("Repeat segment customer"); }
+
+    if (customer.total_visits >= 5) { upsellProb += 0.15; evidence.push(`${customer.total_visits} visits (high engagement)`); }
+    if (customer.avg_rating && customer.avg_rating >= 4) { upsellProb += 0.1; evidence.push(`High satisfaction (${customer.avg_rating.toFixed(1)}/5)`); }
+    if (relationship.band === "champion") { upsellProb += 0.1; evidence.push("Champion relationship status"); }
+
+    upsellProb = Math.max(0.05, Math.min(0.95, upsellProb));
+    assumptions.push("Upsell defined as accepting a premium offer or add-on");
+    assumptions.push("Assumes offer is relevant and well-timed");
+
+    predictions.push({
+      type: "upsell_probability",
+      label: "Upsell Probability",
+      estimated: `${Math.round(upsellProb * 100)}%`,
+      numericEstimate: upsellProb,
+      confidence: baseConfidence,
+      evidence,
+      assumptions,
+    });
+  }
+
+  return predictions;
 }
 
 // =========================================================

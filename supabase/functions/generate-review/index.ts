@@ -40,7 +40,6 @@ Deno.serve(async (req: Request) => {
     const rating = session.rating as number;
     const answers = (session.answers as Record<string, string>) || {};
 
-    // Fetch business name for context
     const { data: business } = await supabase
       .from("businesses")
       .select("name")
@@ -49,7 +48,6 @@ Deno.serve(async (req: Request) => {
 
     const businessName = (business as { name?: string })?.name || "this business";
 
-    // Fetch questions to map answers to question text
     const { data: questions } = await supabase
       .from("questions")
       .select("id, question_text")
@@ -66,9 +64,7 @@ Deno.serve(async (req: Request) => {
       if (qText && ans) answerParts.push(`${qText}: ${ans}`);
     }
 
-    // Generate review based on rating tier
     let review = "";
-    const positiveHighlights: string[] = [];
 
     if (rating >= 4) {
       const openers = [
@@ -80,14 +76,11 @@ Deno.serve(async (req: Request) => {
       review = openers[Math.floor(Math.random() * openers.length)];
 
       if (answerParts.length > 0) {
-        review += " " + answerParts.slice(0, 2).map((a) => {
+        const highlights = answerParts.slice(0, 2).map((a) => {
           const [q, ans] = a.split(": ");
-          if (ans && ans.length > 2) {
-            positiveHighlights.push(`The ${q.toLowerCase()} was outstanding — ${ans}.`);
-            return null;
-          }
-          return null;
-        }).filter(Boolean).join(" ");
+          return ans && ans.length > 2 ? `The ${q.toLowerCase()} was outstanding — ${ans}.` : null;
+        }).filter(Boolean);
+        if (highlights.length > 0) review += " " + highlights.join(" ");
       }
 
       const closers = [
@@ -97,33 +90,29 @@ Deno.serve(async (req: Request) => {
         `I'll be coming back for sure. Five stars well deserved!`,
       ];
       review += " " + closers[Math.floor(Math.random() * closers.length)];
-
-      if (positiveHighlights.length > 0) {
-        review += " " + positiveHighlights.join(" ");
-      }
-
       review += ` Overall, I'd rate my experience ${rating} out of 5 stars. Highly recommended!`;
     } else if (rating === 3) {
       review = `My experience at ${businessName} was decent but had room for improvement.`;
       if (answerParts.length > 0) {
-        review += " " + answerParts.slice(0, 2).map((a) => {
+        const parts = answerParts.slice(0, 2).map((a) => {
           const [q, ans] = a.split(": ");
           return ans && ans.length > 2 ? `Regarding ${q.toLowerCase()}, ${ans}.` : null;
-        }).filter(Boolean).join(" ");
+        }).filter(Boolean);
+        if (parts.length > 0) review += " " + parts.join(" ");
       }
-      review += ` The service was okay, but I think a few things could be refined to make the experience better. I'd give it ${rating} out of 5 stars.`;
+      review += ` The service was okay, but I think a few things could be refined. I'd give it ${rating} out of 5 stars.`;
     } else {
       review = `I had some concerns about my visit to ${businessName}.`;
       if (answerParts.length > 0) {
-        review += " " + answerParts.slice(0, 2).map((a) => {
+        const parts = answerParts.slice(0, 2).map((a) => {
           const [q, ans] = a.split(": ");
           return ans && ans.length > 2 ? `Regarding ${q.toLowerCase()}, ${ans}.` : null;
-        }).filter(Boolean).join(" ");
+        }).filter(Boolean);
+        if (parts.length > 0) review += " " + parts.join(" ");
       }
       review += ` While I appreciate the effort, there are areas that need attention. I hope the team takes this feedback constructively. Rating: ${rating} out of 5 stars.`;
     }
 
-    // Update session with generated review
     await supabase
       .from("review_sessions")
       .update({ ai_generated_review: review, ai_status: "completed" })

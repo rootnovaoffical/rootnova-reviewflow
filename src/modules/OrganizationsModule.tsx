@@ -1,57 +1,444 @@
-import DataManager from '../components/DataManager';
-import type { ColumnDef } from '../components/DataManager';
+import { useState, useEffect, useCallback } from 'react';
+import { supabase } from '../lib/supabase';
+import { useToast } from '../context/ToastContext';
+import {
+  LoadingSpinner,
+  EmptyState,
+  PageHeader,
+  Card,
+  Badge,
+} from '../components/UI';
+import {
+  Building2,
+  Users,
+  GitBranch,
+  MapPin,
+  Shield,
+  Mail,
+} from 'lucide-react';
 
-// organizations: id, name, slug, type, contact_email, contact_phone, status, metadata, created_at, updated_at, logo_url
-const orgColumns: ColumnDef[] = [
-  { key: 'name', label: 'Name', type: 'text', required: true, showInTable: true },
-  { key: 'slug', label: 'Slug', type: 'text', required: true, showInTable: true },
-  { key: 'type', label: 'Type', type: 'select', options: ['agency', 'franchise', 'chain', 'enterprise'], showInTable: true },
-  { key: 'contact_email', label: 'Contact Email', type: 'text', showInTable: true },
-  { key: 'contact_phone', label: 'Contact Phone', type: 'text', showInTable: true },
-  { key: 'status', label: 'Status', type: 'select', options: ['active', 'suspended', 'trial'], showInTable: true },
-  { key: 'logo_url', label: 'Logo URL', type: 'text', showInTable: false },
-];
+/* ============================================================
+ * OrganizationsModule
+ * Show single organization record (read-only)
+ * ============================================================ */
 
-// organization_members: id, organization_id, user_id, role, status, created_at, updated_at
-const memberColumns: ColumnDef[] = [
-  { key: 'role', label: 'Role', type: 'select', options: ['owner', 'admin', 'manager', 'staff'], required: true, showInTable: true },
-  { key: 'status', label: 'Status', type: 'select', options: ['active', 'invited', 'suspended'], showInTable: true },
-  { key: 'created_at', label: 'Joined', type: 'date', showInTable: true, editable: false },
-];
+interface Organization {
+  id: string;
+  name: string;
+  slug: string;
+  type: string | null;
+  contact_email: string | null;
+  status: string | null;
+}
 
-// enterprise_branches: id, organization_id, region_id, business_id, name, slug, branch_code, branch_type, address, city, state, country, timezone, currency, language, phone, email, operating_hours, status, health_score, metadata, created_at, updated_at
-const branchColumns: ColumnDef[] = [
-  { key: 'name', label: 'Branch Name', type: 'text', required: true, showInTable: true },
-  { key: 'branch_code', label: 'Code', type: 'text', showInTable: true },
-  { key: 'branch_type', label: 'Type', type: 'select', options: ['main', 'satellite', 'express', 'kiosk'], showInTable: true },
-  { key: 'city', label: 'City', type: 'text', showInTable: true },
-  { key: 'phone', label: 'Phone', type: 'text', showInTable: true },
-  { key: 'status', label: 'Status', type: 'select', options: ['active', 'inactive', 'planned'], showInTable: true },
-];
+export function OrganizationsModule({ organizationId }: { organizationId: string }) {
+  const { showToast } = useToast();
+  const [org, setOrg] = useState<Organization | null>(null);
+  const [loading, setLoading] = useState(true);
 
-// enterprise_regions: id, organization_id, parent_id, name, slug, region_type, code, metadata, status, created_at, updated_at
-const regionColumns: ColumnDef[] = [
-  { key: 'name', label: 'Region Name', type: 'text', required: true, showInTable: true },
-  { key: 'region_type', label: 'Type', type: 'select', options: ['country', 'state', 'city', 'zone'], showInTable: true },
-  { key: 'code', label: 'Code', type: 'text', showInTable: true },
-  { key: 'status', label: 'Status', type: 'select', options: ['active', 'inactive'], showInTable: true },
-];
+  useEffect(() => {
+    const fetchOrg = async () => {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('organizations')
+        .select('*')
+        .eq('id', organizationId)
+        .maybeSingle();
+      if (error) {
+        showToast('error', 'Failed to load organization');
+      } else {
+        setOrg(data as Organization | null);
+      }
+      setLoading(false);
+    };
+    fetchOrg();
+  }, [organizationId, showToast]);
 
-// organization_policies: id, organization_id, region_id, branch_id, policy_key, policy_type, name, description, rules, is_inherited, is_overridable, status, created_by, created_at, updated_at
-const policyColumns: ColumnDef[] = [
-  { key: 'name', label: 'Policy Name', type: 'text', required: true, showInTable: true },
-  { key: 'policy_key', label: 'Policy Key', type: 'text', required: true, showInTable: true },
-  { key: 'policy_type', label: 'Type', type: 'select', options: ['security', 'compliance', 'operational', 'branding'], showInTable: true },
-  { key: 'description', label: 'Description', type: 'textarea', showInTable: true },
-  { key: 'is_overridable', label: 'Overridable', type: 'boolean', showInTable: true },
-  { key: 'status', label: 'Status', type: 'select', options: ['active', 'draft', 'archived'], showInTable: true },
-];
+  const statusColor = (s: string | null) => {
+    if (!s) return 'gray';
+    if (s === 'active' || s === 'verified') return 'green';
+    if (s === 'suspended' || s === 'deleted') return 'red';
+    return 'yellow';
+  };
 
-interface Props { organizationId: string; }
+  if (loading) return <LoadingSpinner label="Loading organization..." />;
 
-// Organizations module - no organization_id filter since we're listing ALL organizations
-export function OrganizationsModule({ organizationId: _organizationId }: Props) { return <DataManager table="organizations" columns={orgColumns} defaultValues={{ status: 'active', metadata: {} }} />; }
-export function OrganizationMembersModule({ organizationId }: Props) { return <DataManager table="organization_members" organizationId={organizationId} columns={memberColumns} defaultValues={{ role: 'staff', status: 'active' }} />; }
-export function EnterpriseBranchesModule({ organizationId }: Props) { return <DataManager table="enterprise_branches" organizationId={organizationId} columns={branchColumns} defaultValues={{ status: 'active', branch_type: 'main', health_score: 100, metadata: {}, operating_hours: {} }} />; }
-export function EnterpriseRegionsModule({ organizationId }: Props) { return <DataManager table="enterprise_regions" organizationId={organizationId} columns={regionColumns} defaultValues={{ status: 'active', metadata: {} }} />; }
-export function OrganizationPoliciesModule({ organizationId }: Props) { return <DataManager table="organization_policies" organizationId={organizationId} columns={policyColumns} defaultValues={{ status: 'active', is_inherited: false, is_overridable: true, rules: {} }} />; }
+  if (!org) {
+    return (
+      <EmptyState
+        icon={Building2}
+        title="Organization not found"
+        description="The organization record could not be loaded"
+      />
+    );
+  }
+
+  return (
+    <div>
+      <PageHeader title="Organization" description="Organization details" />
+      <Card className="p-6">
+        <div className="flex items-start gap-4 mb-6">
+          <div className="w-14 h-14 rounded-xl bg-blue-500/10 flex items-center justify-center shrink-0">
+            <Building2 className="w-7 h-7 text-blue-400" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h2 className="text-xl font-bold text-white">{org.name}</h2>
+            <code className="text-sm text-zinc-500 font-mono">{org.slug}</code>
+          </div>
+          {org.status && <Badge color={statusColor(org.status)}>{org.status}</Badge>}
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs text-zinc-500 mb-1">Type</label>
+            <p className="text-white font-medium">{org.type || '—'}</p>
+          </div>
+          <div>
+            <label className="block text-xs text-zinc-500 mb-1">Contact Email</label>
+            <div className="flex items-center gap-1.5">
+              <Mail className="w-4 h-4 text-zinc-500" />
+              <p className="text-white font-medium">{org.contact_email || '—'}</p>
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs text-zinc-500 mb-1">Slug</label>
+            <p className="text-white font-medium font-mono">{org.slug}</p>
+          </div>
+          <div>
+            <label className="block text-xs text-zinc-500 mb-1">Status</label>
+            <p className="text-white font-medium">{org.status || '—'}</p>
+          </div>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+/* ============================================================
+ * OrganizationMembersModule
+ * List organization_members filtered by organization_id (read-only)
+ * ============================================================ */
+
+interface OrganizationMember {
+  id: string;
+  organization_id: string;
+  user_id: string;
+  role: string | null;
+  status: string | null;
+}
+
+export function OrganizationMembersModule({ organizationId }: { organizationId: string }) {
+  const { showToast } = useToast();
+  const [members, setMembers] = useState<OrganizationMember[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchMembers = useCallback(async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('organization_members')
+      .select('*')
+      .eq('organization_id', organizationId)
+      .order('created_at', { ascending: false });
+    if (error) {
+      showToast('error', 'Failed to load members');
+    } else {
+      setMembers((data as OrganizationMember[]) || []);
+    }
+    setLoading(false);
+  }, [organizationId, showToast]);
+
+  useEffect(() => {
+    fetchMembers();
+  }, [fetchMembers]);
+
+  const roleColor = (r: string | null) => {
+    if (!r) return 'gray';
+    if (r === 'owner' || r === 'admin') return 'purple';
+    if (r === 'manager') return 'blue';
+    return 'gray';
+  };
+
+  const statusColor = (s: string | null) => {
+    if (!s) return 'gray';
+    if (s === 'active' || s === 'invited') return 'green';
+    if (s === 'removed' || s === 'suspended') return 'red';
+    return 'yellow';
+  };
+
+  return (
+    <div>
+      <PageHeader title="Organization Members" description="Members of this organization" />
+
+      {loading ? (
+        <LoadingSpinner label="Loading members..." />
+      ) : members.length === 0 ? (
+        <EmptyState icon={Users} title="No members" description="Organization members will appear here" />
+      ) : (
+        <div className="grid gap-3">
+          {members.map((m) => (
+            <Card key={m.id} className="p-4">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-white/5 flex items-center justify-center">
+                    <Users className="w-4 h-4 text-zinc-400" />
+                  </div>
+                  <div>
+                    <p className="text-white font-medium font-mono text-sm">{m.user_id}</p>
+                    <div className="flex gap-1.5 mt-1">
+                      {m.role && <Badge color={roleColor(m.role)}>{m.role}</Badge>}
+                      {m.status && <Badge color={statusColor(m.status)}>{m.status}</Badge>}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ============================================================
+ * EnterpriseBranchesModule
+ * List enterprise_branches filtered by organization_id (read-only)
+ * ============================================================ */
+
+interface EnterpriseBranch {
+  id: string;
+  organization_id: string;
+  name: string;
+  branch_code: string | null;
+  city: string | null;
+  state: string | null;
+  status: string | null;
+  health_score: number | null;
+}
+
+export function EnterpriseBranchesModule({ organizationId }: { organizationId: string }) {
+  const { showToast } = useToast();
+  const [branches, setBranches] = useState<EnterpriseBranch[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchBranches = useCallback(async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('enterprise_branches')
+      .select('*')
+      .eq('organization_id', organizationId)
+      .order('name', { ascending: true });
+    if (error) {
+      showToast('error', 'Failed to load branches');
+    } else {
+      setBranches((data as EnterpriseBranch[]) || []);
+    }
+    setLoading(false);
+  }, [organizationId, showToast]);
+
+  useEffect(() => {
+    fetchBranches();
+  }, [fetchBranches]);
+
+  const statusColor = (s: string | null) => {
+    if (!s) return 'gray';
+    if (s === 'active' || s === 'operational') return 'green';
+    if (s === 'closed' || s === 'inactive') return 'red';
+    return 'yellow';
+  };
+
+  const healthColor = (score: number | null) => {
+    if (score === null) return 'gray';
+    if (score >= 80) return 'green';
+    if (score >= 50) return 'yellow';
+    return 'red';
+  };
+
+  return (
+    <div>
+      <PageHeader title="Enterprise Branches" description="Branch locations for this organization" />
+
+      {loading ? (
+        <LoadingSpinner label="Loading branches..." />
+      ) : branches.length === 0 ? (
+        <EmptyState icon={GitBranch} title="No branches" description="Enterprise branches will appear here" />
+      ) : (
+        <div className="grid gap-3">
+          {branches.map((b) => (
+            <Card key={b.id} className="p-4">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-2">
+                    <h3 className="font-semibold text-white">{b.name}</h3>
+                    {b.branch_code && <Badge color="blue">{b.branch_code}</Badge>}
+                    {b.status && <Badge color={statusColor(b.status)}>{b.status}</Badge>}
+                  </div>
+                  <div className="flex items-center gap-1.5 text-sm text-zinc-400 mb-1">
+                    <MapPin className="w-3.5 h-3.5" />
+                    <span>{[b.city, b.state].filter(Boolean).join(', ') || 'Location not set'}</span>
+                  </div>
+                  {b.health_score !== null && (
+                    <Badge color={healthColor(b.health_score)}>Health: {b.health_score}%</Badge>
+                  )}
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ============================================================
+ * EnterpriseRegionsModule
+ * List enterprise_regions filtered by organization_id (read-only)
+ * ============================================================ */
+
+interface EnterpriseRegion {
+  id: string;
+  organization_id: string;
+  name: string;
+  region_type: string | null;
+  code: string | null;
+  status: string | null;
+}
+
+export function EnterpriseRegionsModule({ organizationId }: { organizationId: string }) {
+  const { showToast } = useToast();
+  const [regions, setRegions] = useState<EnterpriseRegion[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchRegions = useCallback(async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('enterprise_regions')
+      .select('*')
+      .eq('organization_id', organizationId)
+      .order('name', { ascending: true });
+    if (error) {
+      showToast('error', 'Failed to load regions');
+    } else {
+      setRegions((data as EnterpriseRegion[]) || []);
+    }
+    setLoading(false);
+  }, [organizationId, showToast]);
+
+  useEffect(() => {
+    fetchRegions();
+  }, [fetchRegions]);
+
+  const statusColor = (s: string | null) => {
+    if (!s) return 'gray';
+    if (s === 'active') return 'green';
+    if (s === 'inactive' || s === 'archived') return 'red';
+    return 'yellow';
+  };
+
+  return (
+    <div>
+      <PageHeader title="Enterprise Regions" description="Regional groupings for this organization" />
+
+      {loading ? (
+        <LoadingSpinner label="Loading regions..." />
+      ) : regions.length === 0 ? (
+        <EmptyState icon={MapPin} title="No regions" description="Enterprise regions will appear here" />
+      ) : (
+        <div className="grid gap-3">
+          {regions.map((r) => (
+            <Card key={r.id} className="p-4">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-2">
+                    <h3 className="font-semibold text-white">{r.name}</h3>
+                    {r.code && <Badge color="blue">{r.code}</Badge>}
+                    {r.status && <Badge color={statusColor(r.status)}>{r.status}</Badge>}
+                  </div>
+                  {r.region_type && <p className="text-sm text-zinc-400">Type: {r.region_type}</p>}
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ============================================================
+ * OrganizationPoliciesModule
+ * List organization_policies filtered by organization_id (read-only)
+ * ============================================================ */
+
+interface OrganizationPolicy {
+  id: string;
+  organization_id: string;
+  policy_key: string;
+  policy_type: string | null;
+  name: string;
+  description: string | null;
+  status: string | null;
+}
+
+export function OrganizationPoliciesModule({ organizationId }: { organizationId: string }) {
+  const { showToast } = useToast();
+  const [policies, setPolicies] = useState<OrganizationPolicy[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchPolicies = useCallback(async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('organization_policies')
+      .select('*')
+      .eq('organization_id', organizationId)
+      .order('name', { ascending: true });
+    if (error) {
+      showToast('error', 'Failed to load policies');
+    } else {
+      setPolicies((data as OrganizationPolicy[]) || []);
+    }
+    setLoading(false);
+  }, [organizationId, showToast]);
+
+  useEffect(() => {
+    fetchPolicies();
+  }, [fetchPolicies]);
+
+  const statusColor = (s: string | null) => {
+    if (!s) return 'gray';
+    if (s === 'active' || s === 'enabled') return 'green';
+    if (s === 'disabled' || s === 'archived') return 'red';
+    return 'yellow';
+  };
+
+  return (
+    <div>
+      <PageHeader title="Organization Policies" description="Policies configured for this organization" />
+
+      {loading ? (
+        <LoadingSpinner label="Loading policies..." />
+      ) : policies.length === 0 ? (
+        <EmptyState icon={Shield} title="No policies" description="Organization policies will appear here" />
+      ) : (
+        <div className="grid gap-3">
+          {policies.map((p) => (
+            <Card key={p.id} className="p-4">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Shield className="w-4 h-4 text-zinc-500" />
+                    <h3 className="font-semibold text-white">{p.name}</h3>
+                    {p.status && <Badge color={statusColor(p.status)}>{p.status}</Badge>}
+                  </div>
+                  <div className="flex flex-wrap gap-2 mb-1">
+                    {p.policy_key && <Badge color="purple">{p.policy_key}</Badge>}
+                    {p.policy_type && <Badge color="blue">{p.policy_type}</Badge>}
+                  </div>
+                  {p.description && <p className="text-sm text-zinc-400 mt-1">{p.description}</p>}
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

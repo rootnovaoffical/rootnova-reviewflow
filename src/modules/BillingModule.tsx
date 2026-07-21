@@ -1,58 +1,391 @@
-import DataManager from '../components/DataManager';
-import type { ColumnDef } from '../components/DataManager';
+import { useState, useEffect, useCallback } from 'react';
+import { supabase } from '../lib/supabase';
+import { useToast } from '../context/ToastContext';
+import {
+  LoadingSpinner,
+  EmptyState,
+  PageHeader,
+  Card,
+  Badge,
+} from '../components/UI';
+import {
+  CreditCard,
+  Receipt,
+  Wallet,
+  FileText,
+  Building2,
+  Calendar,
+} from 'lucide-react';
 
-// plans: id, name, slug, description, monthly_price, annual_price, setup_fee, max_businesses, max_review_sessions, max_team_members, ai_usage_allowance, trial_duration_days, features, is_active, sort_order, created_at, updated_at
-const planColumns: ColumnDef[] = [
-  { key: 'name', label: 'Plan Name', type: 'text', required: true, showInTable: true },
-  { key: 'slug', label: 'Slug', type: 'text', required: true, showInTable: true },
-  { key: 'description', label: 'Description', type: 'textarea', showInTable: true },
-  { key: 'monthly_price', label: 'Monthly Price', type: 'number', required: true, showInTable: true },
-  { key: 'annual_price', label: 'Annual Price', type: 'number', required: true, showInTable: true },
-  { key: 'setup_fee', label: 'Setup Fee', type: 'number', showInTable: true },
-  { key: 'max_businesses', label: 'Max Businesses', type: 'number', showInTable: true },
-  { key: 'max_team_members', label: 'Max Team', type: 'number', showInTable: true },
-  { key: 'is_active', label: 'Active', type: 'boolean', showInTable: true },
-];
+/* ============================================================
+ * PlansModule
+ * List plans (global, read-only) - card grid
+ * ============================================================ */
 
-// subscriptions: id, organization_id, plan_id, status, billing_cycle, custom_monthly_price, custom_setup_fee, discount_percent, discount_duration_months, is_founding_partner, pricing_lock_months, pricing_lock_until, contract_start_date, contract_end_date, trial_ends_at, current_period_start, current_period_end, grace_period_ends_at, created_at, updated_at
-const subColumns: ColumnDef[] = [
-  { key: 'status', label: 'Status', type: 'select', options: ['active', 'trialing', 'past_due', 'canceled', 'unpaid'], required: true, showInTable: true },
-  { key: 'billing_cycle', label: 'Billing Cycle', type: 'select', options: ['monthly', 'annual'], required: true, showInTable: true },
-  { key: 'is_founding_partner', label: 'Founding Partner', type: 'boolean', showInTable: true },
-  { key: 'current_period_start', label: 'Period Start', type: 'date', showInTable: true, editable: false },
-  { key: 'current_period_end', label: 'Period End', type: 'date', showInTable: true, editable: false },
-  { key: 'created_at', label: 'Created', type: 'date', showInTable: true, editable: false },
-];
+interface Plan {
+  id: string;
+  name: string;
+  slug: string;
+  monthly_price: number | null;
+  annual_price: number | null;
+  setup_fee: number | null;
+  max_businesses: number | null;
+  is_active: boolean | null;
+}
 
-// payments: id, organization_id, subscription_id, amount, payment_purpose, payment_method, upi_id, screenshot_path, utr_reference, payment_date, status, rejection_reason, reviewed_by, reviewed_at, approved_by, approved_at, metadata, submitted_by, created_at, updated_at, plan_id, billing_cycle
-const paymentColumns: ColumnDef[] = [
-  { key: 'amount', label: 'Amount', type: 'number', required: true, showInTable: true },
-  { key: 'payment_purpose', label: 'Purpose', type: 'text', showInTable: true },
-  { key: 'payment_method', label: 'Method', type: 'text', showInTable: true },
-  { key: 'status', label: 'Status', type: 'select', options: ['pending', 'under_review', 'approved', 'rejected', 'refunded'], required: true, showInTable: true },
-  { key: 'payment_date', label: 'Payment Date', type: 'date', showInTable: true },
-  { key: 'utr_reference', label: 'UTR Reference', type: 'text', showInTable: true },
-  { key: 'created_at', label: 'Created', type: 'date', showInTable: true, editable: false },
-];
+export function PlansModule() {
+  const { showToast } = useToast();
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [loading, setLoading] = useState(true);
 
-// invoices: id, organization_id, subscription_id, invoice_number, billing_cycle, period_start, period_end, line_items, subtotal, tax_amount, discount_amount, total_amount, status, payment_id, paid_at, due_date, notes, created_at, updated_at
-const invoiceColumns: ColumnDef[] = [
-  { key: 'invoice_number', label: 'Invoice #', type: 'text', required: true, showInTable: true },
-  { key: 'billing_cycle', label: 'Billing Cycle', type: 'select', options: ['monthly', 'annual'], showInTable: true },
-  { key: 'total_amount', label: 'Total Amount', type: 'number', required: true, showInTable: true },
-  { key: 'status', label: 'Status', type: 'select', options: ['draft', 'open', 'paid', 'void', 'uncollectible'], required: true, showInTable: true },
-  { key: 'due_date', label: 'Due Date', type: 'date', showInTable: true },
-  { key: 'paid_at', label: 'Paid At', type: 'date', showInTable: true, editable: false },
-  { key: 'period_start', label: 'Period Start', type: 'date', showInTable: false },
-  { key: 'period_end', label: 'Period End', type: 'date', showInTable: false },
-];
+  useEffect(() => {
+    const fetchPlans = async () => {
+      const { data, error } = await supabase
+        .from('plans')
+        .select('*')
+        .order('monthly_price', { ascending: true });
+      if (error) {
+        showToast('error', 'Failed to load plans');
+      } else {
+        setPlans((data as Plan[]) || []);
+      }
+      setLoading(false);
+    };
+    fetchPlans();
+  }, [showToast]);
 
-interface Props { businessId: string; organizationId?: string; }
+  const formatPrice = (p: number | null) => {
+    if (p === null) return '—';
+    return `$${Number(p).toFixed(2)}`;
+  };
 
-// Plans are global (no business_id or organization_id) - super admin manages them
-export function PlansModule({ businessId: _businessId }: Props) { return <DataManager table="plans" columns={planColumns} defaultValues={{ is_active: true, monthly_price: 0, annual_price: 0, setup_fee: 0, max_businesses: 1, max_review_sessions: 100, max_team_members: 5, ai_usage_allowance: 100, trial_duration_days: 14, features: [], sort_order: 0 }} />; }
+  return (
+    <div>
+      <PageHeader title="Plans" description="Available subscription plans" />
 
-// Subscriptions, Payments, Invoices use organization_id
-export function SubscriptionsModule({ organizationId }: { organizationId: string }) { return <DataManager table="subscriptions" organizationId={organizationId} columns={subColumns} defaultValues={{ status: 'active', billing_cycle: 'monthly', is_founding_partner: false, discount_percent: 0, discount_duration_months: 0, pricing_lock_months: 0 }} />; }
-export function PaymentsModule({ organizationId }: { organizationId: string }) { return <DataManager table="payments" organizationId={organizationId} columns={paymentColumns} defaultValues={{ status: 'pending', amount: 0, metadata: {} }} />; }
-export function InvoicesModule({ organizationId }: { organizationId: string }) { return <DataManager table="invoices" organizationId={organizationId} columns={invoiceColumns} defaultValues={{ status: 'draft', billing_cycle: 'monthly', subtotal: 0, tax_amount: 0, discount_amount: 0, total_amount: 0, line_items: [] }} />; }
+      {loading ? (
+        <LoadingSpinner label="Loading plans..." />
+      ) : plans.length === 0 ? (
+        <EmptyState icon={CreditCard} title="No plans available" description="Plans will appear here once configured" />
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {plans.map((p) => (
+            <Card key={p.id} className="p-5 flex flex-col">
+              <div className="flex items-start justify-between mb-3">
+                <div>
+                  <h3 className="font-semibold text-white text-lg">{p.name}</h3>
+                  <code className="text-xs text-zinc-500 font-mono">{p.slug}</code>
+                </div>
+                {p.is_active ? <Badge color="green">Active</Badge> : <Badge color="gray">Inactive</Badge>}
+              </div>
+              <div className="space-y-2 flex-1">
+                <div className="flex justify-between text-sm">
+                  <span className="text-zinc-500">Monthly</span>
+                  <span className="text-white font-medium">{formatPrice(p.monthly_price)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-zinc-500">Annual</span>
+                  <span className="text-white font-medium">{formatPrice(p.annual_price)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-zinc-500">Setup Fee</span>
+                  <span className="text-white font-medium">{formatPrice(p.setup_fee)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-zinc-500">Max Businesses</span>
+                  <span className="text-white font-medium">{p.max_businesses ?? '—'}</span>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ============================================================
+ * SubscriptionsModule
+ * List subscriptions filtered by organization_id (read-only)
+ * ============================================================ */
+
+interface Subscription {
+  id: string;
+  organization_id: string;
+  plan_id: string;
+  status: string | null;
+  billing_cycle: string | null;
+  current_period_start: string | null;
+  current_period_end: string | null;
+}
+
+export function SubscriptionsModule({ organizationId }: { organizationId: string }) {
+  const { showToast } = useToast();
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    const [subRes, planRes] = await Promise.all([
+      supabase.from('subscriptions').select('*').eq('organization_id', organizationId).order('current_period_start', { ascending: false }),
+      supabase.from('plans').select('*'),
+    ]);
+    if (subRes.error) {
+      showToast('error', 'Failed to load subscriptions');
+    } else {
+      setSubscriptions((subRes.data as Subscription[]) || []);
+    }
+    if (planRes.error) {
+      showToast('error', 'Failed to load plans');
+    } else {
+      setPlans((planRes.data as Plan[]) || []);
+    }
+    setLoading(false);
+  }, [organizationId, showToast]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const planName = (id: string) => plans.find((p) => p.id === id)?.name || 'Unknown Plan';
+
+  const formatDate = (d: string | null) => {
+    if (!d) return '—';
+    return new Date(d).toLocaleDateString();
+  };
+
+  const statusColor = (s: string | null) => {
+    if (!s) return 'gray';
+    if (s === 'active' || s === 'trialing') return 'green';
+    if (s === 'canceled' || s === 'past_due') return 'red';
+    return 'yellow';
+  };
+
+  return (
+    <div>
+      <PageHeader title="Subscriptions" description="Subscription history for this organization" />
+
+      {loading ? (
+        <LoadingSpinner label="Loading subscriptions..." />
+      ) : subscriptions.length === 0 ? (
+        <EmptyState icon={CreditCard} title="No subscriptions" description="Subscriptions will appear here" />
+      ) : (
+        <div className="grid gap-3">
+          {subscriptions.map((s) => (
+            <Card key={s.id} className="p-4">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-2">
+                    <h3 className="font-semibold text-white">{planName(s.plan_id)}</h3>
+                    {s.status && <Badge color={statusColor(s.status)}>{s.status}</Badge>}
+                    {s.billing_cycle && <Badge color="blue">{s.billing_cycle}</Badge>}
+                  </div>
+                  <div className="flex flex-col gap-1 text-sm text-zinc-400">
+                    <div className="flex items-center gap-1.5">
+                      <Calendar className="w-3.5 h-3.5" />
+                      <span>Period: {formatDate(s.current_period_start)} → {formatDate(s.current_period_end)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ============================================================
+ * PaymentsModule
+ * List payments filtered by organization_id (read-only)
+ * ============================================================ */
+
+interface Payment {
+  id: string;
+  organization_id: string;
+  amount: number | null;
+  payment_purpose: string | null;
+  payment_method: string | null;
+  utr_reference: string | null;
+  status: string | null;
+  payment_date: string | null;
+}
+
+export function PaymentsModule({ organizationId }: { organizationId: string }) {
+  const { showToast } = useToast();
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchPayments = useCallback(async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('payments')
+      .select('*')
+      .eq('organization_id', organizationId)
+      .order('payment_date', { ascending: false });
+    if (error) {
+      showToast('error', 'Failed to load payments');
+    } else {
+      setPayments((data as Payment[]) || []);
+    }
+    setLoading(false);
+  }, [organizationId, showToast]);
+
+  useEffect(() => {
+    fetchPayments();
+  }, [fetchPayments]);
+
+  const formatDate = (d: string | null) => {
+    if (!d) return '—';
+    return new Date(d).toLocaleDateString();
+  };
+
+  const statusColor = (s: string | null) => {
+    if (!s) return 'gray';
+    if (s === 'completed' || s === 'success' || s === 'paid') return 'green';
+    if (s === 'failed' || s === 'declined') return 'red';
+    return 'yellow';
+  };
+
+  return (
+    <div>
+      <PageHeader title="Payments" description="Payment history for this organization" />
+
+      {loading ? (
+        <LoadingSpinner label="Loading payments..." />
+      ) : payments.length === 0 ? (
+        <EmptyState icon={Wallet} title="No payments" description="Payment history will appear here" />
+      ) : (
+        <div className="grid gap-3">
+          {payments.map((p) => (
+            <Card key={p.id} className="p-4">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-lg font-bold text-white">
+                      {p.amount !== null ? `$${Number(p.amount).toFixed(2)}` : '—'}
+                    </span>
+                    {p.status && <Badge color={statusColor(p.status)}>{p.status}</Badge>}
+                  </div>
+                  <div className="flex flex-wrap gap-2 mb-1">
+                    {p.payment_purpose && <Badge color="purple">{p.payment_purpose}</Badge>}
+                    {p.payment_method && <Badge color="blue">{p.payment_method}</Badge>}
+                  </div>
+                  {p.utr_reference && (
+                    <p className="text-sm text-zinc-500">UTR: <code className="text-zinc-400 font-mono">{p.utr_reference}</code></p>
+                  )}
+                  <p className="text-sm text-zinc-500 mt-1">Date: {formatDate(p.payment_date)}</p>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ============================================================
+ * InvoicesModule
+ * List invoices filtered by organization_id (read-only)
+ * ============================================================ */
+
+interface Invoice {
+  id: string;
+  organization_id: string;
+  invoice_number: string;
+  billing_cycle: string | null;
+  subtotal: number | null;
+  tax_amount: number | null;
+  total_amount: number | null;
+  status: string | null;
+  due_date: string | null;
+}
+
+export function InvoicesModule({ organizationId }: { organizationId: string }) {
+  const { showToast } = useToast();
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchInvoices = useCallback(async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('invoices')
+      .select('*')
+      .eq('organization_id', organizationId)
+      .order('due_date', { ascending: false });
+    if (error) {
+      showToast('error', 'Failed to load invoices');
+    } else {
+      setInvoices((data as Invoice[]) || []);
+    }
+    setLoading(false);
+  }, [organizationId, showToast]);
+
+  useEffect(() => {
+    fetchInvoices();
+  }, [fetchInvoices]);
+
+  const formatDate = (d: string | null) => {
+    if (!d) return '—';
+    return new Date(d).toLocaleDateString();
+  };
+
+  const formatAmount = (a: number | null) => {
+    if (a === null) return '—';
+    return `$${Number(a).toFixed(2)}`;
+  };
+
+  const statusColor = (s: string | null) => {
+    if (!s) return 'gray';
+    if (s === 'paid' || s === 'completed') return 'green';
+    if (s === 'overdue') return 'red';
+    if (s === 'draft') return 'gray';
+    return 'yellow';
+  };
+
+  return (
+    <div>
+      <PageHeader title="Invoices" description="Invoice history for this organization" />
+
+      {loading ? (
+        <LoadingSpinner label="Loading invoices..." />
+      ) : invoices.length === 0 ? (
+        <EmptyState icon={Receipt} title="No invoices" description="Invoices will appear here" />
+      ) : (
+        <div className="grid gap-3">
+          {invoices.map((inv) => (
+            <Card key={inv.id} className="p-4">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-2">
+                    <h3 className="font-semibold text-white font-mono">{inv.invoice_number}</h3>
+                    {inv.status && <Badge color={statusColor(inv.status)}>{inv.status}</Badge>}
+                    {inv.billing_cycle && <Badge color="blue">{inv.billing_cycle}</Badge>}
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-sm">
+                    <div>
+                      <span className="text-zinc-500">Subtotal</span>
+                      <p className="text-white">{formatAmount(inv.subtotal)}</p>
+                    </div>
+                    <div>
+                      <span className="text-zinc-500">Tax</span>
+                      <p className="text-white">{formatAmount(inv.tax_amount)}</p>
+                    </div>
+                    <div>
+                      <span className="text-zinc-500">Total</span>
+                      <p className="text-white font-semibold">{formatAmount(inv.total_amount)}</p>
+                    </div>
+                  </div>
+                  <p className="text-sm text-zinc-500 mt-2">Due: {formatDate(inv.due_date)}</p>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

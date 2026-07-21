@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { BrandingProvider } from "./context/BrandingContext";
 import { ToastProvider } from "./context/ToastContext";
+import { MobileProvider } from "./context/MobileContext";
 import ProtectedRoute, { defaultPathForRole } from "./components/ProtectedRoute";
 import SpatialBackground from "./components/SpatialBackground";
 import { Loading } from "./components/States";
@@ -76,6 +77,22 @@ import EnterpriseRoles from "./pages/business/EnterpriseRoles";
 import EnterpriseEvents from "./pages/business/EnterpriseEvents";
 import EnterpriseBranchManagers from "./pages/business/EnterpriseBranchManagers";
 
+import MobileDashboard from "./pages/mobile/Dashboard";
+import MobileReviews from "./pages/mobile/Reviews";
+import MobileAIAssistant from "./pages/mobile/AIAssistant";
+import MobileNotifications from "./pages/mobile/Notifications";
+import MobileMore from "./pages/mobile/More";
+import MobileAnalytics from "./pages/mobile/Analytics";
+import MobileCustomer360 from "./pages/mobile/Customer360";
+import MobileCampaigns from "./pages/mobile/Campaigns";
+import MobileCommunication from "./pages/mobile/Communication";
+import MobileQR from "./pages/mobile/QR";
+import MobileWorkflows from "./pages/mobile/Workflows";
+import MobileEnterprise from "./pages/mobile/Enterprise";
+import MobileSettings from "./pages/mobile/Settings";
+import MobileProfile from "./pages/mobile/Profile";
+import MobileLoyalty from "./pages/mobile/Loyalty";
+
 const ADMIN_ROLES = ["ROOTNOVA_SUPER_ADMIN", "ROOTNOVA_ADMIN"] as const;
 const PARTNER_ROLES = ["PARTNER_OWNER", "PARTNER_ADMIN", "PARTNER_TEAM_MEMBER"] as const;
 const PARTNER_MANAGE_ROLES = ["PARTNER_OWNER", "PARTNER_ADMIN"] as const;
@@ -94,6 +111,7 @@ export default function App() {
       <ToastProvider>
         <BrandingProvider>
           <AuthProvider>
+            <MobileProvider>
             <div className="relative min-h-screen">
               <SpatialBackground />
               <Routes>
@@ -169,9 +187,26 @@ export default function App() {
                 <Route path="/business/enterprise/events" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><EnterpriseEvents /></ProtectedRoute>} />
                 <Route path="/business/enterprise/managers" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><EnterpriseBranchManagers /></ProtectedRoute>} />
 
+                <Route path="/mobile" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><MobileDashboard /></ProtectedRoute>} />
+                <Route path="/mobile/reviews" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><MobileReviews /></ProtectedRoute>} />
+                <Route path="/mobile/ai" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><MobileAIAssistant /></ProtectedRoute>} />
+                <Route path="/mobile/notifications" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><MobileNotifications /></ProtectedRoute>} />
+                <Route path="/mobile/more" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><MobileMore /></ProtectedRoute>} />
+                <Route path="/mobile/analytics" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><MobileAnalytics /></ProtectedRoute>} />
+                <Route path="/mobile/customer-360" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><MobileCustomer360 /></ProtectedRoute>} />
+                <Route path="/mobile/campaigns" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><MobileCampaigns /></ProtectedRoute>} />
+                <Route path="/mobile/communication" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><MobileCommunication /></ProtectedRoute>} />
+                <Route path="/mobile/qr" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><MobileQR /></ProtectedRoute>} />
+                <Route path="/mobile/workflows" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><MobileWorkflows /></ProtectedRoute>} />
+                <Route path="/mobile/enterprise" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><MobileEnterprise /></ProtectedRoute>} />
+                <Route path="/mobile/settings" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><MobileSettings /></ProtectedRoute>} />
+                <Route path="/mobile/profile" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><MobileProfile /></ProtectedRoute>} />
+                <Route path="/mobile/loyalty" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><MobileLoyalty /></ProtectedRoute>} />
+
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </div>
+            </MobileProvider>
           </AuthProvider>
         </BrandingProvider>
       </ToastProvider>

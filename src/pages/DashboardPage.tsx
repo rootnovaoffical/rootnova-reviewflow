@@ -7,7 +7,7 @@ import type { AdminRole } from '../lib/types';
 import {
   LayoutDashboard, Star, HelpCircle, QrCode as QrCodeIcon, Zap, Workflow, FileStack,
   MessageSquare, Users, Brain, TrendingUp, FileBarChart, Plug, Code2, CreditCard,
-  Building2, Globe, Settings, LogOut, ChevronDown, ChevronRight, Menu, X, Copy,
+  Building2, Globe, Settings, LogOut, ChevronDown, ChevronRight, Menu, Copy,
   ExternalLink, Save
 } from 'lucide-react';
 
@@ -159,25 +159,20 @@ export default function DashboardPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [settingsMode, setSettingsMode] = useState(false);
   const [editName, setEditName] = useState(business?.name || '');
-  const [editIndustry, setEditIndustry] = useState(business?.industry || '');
-  const [editPhone, setEditPhone] = useState(business?.phone || '');
-  const [editWebsite, setEditWebsite] = useState(business?.website || '');
+  const [editCategory, setEditCategory] = useState(business?.business_category || '');
+  const [editPhone, setEditPhone] = useState(business?.contact_phone || '');
+  const [editEmail, setEditEmail] = useState(business?.contact_email || '');
+  const [editCity, setEditCity] = useState(business?.location_city || '');
   const [editGoogleUrl, setEditGoogleUrl] = useState(business?.google_review_url || '');
-  const [editDescription, setEditDescription] = useState(business?.description || '');
+  const [editWelcome, setEditWelcome] = useState(business?.welcome_message || '');
 
   function toggleGroup(id: string) {
-    setCollapsedGroups((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+    setCollapsedGroups((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   }
 
   function copyReviewLink() {
     if (!business) return;
-    const url = `${window.location.origin}/#/review/${business.slug}`;
-    navigator.clipboard.writeText(url);
+    navigator.clipboard.writeText(`${window.location.origin}/#/review/${business.slug}`);
     showToast('success', 'Review link copied!');
   }
 
@@ -185,22 +180,16 @@ export default function DashboardPage() {
     if (!business) return;
     try {
       const { error } = await supabase.from('businesses').update({
-        name: editName,
-        industry: editIndustry,
-        phone: editPhone,
-        website: editWebsite,
-        google_review_url: editGoogleUrl,
-        description: editDescription,
+        name: editName, business_category: editCategory, contact_phone: editPhone,
+        contact_email: editEmail, location_city: editCity,
+        google_review_url: editGoogleUrl, welcome_message: editWelcome,
       }).eq('id', business.id);
       if (error) throw error;
       showToast('success', 'Settings saved');
       setSettingsMode(false);
-    } catch (e) {
-      showToast('error', `Save failed: ${(e as Error).message}`);
-    }
+    } catch (e) { showToast('error', `Save failed: ${(e as Error).message}`); }
   }
 
-  // Find active module
   let activeModuleDef: ModuleDef | null = null;
   for (const group of NAV_GROUPS) {
     const found = group.modules.find((m) => m.id === activeModule);
@@ -220,19 +209,15 @@ export default function DashboardPage() {
             <span className="text-white font-semibold">RootNova</span>
           </div>
         </div>
-
         <nav className="flex-1 overflow-y-auto py-2">
           {NAV_GROUPS.map((group) => {
             const visibleModules = group.modules.filter((m) => m.roles.includes(role));
             if (visibleModules.length === 0) return null;
             const collapsed = collapsedGroups.has(group.id);
-
             return (
               <div key={group.id} className="mb-1">
-                <button
-                  onClick={() => toggleGroup(group.id)}
-                  className="w-full flex items-center gap-2 px-4 py-2 text-xs font-semibold text-zinc-500 uppercase tracking-wider hover:text-zinc-300 transition-colors"
-                >
+                <button onClick={() => toggleGroup(group.id)}
+                  className="w-full flex items-center gap-2 px-4 py-2 text-xs font-semibold text-zinc-400 uppercase tracking-wider hover:text-zinc-200 transition-colors">
                   {collapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                   <group.icon className="w-3.5 h-3.5" />
                   {group.label}
@@ -240,15 +225,12 @@ export default function DashboardPage() {
                 {!collapsed && (
                   <div className="space-y-0.5">
                     {visibleModules.map((m) => (
-                      <button
-                        key={m.id}
-                        onClick={() => { setActiveModule(m.id); setSettingsMode(false); setSidebarOpen(false); }}
+                      <button key={m.id} onClick={() => { setActiveModule(m.id); setSettingsMode(false); setSidebarOpen(false); }}
                         className={`w-full flex items-center gap-3 px-8 py-2 text-sm transition-colors ${
                           activeModule === m.id && !settingsMode
                             ? 'bg-blue-500/10 text-blue-300 border-l-2 border-blue-400'
                             : 'text-zinc-400 hover:text-white hover:bg-white/5 border-l-2 border-transparent'
-                        }`}
-                      >
+                        }`}>
                         <m.icon className="w-4 h-4" />
                         {m.label}
                       </button>
@@ -259,20 +241,15 @@ export default function DashboardPage() {
             );
           })}
         </nav>
-
         <div className="p-3 border-t border-white/10 space-y-1">
-          <button
-            onClick={() => setSettingsMode(true)}
+          <button onClick={() => setSettingsMode(true)}
             className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
               settingsMode ? 'bg-blue-500/10 text-blue-300' : 'text-zinc-400 hover:text-white hover:bg-white/5'
-            }`}
-          >
+            }`}>
             <Settings className="w-4 h-4" /> Settings
           </button>
-          <button
-            onClick={signOut}
-            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-zinc-400 hover:text-red-400 hover:bg-white/5 transition-colors"
-          >
+          <button onClick={signOut}
+            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-zinc-400 hover:text-red-400 hover:bg-white/5 transition-colors">
             <LogOut className="w-4 h-4" /> Sign Out
           </button>
         </div>
@@ -283,13 +260,9 @@ export default function DashboardPage() {
   return (
     <div className="relative min-h-screen flex">
       <SpatialBackground />
-
-      {/* Desktop sidebar */}
       <aside className="relative z-10 w-64 shrink-0 bg-black/40 backdrop-blur-xl border-r border-white/10 hidden lg:block">
         {renderSidebar()}
       </aside>
-
-      {/* Mobile sidebar */}
       {sidebarOpen && (
         <div className="fixed inset-0 z-50 lg:hidden" onClick={() => setSidebarOpen(false)}>
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
@@ -298,10 +271,7 @@ export default function DashboardPage() {
           </aside>
         </div>
       )}
-
-      {/* Main content */}
       <div className="relative z-10 flex-1 flex flex-col min-w-0">
-        {/* Header */}
         <header className="h-14 border-b border-white/10 bg-black/30 backdrop-blur-xl flex items-center justify-between px-4">
           <div className="flex items-center gap-3">
             <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-2 rounded-lg hover:bg-white/10 text-zinc-400">
@@ -309,7 +279,7 @@ export default function DashboardPage() {
             </button>
             <div>
               <h1 className="text-sm font-semibold text-white">{settingsMode ? 'Settings' : activeModuleDef?.label || 'Dashboard'}</h1>
-              <p className="text-xs text-zinc-500">{business?.name} · {roleLabel}</p>
+              <p className="text-xs text-zinc-500">{business?.name || 'No business'} · {roleLabel}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -323,8 +293,6 @@ export default function DashboardPage() {
             )}
           </div>
         </header>
-
-        {/* Content */}
         <main className="flex-1 overflow-y-auto p-4 lg:p-6">
           {settingsMode ? (
             <div className="max-w-2xl space-y-5">
@@ -336,24 +304,28 @@ export default function DashboardPage() {
                     <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-blue-400/50" />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-zinc-400 mb-1.5">Industry</label>
-                    <input type="text" value={editIndustry} onChange={(e) => setEditIndustry(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-blue-400/50" />
+                    <label className="block text-xs font-medium text-zinc-400 mb-1.5">Category</label>
+                    <input type="text" value={editCategory} onChange={(e) => setEditCategory(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-blue-400/50" />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-zinc-400 mb-1.5">Phone</label>
+                    <label className="block text-xs font-medium text-zinc-400 mb-1.5">Contact Phone</label>
                     <input type="text" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-blue-400/50" />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-zinc-400 mb-1.5">Website</label>
-                    <input type="text" value={editWebsite} onChange={(e) => setEditWebsite(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-blue-400/50" />
+                    <label className="block text-xs font-medium text-zinc-400 mb-1.5">Contact Email</label>
+                    <input type="text" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-blue-400/50" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-400 mb-1.5">City</label>
+                    <input type="text" value={editCity} onChange={(e) => setEditCity(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-blue-400/50" />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-zinc-400 mb-1.5">Google Review URL</label>
                     <input type="text" value={editGoogleUrl} onChange={(e) => setEditGoogleUrl(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-blue-400/50" />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-zinc-400 mb-1.5">Description</label>
-                    <textarea value={editDescription} onChange={(e) => setEditDescription(e.target.value)} rows={3} className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-blue-400/50" />
+                    <label className="block text-xs font-medium text-zinc-400 mb-1.5">Welcome Message</label>
+                    <textarea value={editWelcome} onChange={(e) => setEditWelcome(e.target.value)} rows={3} className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-blue-400/50" />
                   </div>
                 </div>
                 <div className="flex justify-end mt-5">
@@ -362,7 +334,6 @@ export default function DashboardPage() {
                   </button>
                 </div>
               </div>
-
               <div className="rounded-xl bg-white/[0.03] border border-white/10 p-6">
                 <h2 className="text-lg font-semibold text-white mb-4">Account</h2>
                 <div className="space-y-2 text-sm">
@@ -375,7 +346,10 @@ export default function DashboardPage() {
           ) : activeModuleDef && business ? (
             activeModuleDef.render(business.id, organization?.id)
           ) : (
-            <div className="text-center py-20 text-zinc-500">Select a module from the sidebar.</div>
+            <div className="text-center py-20 text-zinc-500">
+              <p className="mb-2">No business linked to your account.</p>
+              <p className="text-xs">Contact your administrator to get access.</p>
+            </div>
           )}
         </main>
       </div>

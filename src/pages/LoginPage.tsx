@@ -15,12 +15,8 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     const { error } = await signIn(email, password);
-    if (error) {
-      showToast('error', error);
-      setLoading(false);
-    } else {
-      showToast('success', 'Welcome back!');
-    }
+    if (error) { showToast('error', error); setLoading(false); }
+    else { showToast('success', 'Welcome back!'); }
   }
 
   return (
@@ -34,7 +30,6 @@ export default function LoginPage() {
           <h1 className="text-3xl font-bold text-white tracking-tight">RootNova</h1>
           <p className="text-zinc-400 mt-2 text-sm">Business Review & Growth Platform</p>
         </div>
-
         <div className="rounded-2xl bg-white/[0.03] border border-white/10 backdrop-blur-xl p-8 shadow-2xl">
           <h2 className="text-xl font-semibold text-white mb-6">Sign In</h2>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -42,35 +37,22 @@ export default function LoginPage() {
               <label className="block text-xs font-medium text-zinc-400 mb-1.5">Email</label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
                   className="w-full pl-10 pr-3 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white placeholder-zinc-500 focus:outline-none focus:border-blue-400/50 transition-colors"
-                  placeholder="you@business.com"
-                />
+                  placeholder="you@business.com" />
               </div>
             </div>
             <div>
               <label className="block text-xs font-medium text-zinc-400 mb-1.5">Password</label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-                <input
-                  type="password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)}
                   className="w-full pl-10 pr-3 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white placeholder-zinc-500 focus:outline-none focus:border-blue-400/50 transition-colors"
-                  placeholder="••••••••"
-                />
+                  placeholder="••••••••" />
               </div>
             </div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-medium hover:from-blue-600 hover:to-cyan-600 disabled:opacity-50 transition-all text-sm"
-            >
+            <button type="submit" disabled={loading}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-medium hover:from-blue-600 hover:to-cyan-600 disabled:opacity-50 transition-all text-sm">
               {loading ? 'Signing in…' : <>Sign In <ArrowRight className="w-4 h-4" /></>}
             </button>
           </form>

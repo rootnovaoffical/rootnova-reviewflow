@@ -1,33 +1,33 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Star, TrendingUp, MessageSquare, Users, QrCode as QrCodeIcon } from 'lucide-react';
+import { Star, TrendingUp, MessageSquare, Users } from 'lucide-react';
 
 interface Props {
   businessId: string;
 }
 
 export default function OverviewModule({ businessId }: Props) {
-  const [stats, setStats] = useState({ total: 0, avgRating: 0, pending: 0, positive: 0 });
-  const [recent, setRecent] = useState<{ id: string; rating: number | null; customer_name: string | null; created_at: string; ai_review_text: string | null }[]>([]);
+  const [stats, setStats] = useState({ total: 0, avgRating: 0, completed: 0, pending: 0 });
+  const [recent, setRecent] = useState<{ id: string; rating: number | null; ai_generated_review: string | null; created_at: string; ai_status: string | null }[]>([]);
 
   useEffect(() => {
     async function load() {
       const { data } = await supabase
         .from('review_sessions')
-        .select('id, rating, customer_name, created_at, ai_review_text, status')
+        .select('id, rating, ai_generated_review, created_at, ai_status')
         .eq('business_id', businessId)
         .order('created_at', { ascending: false })
         .limit(100);
 
-      const rows = data || [];
+      const rows = (data || []) as typeof recent;
       const total = rows.length;
       const rated = rows.filter((r) => r.rating != null);
       const avg = rated.length ? rated.reduce((s, r) => s + (r.rating || 0), 0) / rated.length : 0;
-      const pending = rows.filter((r) => r.status === 'pending').length;
-      const positive = rated.filter((r) => (r.rating || 0) >= 4).length;
+      const completed = rows.filter((r) => r.ai_status === 'completed').length;
+      const pending = rows.filter((r) => r.ai_status === 'pending' || r.ai_status === 'processing').length;
 
-      setStats({ total, avgRating: avg, pending, positive });
-      setRecent(rows.slice(0, 5) as typeof recent);
+      setStats({ total, avgRating: avg, completed, pending });
+      setRecent(rows.slice(0, 5));
     }
     load();
   }, [businessId]);
@@ -35,7 +35,7 @@ export default function OverviewModule({ businessId }: Props) {
   const cards = [
     { label: 'Total Reviews', value: stats.total, icon: MessageSquare, color: 'text-blue-400' },
     { label: 'Avg Rating', value: stats.avgRating.toFixed(1), icon: Star, color: 'text-amber-400' },
-    { label: 'Positive', value: stats.positive, icon: TrendingUp, color: 'text-emerald-400' },
+    { label: 'Completed', value: stats.completed, icon: TrendingUp, color: 'text-emerald-400' },
     { label: 'Pending', value: stats.pending, icon: Users, color: 'text-orange-400' },
   ];
 
@@ -83,13 +83,14 @@ export default function OverviewModule({ businessId }: Props) {
             <div className="space-y-3">
               {recent.map((r) => (
                 <div key={r.id} className="flex items-start gap-3 pb-3 border-b border-white/5 last:border-0">
-                  <QrCodeIcon className="w-4 h-4 text-zinc-500 mt-1 shrink-0" />
+                  <Star className="w-4 h-4 text-zinc-500 mt-1 shrink-0" />
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm text-white font-medium">{r.customer_name || 'Anonymous'}</span>
+                      <span className="text-sm text-white font-medium">Review</span>
                       {r.rating != null && <span className="text-xs text-amber-400">{r.rating}★</span>}
+                      {r.ai_status && <span className="text-xs text-zinc-500">· {r.ai_status}</span>}
                     </div>
-                    <p className="text-xs text-zinc-500 mt-0.5 line-clamp-2">{r.ai_review_text || 'No review text'}</p>
+                    <p className="text-xs text-zinc-500 mt-0.5 line-clamp-2">{r.ai_generated_review || 'No review text'}</p>
                   </div>
                 </div>
               ))}

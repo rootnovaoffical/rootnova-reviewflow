@@ -14,12 +14,66 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+function mapRole(dbRole: string | null): AdminRole {
+  if (!dbRole) return 'business_admin';
+  const r = dbRole.toUpperCase();
+  if (r.includes('SUPER')) return 'super_admin';
+  if (r.includes('PARTNER')) return 'partner_admin';
+  return 'business_admin';
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<Profile | null>(null);
   const [business, setBusiness] = useState<Business | null>(null);
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [role, setRole] = useState<AdminRole>('business_admin');
   const [loading, setLoading] = useState(true);
+
+  async function loadBusinessData(userId: string, userRole: AdminRole) {
+    let businessId: string | null = null;
+
+    if (userRole === 'super_admin') {
+      // Super admin: load first business
+      const { data: biz } = await supabase.from('businesses').select('*').limit(1).single();
+      if (biz) {
+        setBusiness(biz as Business);
+        businessId = (biz as Business).id;
+      }
+    } else {
+      // Partner/Business admin: find via business_admins junction
+      const { data: ba } = await supabase
+        .from('business_admins')
+        .select('business_id')
+        .eq('user_id', userId)
+        .limit(1)
+        .single();
+
+      if (ba) {
+        businessId = (ba as { business_id: string }).business_id;
+        const { data: biz } = await supabase.from('businesses').select('*').eq('id', businessId).single();
+        if (biz) setBusiness(biz as Business);
+      }
+
+      // If no junction record, try first business as fallback
+      if (!businessId) {
+        const { data: biz } = await supabase.from('businesses').select('*').limit(1).single();
+        if (biz) {
+          setBusiness(biz as Business);
+          businessId = (biz as Business).id;
+        }
+      }
+
+      // Load organization if partner
+      if (userRole === 'partner_admin' && businessId) {
+        const { data: biz } = await supabase.from('businesses').select('organization_id').eq('id', businessId).single();
+        const orgId = (biz as { organization_id: string | null })?.organization_id;
+        if (orgId) {
+          const { data: org } = await supabase.from('organizations').select('*').eq('id', orgId).single();
+          if (org) setOrganization(org as Organization);
+        }
+      }
+    }
+  }
 
   useEffect(() => {
     let mounted = true;
@@ -43,25 +97,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        const p = profileData as Profile;
-        setUser(p);
-        setRole(p.role || 'business_admin');
+        const p = {
+          id: profileData.id,
+          email: profileData.email || session.user.email || '',
+          full_name: profileData.full_name,
+          role: mapRole(profileData.role),
+          created_at: profileData.created_at,
+        } as Profile;
 
-        // Load business
-        if (p.role === 'super_admin') {
-          const { data: biz } = await supabase.from('businesses').select('*').limit(1).single();
-          if (biz && mounted) setBusiness(biz as Business);
-        } else if (p.role === 'partner_admin') {
-          const { data: biz } = await supabase.from('businesses').select('*').eq('owner_id', p.id).limit(1).single();
-          if (biz && mounted) {
-            setBusiness(biz as Business);
-            const { data: org } = await supabase.from('organizations').select('*').eq('owner_id', p.id).limit(1).single();
-            if (org && mounted) setOrganization(org as Organization);
-          }
-        } else {
-          const { data: biz } = await supabase.from('businesses').select('*').eq('owner_id', p.id).limit(1).single();
-          if (biz && mounted) setBusiness(biz as Business);
-        }
+        setUser(p);
+        setRole(p.role);
+
+        await loadBusinessData(p.id, p.role);
       } catch {
         // ignore
       } finally {
@@ -91,7 +138,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) return { error: error.message };
 
-      // Reload profile
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return { error: 'No session' };
 
@@ -102,23 +148,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .single();
 
       if (profileData) {
-        const p = profileData as Profile;
-        setUser(p);
-        setRole(p.role || 'business_admin');
+        const p = {
+          id: profileData.id,
+          email: profileData.email || session.user.email || '',
+          full_name: profileData.full_name,
+          role: mapRole(profileData.role),
+          created_at: profileData.created_at,
+        } as Profile;
 
-        if (p.role === 'super_admin') {
-          const { data: biz } = await supabase.from('businesses').select('*').limit(1).single();
-          if (biz) setBusiness(biz as Business);
-        } else {
-          const { data: biz } = await supabase.from('businesses').select('*').eq('owner_id', p.id).limit(1).single();
-          if (biz) {
-            setBusiness(biz as Business);
-            if (p.role === 'partner_admin') {
-              const { data: org } = await supabase.from('organizations').select('*').eq('owner_id', p.id).limit(1).single();
-              if (org) setOrganization(org as Organization);
-            }
-          }
-        }
+        setUser(p);
+        setRole(p.role);
+        await loadBusinessData(p.id, p.role);
       }
 
       return { error: null };

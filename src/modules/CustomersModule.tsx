@@ -1,23 +1,27 @@
 import DataManager from '../components/DataManager';
 
 const customerColumns = [
-  { key: 'name', label: 'Name', type: 'text' as const, required: true, showInTable: true },
-  { key: 'email', label: 'Email', type: 'text' as const, showInTable: true },
-  { key: 'phone', label: 'Phone', type: 'text' as const, showInTable: true },
-  { key: 'loyalty_points', label: 'Points', type: 'number' as const, showInTable: true },
+  { key: 'display_name', label: 'Name', type: 'text' as const, required: true, showInTable: true },
+  { key: 'identifier', label: 'Identifier', type: 'text' as const, showInTable: true },
+  { key: 'total_visits', label: 'Visits', type: 'number' as const, showInTable: true },
+  { key: 'total_reviews', label: 'Reviews', type: 'number' as const, showInTable: true },
+  { key: 'avg_rating', label: 'Avg Rating', type: 'number' as const, showInTable: true },
+  { key: 'segment', label: 'Segment', type: 'text' as const, showInTable: true },
 ];
 
 const loyaltyColumns = [
   { key: 'name', label: 'Program Name', type: 'text' as const, required: true, showInTable: true },
-  { key: 'points_per_review', label: 'Points/Review', type: 'number' as const, showInTable: true },
-  { key: 'reward_threshold', label: 'Reward Threshold', type: 'number' as const, showInTable: true },
-  { key: 'is_active', label: 'Active', type: 'boolean' as const, showInTable: true },
+  { key: 'program_type', label: 'Type', type: 'select' as const, options: ['points', 'visits', 'tiered'], showInTable: true },
+  { key: 'points_per_action', label: 'Points/Action', type: 'number' as const, showInTable: true },
+  { key: 'target_count', label: 'Target Count', type: 'number' as const, showInTable: true },
+  { key: 'reward_description', label: 'Reward', type: 'textarea' as const, showInTable: true },
+  { key: 'status', label: 'Status', type: 'select' as const, options: ['active', 'paused', 'ended'], showInTable: true },
 ];
 
 export function CustomersModule({ businessId }: { businessId: string }) {
-  return <DataManager table="customers" businessId={businessId} columns={customerColumns} defaultValues={{ loyalty_points: 0 }} />;
+  return <DataManager table="customers" businessId={businessId} columns={customerColumns} defaultValues={{ total_visits: 0, total_reviews: 0 }} />;
 }
 
 export function LoyaltyModule({ businessId }: { businessId: string }) {
-  return <DataManager table="loyalty_programs" businessId={businessId} columns={loyaltyColumns} defaultValues={{ is_active: true, points_per_review: 10, reward_threshold: 100 }} />;
+  return <DataManager table="loyalty_programs" businessId={businessId} columns={loyaltyColumns} defaultValues={{ status: 'active', program_type: 'points', points_per_action: 10, target_count: 100 }} />;
 }

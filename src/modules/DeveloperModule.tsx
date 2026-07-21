@@ -1,27 +1,30 @@
 import DataManager from '../components/DataManager';
 
 const apiKeyColumns = [
-  { key: 'name', label: 'Key Name', type: 'text' as const, required: true, showInTable: true },
+  { key: 'key_name', label: 'Key Name', type: 'text' as const, required: true, showInTable: true },
   { key: 'key_prefix', label: 'Prefix', type: 'text' as const, showInTable: true },
   { key: 'scopes', label: 'Scopes', type: 'array' as const, showInTable: true },
+  { key: 'rate_limit_per_hour', label: 'Rate Limit/hr', type: 'number' as const, showInTable: true },
   { key: 'is_active', label: 'Active', type: 'boolean' as const, showInTable: true },
 ];
 
 const appColumns = [
-  { key: 'name', label: 'App Name', type: 'text' as const, required: true, showInTable: true },
+  { key: 'app_name', label: 'App Name', type: 'text' as const, required: true, showInTable: true },
   { key: 'description', label: 'Description', type: 'textarea' as const, showInTable: true },
-  { key: 'redirect_url', label: 'Redirect URL', type: 'text' as const, showInTable: true },
+  { key: 'client_id', label: 'Client ID', type: 'text' as const, showInTable: true },
+  { key: 'redirect_uris', label: 'Redirect URIs', type: 'array' as const, showInTable: true },
   { key: 'is_active', label: 'Active', type: 'boolean' as const, showInTable: true },
 ];
 
 const webhookColumns = [
+  { key: 'name', label: 'Name', type: 'text' as const, required: true, showInTable: true },
   { key: 'url', label: 'URL', type: 'text' as const, required: true, showInTable: true },
   { key: 'events', label: 'Events', type: 'array' as const, showInTable: true },
   { key: 'is_active', label: 'Active', type: 'boolean' as const, showInTable: true },
 ];
 
 export function ApiKeysModule({ businessId }: { businessId: string }) {
-  return <DataManager table="api_keys" businessId={businessId} columns={apiKeyColumns} defaultValues={{ is_active: true }} />;
+  return <DataManager table="api_keys" businessId={businessId} columns={apiKeyColumns} defaultValues={{ is_active: true, rate_limit_per_hour: 1000 }} />;
 }
 
 export function DeveloperAppsModule({ businessId }: { businessId: string }) {

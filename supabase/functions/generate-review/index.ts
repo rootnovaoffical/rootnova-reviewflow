@@ -73,7 +73,6 @@ Deno.serve(async (req: Request) => {
       review += ` I hope ${name} can address these concerns and improve going forward.`;
     }
 
-    // Update session in DB
     if (sessionId) {
       const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
       const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -87,9 +86,9 @@ Deno.serve(async (req: Request) => {
         },
         body: JSON.stringify({
           rating: r,
-          ai_review_text: review,
+          ai_generated_review: review,
           answers: answers || {},
-          status: "completed",
+          ai_status: "completed",
         }),
       });
     }

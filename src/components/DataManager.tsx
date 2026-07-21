@@ -26,13 +26,7 @@ interface DataManagerProps {
 }
 
 export default function DataManager({
-  table,
-  businessId,
-  organizationId,
-  columns,
-  filter,
-  defaultValues,
-  pageSize = 25,
+  table, businessId, organizationId, columns, filter, defaultValues, pageSize = 25,
 }: DataManagerProps) {
   const { showToast } = useToast();
   const [rows, setRows] = useState<Record<string, unknown>[]>([]);
@@ -68,9 +62,7 @@ export default function DataManager({
     }
   }, [table, businessId, organizationId, filter, showToast]);
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  useEffect(() => { loadData(); }, [loadData]);
 
   const filteredRows = rows.filter((row) => {
     if (!search) return true;

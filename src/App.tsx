@@ -6,17 +6,14 @@ import PublicReviewPage from './pages/PublicReviewPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
-  if (loading) return <div className="flex items-center justify-center min-h-screen">Loading…</div>;
+  if (loading) return <div className="flex items-center justify-center min-h-screen text-white">Loading…</div>;
   if (!user) return <Navigate to="/" replace />;
   return <>{children}</>;
 }
 
 export default function App() {
   const { user, loading } = useAuth();
-
-  if (loading) {
-    return <div className="flex items-center justify-center min-h-screen text-white">Loading…</div>;
-  }
+  if (loading) return <div className="flex items-center justify-center min-h-screen text-white">Loading…</div>;
 
   return (
     <Routes>

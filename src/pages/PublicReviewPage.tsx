@@ -8,28 +8,17 @@ import { Sparkles, ArrowRight, ArrowLeft, Copy, RefreshCw, ExternalLink, Check }
 type Step = 'welcome' | 'rating' | 'questions' | 'generating' | 'result';
 
 interface Business {
-  id: string;
-  name: string;
-  slug: string;
-  description: string | null;
-  google_review_url: string | null;
+  id: string; name: string; slug: string;
+  welcome_message: string | null; google_review_url: string | null;
 }
 
 interface QuestionRow {
-  id: string;
-  text: string;
-  flow_type: string;
-  options: string[] | null;
-  condition_rating_min: number | null;
-  condition_rating_max: number | null;
-  order_index: number;
+  id: string; question_text: string; flow_type: string;
+  options: string[] | null; question_type: string; sort_order: number;
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<T>((_, reject) => setTimeout(() => reject(new Error('Request timed out')), ms)),
-  ]);
+  return Promise.race([promise, new Promise<T>((_, reject) => setTimeout(() => reject(new Error('Request timed out')), ms))]);
 }
 
 export default function PublicReviewPage() {
@@ -52,11 +41,8 @@ export default function PublicReviewPage() {
         const { data, error: err } = await supabase.from('businesses').select('*').eq('slug', slug).single();
         if (err) throw err;
         if (data) setBusiness(data as Business);
-      } catch {
-        setError('Business not found');
-      } finally {
-        setLoading(false);
-      }
+      } catch { setError('Business not found'); }
+      finally { setLoading(false); }
     }
     loadBusiness();
   }, [slug]);
@@ -65,30 +51,25 @@ export default function PublicReviewPage() {
     if (!business) return;
     try {
       const { data, error: err } = await supabase.from('review_sessions').insert({
-        business_id: business.id,
-        status: 'pending',
+        business_id: business.id, ai_status: 'pending',
       }).select().single();
       if (err) throw err;
       setSessionId(data.id);
       setStep('rating');
-    } catch {
-      setError('Failed to start review session');
-    }
+    } catch { setError('Failed to start review session'); }
   }
 
   async function onRatingSelect(r: number) {
     setRating(r);
-    // Load questions
     try {
       const { data } = await supabase
         .from('questions')
         .select('*')
         .eq('business_id', business?.id)
-        .order('order_index', { ascending: true });
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true });
       if (data) {
         const filtered = (data as QuestionRow[]).filter((q) => {
-          if (q.condition_rating_min != null && r < q.condition_rating_min) return false;
-          if (q.condition_rating_max != null && r > q.condition_rating_max) return false;
           if (q.flow_type === 'positive' && r < 4) return false;
           if (q.flow_type === 'negative' && r >= 4) return false;
           if (q.flow_type === 'neutral' && (r < 3 || r > 3)) return false;
@@ -97,9 +78,7 @@ export default function PublicReviewPage() {
         setQuestions(filtered);
       }
       setStep('questions');
-    } catch {
-      setStep('questions');
-    }
+    } catch { setStep('questions'); }
   }
 
   const generateReview = useCallback(async (regenerate = false) => {
@@ -107,35 +86,18 @@ export default function PublicReviewPage() {
     try {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
       const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
-
       const response = await withTimeout(
         fetch(`${supabaseUrl}/functions/v1/generate-review`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${supabaseKey}`,
-            'apikey': supabaseKey,
-          },
-          body: JSON.stringify({
-            sessionId,
-            rating,
-            answers,
-            businessId: business?.id,
-            businessName: business?.name,
-            regenerate,
-          }),
-        }),
-        30000
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${supabaseKey}`, apikey: supabaseKey },
+          body: JSON.stringify({ sessionId, rating, answers, businessId: business?.id, businessName: business?.name, regenerate }),
+        }), 30000
       );
-
       if (!response.ok) throw new Error('Generation failed');
-
       const data = await response.json();
-      const reviewText = data.review || data.text || '';
-      setAiReview(reviewText);
+      setAiReview(data.review || data.text || '');
       setStep('result');
-    } catch (e) {
-      // Fallback: generate a simple review locally
+    } catch {
       const fallback = generateFallbackReview(business?.name || '', rating || 0, answers);
       setAiReview(fallback);
       setStep('result');
@@ -145,24 +107,14 @@ export default function PublicReviewPage() {
   function generateFallbackReview(name: string, r: number, ans: Record<string, string>): string {
     const positive = r >= 4;
     const parts: string[] = [];
-    if (positive) {
-      parts.push(`I had a fantastic experience at ${name}.`);
-    } else if (r === 3) {
-      parts.push(`My visit to ${name} was decent overall.`);
-    } else {
-      parts.push(`Unfortunately, my experience at ${name} was disappointing.`);
-    }
+    if (positive) parts.push(`I had a fantastic experience at ${name}.`);
+    else if (r === 3) parts.push(`My visit to ${name} was decent overall.`);
+    else parts.push(`Unfortunately, my experience at ${name} was disappointing.`);
     const answerTexts = Object.values(ans).filter(Boolean);
-    if (answerTexts.length > 0) {
-      parts.push(answerTexts.slice(0, 2).join('. '));
-    }
-    if (positive) {
-      parts.push(`The staff was friendly and attentive. I would definitely recommend ${name} to others.`);
-    } else if (r === 3) {
-      parts.push(`There's room for improvement, but the service was acceptable.`);
-    } else {
-      parts.push(`I hope they can address these issues going forward.`);
-    }
+    if (answerTexts.length > 0) parts.push(answerTexts.slice(0, 2).join('. '));
+    if (positive) parts.push(`The staff was friendly and attentive. I would definitely recommend ${name} to others.`);
+    else if (r === 3) parts.push(`There's room for improvement, but the service was acceptable.`);
+    else parts.push(`I hope they can address these issues going forward.`);
     return parts.join(' ');
   }
 
@@ -172,26 +124,22 @@ export default function PublicReviewPage() {
     setTimeout(() => setCopied(false), 2000);
   }
 
-  if (loading) {
-    return (
-      <div className="relative min-h-screen flex items-center justify-center">
-        <SpatialBackground />
-        <p className="relative z-10 text-zinc-400">Loading…</p>
-      </div>
-    );
-  }
+  if (loading) return (
+    <div className="relative min-h-screen flex items-center justify-center">
+      <SpatialBackground />
+      <p className="relative z-10 text-zinc-400">Loading…</p>
+    </div>
+  );
 
-  if (error) {
-    return (
-      <div className="relative min-h-screen flex items-center justify-center">
-        <SpatialBackground />
-        <div className="relative z-10 text-center">
-          <h1 className="text-2xl font-bold text-white mb-2">Oops!</h1>
-          <p className="text-zinc-400">{error}</p>
-        </div>
+  if (error) return (
+    <div className="relative min-h-screen flex items-center justify-center">
+      <SpatialBackground />
+      <div className="relative z-10 text-center">
+        <h1 className="text-2xl font-bold text-white mb-2">Oops!</h1>
+        <p className="text-zinc-400">{error}</p>
       </div>
-    );
-  }
+    </div>
+  );
 
   if (!business) return null;
 
@@ -199,25 +147,21 @@ export default function PublicReviewPage() {
     <div className="relative min-h-screen flex items-center justify-center p-4">
       <SpatialBackground />
       <div className="relative z-10 w-full max-w-lg">
-        {/* Welcome */}
         {step === 'welcome' && (
           <div className="rounded-2xl bg-white/[0.03] border border-white/10 backdrop-blur-xl p-8 shadow-2xl text-center">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500/20 to-cyan-500/20 border border-blue-400/30 mb-4">
               <Sparkles className="w-8 h-8 text-blue-400" />
             </div>
             <h1 className="text-2xl font-bold text-white mb-2">Welcome to {business.name}</h1>
-            {business.description && <p className="text-zinc-400 text-sm mb-6">{business.description}</p>}
+            {business.welcome_message && <p className="text-zinc-400 text-sm mb-6">{business.welcome_message}</p>}
             <p className="text-zinc-300 text-sm mb-6">We'd love to hear about your experience. Your feedback helps us improve and grow.</p>
-            <button
-              onClick={startReview}
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-medium hover:from-blue-600 hover:to-cyan-600 transition-all text-sm"
-            >
+            <button onClick={startReview}
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-medium hover:from-blue-600 hover:to-cyan-600 transition-all text-sm">
               Start Review <ArrowRight className="w-4 h-4" />
             </button>
           </div>
         )}
 
-        {/* Rating */}
         {step === 'rating' && (
           <div className="rounded-2xl bg-white/[0.03] border border-white/10 backdrop-blur-xl p-8 shadow-2xl">
             <h2 className="text-xl font-semibold text-white text-center mb-2">How was your experience?</h2>
@@ -226,7 +170,6 @@ export default function PublicReviewPage() {
           </div>
         )}
 
-        {/* Questions */}
         {step === 'questions' && (
           <div className="rounded-2xl bg-white/[0.03] border border-white/10 backdrop-blur-xl p-8 shadow-2xl">
             <h2 className="text-xl font-semibold text-white mb-4">Tell us more</h2>
@@ -236,31 +179,20 @@ export default function PublicReviewPage() {
               <div className="space-y-5 mb-6">
                 {questions.map((q) => (
                   <div key={q.id}>
-                    <label className="block text-sm font-medium text-zinc-300 mb-2">{q.text}</label>
-                    {q.options && q.options.length > 0 ? (
+                    <label className="block text-sm font-medium text-zinc-300 mb-2">{q.question_text}</label>
+                    {q.options && Array.isArray(q.options) && q.options.length > 0 ? (
                       <div className="flex flex-wrap gap-2">
                         {q.options.map((opt) => (
-                          <button
-                            key={opt}
-                            onClick={() => setAnswers({ ...answers, [q.id]: opt })}
+                          <button key={opt} onClick={() => setAnswers({ ...answers, [q.id]: opt })}
                             className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
-                              answers[q.id] === opt
-                                ? 'bg-blue-500/20 border-blue-400/30 text-blue-200'
-                                : 'bg-white/5 border-white/10 text-zinc-400 hover:bg-white/10'
-                            }`}
-                          >
-                            {opt}
-                          </button>
+                              answers[q.id] === opt ? 'bg-blue-500/20 border-blue-400/30 text-blue-200' : 'bg-white/5 border-white/10 text-zinc-400 hover:bg-white/10'
+                            }`}>{opt}</button>
                         ))}
                       </div>
                     ) : (
-                      <textarea
-                        value={answers[q.id] || ''}
-                        onChange={(e) => setAnswers({ ...answers, [q.id]: e.target.value })}
-                        rows={2}
-                        className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm placeholder-zinc-500 focus:outline-none focus:border-blue-400/50"
-                        placeholder="Type your answer…"
-                      />
+                      <textarea value={answers[q.id] || ''} onChange={(e) => setAnswers({ ...answers, [q.id]: e.target.value })}
+                        rows={2} className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm placeholder-zinc-500 focus:outline-none focus:border-blue-400/50"
+                        placeholder="Type your answer…" />
                     )}
                   </div>
                 ))}
@@ -277,7 +209,6 @@ export default function PublicReviewPage() {
           </div>
         )}
 
-        {/* Generating */}
         {step === 'generating' && (
           <div className="rounded-2xl bg-white/[0.03] border border-white/10 backdrop-blur-xl p-8 shadow-2xl text-center">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500/20 to-cyan-500/20 border border-blue-400/30 mb-4">
@@ -288,7 +219,6 @@ export default function PublicReviewPage() {
           </div>
         )}
 
-        {/* Result */}
         {step === 'result' && (
           <div className="rounded-2xl bg-white/[0.03] border border-white/10 backdrop-blur-xl p-8 shadow-2xl">
             <h2 className="text-xl font-semibold text-white mb-2">Your Review</h2>
@@ -304,7 +234,8 @@ export default function PublicReviewPage() {
                 <RefreshCw className="w-4 h-4" /> Regenerate
               </button>
               {business.google_review_url && (
-                <a href={business.google_review_url} target="_blank" rel="noreferrer" className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-500/20 border border-blue-400/30 text-blue-200 hover:bg-blue-500/30 text-sm font-medium">
+                <a href={business.google_review_url} target="_blank" rel="noreferrer"
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-500/20 border border-blue-400/30 text-blue-200 hover:bg-blue-500/30 text-sm font-medium">
                   <ExternalLink className="w-4 h-4" /> Post on Google
                 </a>
               )}

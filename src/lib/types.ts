@@ -255,3 +255,151 @@ export interface ActionItem {
   created_at: string;
   updated_at: string;
 }
+
+// =========================================================
+// Module 6: Customer Engagement & Automation
+// =========================================================
+
+export type CustomerSegment =
+  | "new"
+  | "returning"
+  | "loyal"
+  | "promoter"
+  | "passive"
+  | "detractor"
+  | "vip"
+  | "inactive"
+  | "needs_followup"
+  | "returning_after_long_time";
+
+export interface Customer {
+  id: string;
+  business_id: string;
+  identifier: string | null;
+  display_name: string | null;
+  total_visits: number;
+  total_reviews: number;
+  avg_rating: number;
+  last_visit_at: string | null;
+  first_seen_at: string;
+  segment: CustomerSegment;
+  segment_updated_at: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CustomerEvent {
+  id: string;
+  business_id: string;
+  customer_id: string | null;
+  review_session_id: string | null;
+  event_type: string;
+  event_data: Record<string, unknown>;
+  created_at: string;
+}
+
+export type AutomationTriggerType =
+  | "review_submitted"
+  | "rating_threshold"
+  | "customer_segment"
+  | "campaign_response";
+
+export type AutomationActionType =
+  | "send_message"
+  | "notify_manager"
+  | "open_recovery"
+  | "add_points"
+  | "send_coupon";
+
+export type AutomationStatus = "active" | "paused" | "archived";
+
+export interface AutomationRule {
+  id: string;
+  business_id: string;
+  name: string;
+  trigger_type: AutomationTriggerType;
+  trigger_config: Record<string, unknown>;
+  action_type: AutomationActionType;
+  action_config: Record<string, unknown>;
+  delay_hours: number;
+  status: AutomationStatus;
+  trigger_count: number;
+  last_triggered_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type CampaignType =
+  | "review"
+  | "discount"
+  | "festival"
+  | "referral"
+  | "weekend_offer"
+  | "happy_hour"
+  | "new_menu";
+
+export type CampaignStatus = "draft" | "active" | "paused" | "completed";
+
+export interface Campaign {
+  id: string;
+  business_id: string;
+  name: string;
+  description: string | null;
+  campaign_type: CampaignType;
+  audience_segment: string | null;
+  status: CampaignStatus;
+  schedule_start: string | null;
+  schedule_end: string | null;
+  reach_count: number;
+  response_count: number;
+  conversion_count: number;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export type LoyaltyProgramType = "visit_based" | "review_based" | "birthday" | "festival";
+
+export interface LoyaltyProgram {
+  id: string;
+  business_id: string;
+  name: string;
+  program_type: LoyaltyProgramType;
+  target_count: number;
+  reward_description: string;
+  points_per_action: number;
+  status: string;
+  redeemed_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CustomerLoyalty {
+  id: string;
+  business_id: string;
+  customer_id: string;
+  program_id: string | null;
+  points: number;
+  visits_counted: number;
+  reward_unlocked: boolean;
+  unlocked_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type NotificationSeverity = "info" | "warning" | "critical" | "success";
+
+export interface EngagementNotification {
+  id: string;
+  business_id: string;
+  notification_type: string;
+  title: string;
+  message: string;
+  severity: NotificationSeverity;
+  related_id: string | null;
+  related_type: string | null;
+  is_read: boolean;
+  read_at: string | null;
+  created_at: string;
+}

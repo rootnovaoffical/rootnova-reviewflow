@@ -6,6 +6,7 @@ const businessNav: NavItem[] = [
   { label: "Questions", to: "/business/questions", icon: "❓" },
   { label: "Reviews", to: "/business/reviews", icon: "⭐" },
   { label: "Actions", to: "/business/actions", icon: "🎯" },
+  { label: "Engagement", to: "/business/engagement", icon: "💬" },
   { label: "QR Codes", to: "/business/qr-codes", icon: "📱" },
   { label: "Analytics", to: "/business/analytics", icon: "📈" },
   { label: "Settings", to: "/business/settings", icon: "⚙️" },

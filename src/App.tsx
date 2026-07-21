@@ -42,6 +42,11 @@ import BusinessAnalytics from "./pages/business/Analytics";
 import BusinessSettings from "./pages/business/Settings";
 import BusinessQRCodes from "./pages/business/QRCodes";
 import BusinessActions from "./pages/business/Actions";
+import BusinessEngagement from "./pages/business/Engagement";
+import BusinessCustomers from "./pages/business/Customers";
+import BusinessAutomations from "./pages/business/Automations";
+import BusinessCampaigns from "./pages/business/Campaigns";
+import BusinessLoyalty from "./pages/business/Loyalty";
 
 const ADMIN_ROLES = ["ROOTNOVA_SUPER_ADMIN", "ROOTNOVA_ADMIN"] as const;
 const PARTNER_ROLES = ["PARTNER_OWNER", "PARTNER_ADMIN", "PARTNER_TEAM_MEMBER"] as const;
@@ -101,6 +106,11 @@ export default function App() {
                 <Route path="/business/settings" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><BusinessSettings /></ProtectedRoute>} />
                 <Route path="/business/qr-codes" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><BusinessQRCodes /></ProtectedRoute>} />
                 <Route path="/business/actions" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><BusinessActions /></ProtectedRoute>} />
+                <Route path="/business/engagement" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><BusinessEngagement /></ProtectedRoute>} />
+                <Route path="/business/engagement/customers" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><BusinessCustomers /></ProtectedRoute>} />
+                <Route path="/business/engagement/automations" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><BusinessAutomations /></ProtectedRoute>} />
+                <Route path="/business/engagement/campaigns" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><BusinessCampaigns /></ProtectedRoute>} />
+                <Route path="/business/engagement/loyalty" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><BusinessLoyalty /></ProtectedRoute>} />
 
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>

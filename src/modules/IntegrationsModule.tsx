@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useToast } from '../context/ToastContext';
-import { Plus, Plug, Globe, Check } from 'lucide-react';
+import { Plus, Plug, Check } from 'lucide-react';
 import DataManager from '../components/DataManager';
 import type { ColumnDef } from '../components/DataManager';
 
@@ -11,12 +11,9 @@ const installedColumns: ColumnDef[] = [
 ];
 
 interface Provider { id: string; name: string; slug: string; category: string; description: string | null; logo_url: string | null; is_active: boolean; }
-
 interface Props { businessId: string; }
 
-export function InstalledIntegrationsModule({ businessId }: Props) {
-  return <DataManager table="installed_integrations" businessId={businessId} columns={installedColumns} defaultValues={{ status: 'connected', config: {} }} />;
-}
+export function InstalledIntegrationsModule({ businessId }: Props) { return <DataManager table="installed_integrations" businessId={businessId} columns={installedColumns} defaultValues={{ status: 'connected', config: {} }} />; }
 
 export function IntegrationProvidersModule({ businessId }: Props) {
   const { showToast } = useToast();
@@ -53,9 +50,7 @@ export function IntegrationProvidersModule({ businessId }: Props) {
         setInstalled((prev) => ({ ...prev, [prov.id]: data.id }));
         showToast('success', `${prov.name} connected`);
       }
-    } catch (e) {
-      showToast('error', `Failed: ${(e as Error).message}`);
-    }
+    } catch (e) { showToast('error', `Failed: ${(e as Error).message}`); }
   }
 
   if (loading) return <div className="text-center py-12 text-zinc-500">Loading providers…</div>;
@@ -65,13 +60,8 @@ export function IntegrationProvidersModule({ businessId }: Props) {
       {providers.map((prov) => (
         <div key={prov.id} className="rounded-xl bg-white/[0.03] border border-white/10 p-5">
           <div className="flex items-start gap-3 mb-3">
-            <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
-              {prov.logo_url ? <img src={prov.logo_url} alt={prov.name} className="w-6 h-6" /> : <Plug className="w-5 h-5 text-blue-400" />}
-            </div>
-            <div className="flex-1 min-w-0">
-              <h3 className="text-sm font-semibold text-white truncate">{prov.name}</h3>
-              <span className="text-xs text-zinc-500">{prov.category}</span>
-            </div>
+            <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center">{prov.logo_url ? <img src={prov.logo_url} alt={prov.name} className="w-6 h-6" /> : <Plug className="w-5 h-5 text-blue-400" />}</div>
+            <div className="flex-1 min-w-0"><h3 className="text-sm font-semibold text-white truncate">{prov.name}</h3><span className="text-xs text-zinc-500">{prov.category}</span></div>
           </div>
           <p className="text-xs text-zinc-400 mb-3 line-clamp-2">{prov.description ?? 'No description'}</p>
           <button onClick={() => toggleInstall(prov)} className={`w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${installed[prov.id] ? 'bg-emerald-500/10 border border-emerald-400/30 text-emerald-200 hover:bg-emerald-500/20' : 'bg-blue-500/20 border border-blue-400/30 text-blue-200 hover:bg-blue-500/30'}`}>

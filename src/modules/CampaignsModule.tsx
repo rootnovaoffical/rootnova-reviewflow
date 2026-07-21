@@ -13,9 +13,5 @@ const columns: ColumnDef[] = [
   { key: 'schedule_start', label: 'Start Date', type: 'date', showInTable: false },
   { key: 'schedule_end', label: 'End Date', type: 'date', showInTable: false },
 ];
-
 interface Props { businessId: string; }
-
-export default function CampaignsModule({ businessId }: Props) {
-  return <DataManager table="campaigns" businessId={businessId} columns={columns} defaultValues={{ campaign_type: 'review_request', status: 'draft', reach_count: 0, response_count: 0, conversion_count: 0, metadata: {} }} />;
-}
+export default function CampaignsModule({ businessId }: Props) { return <DataManager table="campaigns" businessId={businessId} columns={columns} defaultValues={{ campaign_type: 'review_request', status: 'draft', reach_count: 0, response_count: 0, conversion_count: 0, metadata: {} }} />; }

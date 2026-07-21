@@ -8,7 +8,6 @@ const templateColumns: ColumnDef[] = [
   { key: 'config', label: 'Config (JSON)', type: 'json', showInTable: false },
   { key: 'is_active', label: 'Active', type: 'boolean', showInTable: true },
 ];
-
 const scheduledColumns: ColumnDef[] = [
   { key: 'name', label: 'Report Name', type: 'text', required: true, showInTable: true },
   { key: 'frequency', label: 'Frequency', type: 'select', options: ['daily', 'weekly', 'monthly', 'quarterly'], required: true, showInTable: true },
@@ -18,13 +17,6 @@ const scheduledColumns: ColumnDef[] = [
   { key: 'next_run', label: 'Next Run', type: 'date', showInTable: true, editable: false },
   { key: 'last_run', label: 'Last Run', type: 'date', showInTable: true, editable: false },
 ];
-
 interface Props { businessId: string; }
-
-export function ReportTemplatesModule({ businessId }: Props) {
-  return <DataManager table="report_templates" businessId={businessId} columns={templateColumns} defaultValues={{ is_active: true, report_type: 'summary', config: {} }} />;
-}
-
-export function ScheduledReportsModule({ businessId }: Props) {
-  return <DataManager table="scheduled_reports" businessId={businessId} columns={scheduledColumns} defaultValues={{ frequency: 'weekly', format: 'pdf', status: 'active', recipients: [] }} />;
-}
+export function ReportTemplatesModule({ businessId }: Props) { return <DataManager table="report_templates" businessId={businessId} columns={templateColumns} defaultValues={{ is_active: true, report_type: 'summary', config: {} }} />; }
+export function ScheduledReportsModule({ businessId }: Props) { return <DataManager table="scheduled_reports" businessId={businessId} columns={scheduledColumns} defaultValues={{ frequency: 'weekly', format: 'pdf', status: 'active', recipients: [] }} />; }

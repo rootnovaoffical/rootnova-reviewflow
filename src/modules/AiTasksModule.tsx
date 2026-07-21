@@ -11,9 +11,5 @@ const columns: ColumnDef[] = [
   { key: 'reasoning', label: 'Reasoning', type: 'textarea', showInTable: false },
   { key: 'expected_impact', label: 'Expected Impact', type: 'text', showInTable: false },
 ];
-
 interface Props { businessId: string; }
-
-export default function AiTasksModule({ businessId }: Props) {
-  return <DataManager table="ai_tasks" businessId={businessId} columns={columns} defaultValues={{ task_type: 'review_request', priority: 'medium', status: 'pending', confidence: 'medium' }} />;
-}
+export default function AiTasksModule({ businessId }: Props) { return <DataManager table="ai_tasks" businessId={businessId} columns={columns} defaultValues={{ task_type: 'review_request', priority: 'medium', status: 'pending', confidence: 'medium' }} />; }

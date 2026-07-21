@@ -10,7 +10,6 @@ const apiKeyColumns: ColumnDef[] = [
   { key: 'expires_at', label: 'Expires', type: 'date', showInTable: true },
   { key: 'last_used_at', label: 'Last Used', type: 'date', showInTable: true, editable: false },
 ];
-
 const appColumns: ColumnDef[] = [
   { key: 'name', label: 'App Name', type: 'text', required: true, showInTable: true },
   { key: 'description', label: 'Description', type: 'textarea', showInTable: true },
@@ -19,23 +18,12 @@ const appColumns: ColumnDef[] = [
   { key: 'redirect_uris', label: 'Redirect URIs (one per line)', type: 'array', showInTable: false },
   { key: 'is_active', label: 'Active', type: 'boolean', showInTable: true },
 ];
-
 const webhookColumns: ColumnDef[] = [
   { key: 'url', label: 'URL', type: 'text', required: true, showInTable: true },
   { key: 'events', label: 'Events (one per line)', type: 'array', showInTable: true },
   { key: 'is_active', label: 'Active', type: 'boolean', showInTable: true },
 ];
-
 interface Props { businessId: string; }
-
-export function ApiKeysModule({ businessId }: Props) {
-  return <DataManager table="api_keys" businessId={businessId} columns={apiKeyColumns} defaultValues={{ is_active: true, scopes: [], rate_limit_per_hour: 1000 }} />;
-}
-
-export function DeveloperAppsModule({ businessId }: Props) {
-  return <DataManager table="developer_apps" businessId={businessId} columns={appColumns} defaultValues={{ is_active: true, scopes: [], redirect_uris: [] }} />;
-}
-
-export function WebhooksModule({ businessId }: Props) {
-  return <DataManager table="webhooks" businessId={businessId} columns={webhookColumns} defaultValues={{ is_active: true, events: [] }} />;
-}
+export function ApiKeysModule({ businessId }: Props) { return <DataManager table="api_keys" businessId={businessId} columns={apiKeyColumns} defaultValues={{ is_active: true, scopes: [], rate_limit_per_hour: 1000 }} />; }
+export function DeveloperAppsModule({ businessId }: Props) { return <DataManager table="developer_apps" businessId={businessId} columns={appColumns} defaultValues={{ is_active: true, scopes: [], redirect_uris: [] }} />; }
+export function WebhooksModule({ businessId }: Props) { return <DataManager table="webhooks" businessId={businessId} columns={webhookColumns} defaultValues={{ is_active: true, events: [] }} />; }

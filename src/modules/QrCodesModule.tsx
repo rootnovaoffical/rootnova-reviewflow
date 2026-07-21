@@ -9,9 +9,5 @@ const columns: ColumnDef[] = [
   { key: 'is_active', label: 'Active', type: 'boolean', showInTable: true },
   { key: 'created_at', label: 'Created', type: 'date', showInTable: true, editable: false },
 ];
-
 interface Props { businessId: string; }
-
-export default function QrCodesModule({ businessId }: Props) {
-  return <DataManager table="qr_codes" businessId={businessId} columns={columns} defaultValues={{ is_active: true, qr_type: 'review', scan_count: 0 }} />;
-}
+export default function QrCodesModule({ businessId }: Props) { return <DataManager table="qr_codes" businessId={businessId} columns={columns} defaultValues={{ is_active: true, qr_type: 'review', scan_count: 0 }} />; }

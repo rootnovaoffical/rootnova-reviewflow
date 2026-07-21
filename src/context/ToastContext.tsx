@@ -20,14 +20,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {children}
       <div className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-2">
         {toasts.map((t) => (
-          <div
-            key={t.id}
-            className={`px-4 py-3 rounded-xl shadow-lg backdrop-blur-md text-sm font-medium max-w-sm ${
-              t.type === 'success' ? 'bg-emerald-500/20 border border-emerald-400/30 text-emerald-200'
-              : t.type === 'error' ? 'bg-red-500/20 border border-red-400/30 text-red-200'
-              : 'bg-blue-500/20 border border-blue-400/30 text-blue-200'
-            }`}
-          >
+          <div key={t.id} className={`px-4 py-3 rounded-xl shadow-lg backdrop-blur-md text-sm font-medium max-w-sm ${t.type === 'success' ? 'bg-emerald-500/20 border border-emerald-400/30 text-emerald-200' : t.type === 'error' ? 'bg-red-500/20 border border-red-400/30 text-red-200' : 'bg-blue-500/20 border border-blue-400/30 text-blue-200'}`}>
             {t.message}
           </div>
         ))}

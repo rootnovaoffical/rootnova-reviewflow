@@ -11,7 +11,6 @@ const customerColumns: ColumnDef[] = [
   { key: 'last_visit_at', label: 'Last Visit', type: 'date', showInTable: true, editable: false },
   { key: 'first_seen_at', label: 'First Seen', type: 'date', showInTable: true, editable: false },
 ];
-
 const loyaltyColumns: ColumnDef[] = [
   { key: 'name', label: 'Program Name', type: 'text', required: true, showInTable: true },
   { key: 'description', label: 'Description', type: 'textarea', showInTable: true },
@@ -20,13 +19,6 @@ const loyaltyColumns: ColumnDef[] = [
   { key: 'reward_description', label: 'Reward', type: 'text', showInTable: true },
   { key: 'is_active', label: 'Active', type: 'boolean', showInTable: true },
 ];
-
 interface Props { businessId: string; }
-
-export function CustomersModule({ businessId }: Props) {
-  return <DataManager table="customers" businessId={businessId} columns={customerColumns} defaultValues={{ total_visits: 0, total_reviews: 0, segment: 'new' }} />;
-}
-
-export function LoyaltyModule({ businessId }: Props) {
-  return <DataManager table="loyalty_programs" businessId={businessId} columns={loyaltyColumns} defaultValues={{ is_active: true, points_per_review: 10, reward_threshold: 100 }} />;
-}
+export function CustomersModule({ businessId }: Props) { return <DataManager table="customers" businessId={businessId} columns={customerColumns} defaultValues={{ total_visits: 0, total_reviews: 0, segment: 'new' }} />; }
+export function LoyaltyModule({ businessId }: Props) { return <DataManager table="loyalty_programs" businessId={businessId} columns={loyaltyColumns} defaultValues={{ is_active: true, points_per_review: 10, reward_threshold: 100 }} />; }

@@ -9,9 +9,5 @@ const columns: ColumnDef[] = [
   { key: 'sort_order', label: 'Sort Order', type: 'number', showInTable: true },
   { key: 'is_active', label: 'Active', type: 'boolean', showInTable: true },
 ];
-
 interface Props { businessId: string; }
-
-export default function QuestionsModule({ businessId }: Props) {
-  return <DataManager table="questions" businessId={businessId} columns={columns} defaultValues={{ is_active: true, sort_order: 0, flow_type: 'all', question_type: 'text' }} />;
-}
+export default function QuestionsModule({ businessId }: Props) { return <DataManager table="questions" businessId={businessId} columns={columns} defaultValues={{ is_active: true, sort_order: 0, flow_type: 'all', question_type: 'text' }} />; }

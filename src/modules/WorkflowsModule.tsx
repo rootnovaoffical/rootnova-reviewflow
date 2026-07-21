@@ -8,9 +8,5 @@ const columns: ColumnDef[] = [
   { key: 'trigger_type', label: 'Trigger', type: 'select', options: ['manual', 'event', 'schedule', 'webhook'], required: true, showInTable: true },
   { key: 'created_at', label: 'Created', type: 'date', showInTable: true, editable: false },
 ];
-
 interface Props { businessId: string; }
-
-export default function WorkflowsModule({ businessId }: Props) {
-  return <DataManager table="workflows" businessId={businessId} columns={columns} defaultValues={{ status: 'draft', trigger_type: 'manual' }} />;
-}
+export default function WorkflowsModule({ businessId }: Props) { return <DataManager table="workflows" businessId={businessId} columns={columns} defaultValues={{ status: 'draft', trigger_type: 'manual' }} />; }

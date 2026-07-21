@@ -11,9 +11,5 @@ const columns: ColumnDef[] = [
   { key: 'trigger_config', label: 'Trigger Config', type: 'json', showInTable: false },
   { key: 'action_config', label: 'Action Config', type: 'json', showInTable: false },
 ];
-
 interface Props { businessId: string; }
-
-export default function AutomationModule({ businessId }: Props) {
-  return <DataManager table="automation_rules" businessId={businessId} columns={columns} defaultValues={{ status: 'active', trigger_count: 0, trigger_config: {}, action_config: {} }} />;
-}
+export default function AutomationModule({ businessId }: Props) { return <DataManager table="automation_rules" businessId={businessId} columns={columns} defaultValues={{ status: 'active', trigger_count: 0, trigger_config: {}, action_config: {} }} />; }

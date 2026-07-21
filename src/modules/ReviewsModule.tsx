@@ -8,9 +8,5 @@ const columns: ColumnDef[] = [
   { key: 'answers', label: 'Answers', type: 'json', showInTable: false },
   { key: 'created_at', label: 'Created', type: 'date', showInTable: true, editable: false },
 ];
-
 interface Props { businessId: string; }
-
-export default function ReviewsModule({ businessId }: Props) {
-  return <DataManager table="review_sessions" businessId={businessId} columns={columns} pageSize={20} />;
-}
+export default function ReviewsModule({ businessId }: Props) { return <DataManager table="review_sessions" businessId={businessId} columns={columns} pageSize={20} />; }

@@ -8,7 +8,7 @@ import {
   LayoutDashboard, Star, HelpCircle, QrCode as QrCodeIcon, Zap, Workflow, FileStack,
   MessageSquare, Users, Brain, TrendingUp, FileBarChart, Plug, Code2, CreditCard,
   Building2, Globe, Settings, LogOut, ChevronDown, ChevronRight, Menu, Copy,
-  ExternalLink, Save
+  ExternalLink, Save, Building
 } from 'lucide-react';
 
 import OverviewModule from '../modules/OverviewModule';
@@ -152,12 +152,13 @@ const NAV_GROUPS: NavGroup[] = [
 ];
 
 export default function DashboardPage() {
-  const { user, business, organization, role, signOut } = useAuth();
+  const { user, business, businesses, organization, role, signOut, switchBusiness } = useAuth();
   const { showToast } = useToast();
   const [activeModule, setActiveModule] = useState('overview');
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [settingsMode, setSettingsMode] = useState(false);
+  const [bizDropdownOpen, setBizDropdownOpen] = useState(false);
   const [editName, setEditName] = useState(business?.name || '');
   const [editCategory, setEditCategory] = useState(business?.business_category || '');
   const [editPhone, setEditPhone] = useState(business?.contact_phone || '');
@@ -166,9 +167,7 @@ export default function DashboardPage() {
   const [editGoogleUrl, setEditGoogleUrl] = useState(business?.google_review_url || '');
   const [editWelcome, setEditWelcome] = useState(business?.welcome_message || '');
 
-  function toggleGroup(id: string) {
-    setCollapsedGroups((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
-  }
+  function toggleGroup(id: string) { setCollapsedGroups((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; }); }
 
   function copyReviewLink() {
     if (!business) return;
@@ -216,8 +215,7 @@ export default function DashboardPage() {
             const collapsed = collapsedGroups.has(group.id);
             return (
               <div key={group.id} className="mb-1">
-                <button onClick={() => toggleGroup(group.id)}
-                  className="w-full flex items-center gap-2 px-4 py-2 text-xs font-semibold text-zinc-400 uppercase tracking-wider hover:text-zinc-200 transition-colors">
+                <button onClick={() => toggleGroup(group.id)} className="w-full flex items-center gap-2 px-4 py-2 text-xs font-semibold text-zinc-400 uppercase tracking-wider hover:text-zinc-200 transition-colors">
                   {collapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                   <group.icon className="w-3.5 h-3.5" />
                   {group.label}
@@ -226,11 +224,7 @@ export default function DashboardPage() {
                   <div className="space-y-0.5">
                     {visibleModules.map((m) => (
                       <button key={m.id} onClick={() => { setActiveModule(m.id); setSettingsMode(false); setSidebarOpen(false); }}
-                        className={`w-full flex items-center gap-3 px-8 py-2 text-sm transition-colors ${
-                          activeModule === m.id && !settingsMode
-                            ? 'bg-blue-500/10 text-blue-300 border-l-2 border-blue-400'
-                            : 'text-zinc-400 hover:text-white hover:bg-white/5 border-l-2 border-transparent'
-                        }`}>
+                        className={`w-full flex items-center gap-3 px-8 py-2 text-sm transition-colors ${activeModule === m.id && !settingsMode ? 'bg-blue-500/10 text-blue-300 border-l-2 border-blue-400' : 'text-zinc-400 hover:text-white hover:bg-white/5 border-l-2 border-transparent'}`}>
                         <m.icon className="w-4 h-4" />
                         {m.label}
                       </button>
@@ -242,12 +236,10 @@ export default function DashboardPage() {
           })}
         </nav>
         <div className="p-3 border-t border-white/10 space-y-1">
-          <button onClick={() => setSettingsMode(true)}
-            className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${settingsMode ? 'bg-blue-500/10 text-blue-300' : 'text-zinc-400 hover:text-white hover:bg-white/5'}`}>
+          <button onClick={() => setSettingsMode(true)} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${settingsMode ? 'bg-blue-500/10 text-blue-300' : 'text-zinc-400 hover:text-white hover:bg-white/5'}`}>
             <Settings className="w-4 h-4" /> Settings
           </button>
-          <button onClick={signOut}
-            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-zinc-400 hover:text-red-400 hover:bg-white/5 transition-colors">
+          <button onClick={signOut} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-zinc-400 hover:text-red-400 hover:bg-white/5 transition-colors">
             <LogOut className="w-4 h-4" /> Sign Out
           </button>
         </div>
@@ -281,6 +273,25 @@ export default function DashboardPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {businesses.length > 1 && (
+              <div className="relative">
+                <button onClick={() => setBizDropdownOpen(!bizDropdownOpen)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-zinc-300 hover:bg-white/10 transition-colors">
+                  <Building className="w-3.5 h-3.5" />
+                  <span className="max-w-[120px] truncate">{business?.name || 'Select'}</span>
+                  <ChevronDown className="w-3 h-3" />
+                </button>
+                {bizDropdownOpen && (
+                  <div className="absolute right-0 mt-1 w-56 max-h-64 overflow-y-auto rounded-lg bg-zinc-900 border border-white/10 shadow-xl z-50" onClick={() => setBizDropdownOpen(false)}>
+                    {businesses.map((b) => (
+                      <button key={b.id} onClick={() => switchBusiness(b.id)} className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors ${b.id === business?.id ? 'bg-blue-500/10 text-blue-300' : 'text-zinc-300 hover:bg-white/5'}`}>
+                        <Building className="w-3.5 h-3.5 shrink-0" />
+                        <span className="truncate">{b.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             <button onClick={copyReviewLink} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-zinc-300 hover:bg-white/10 transition-colors">
               <Copy className="w-3.5 h-3.5" /> Copy Link
             </button>

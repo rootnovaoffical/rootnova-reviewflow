@@ -3,15 +3,20 @@ import { Link } from "react-router-dom";
 import Layout from "../../components/Layout";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../context/AuthContext";
-import type { Subscription, Plan, Payment } from "../../lib/types";
+import type { Subscription, Plan, Payment, Invoice } from "../../lib/types";
 import { Loading, EmptyState } from "../../components/States";
 import { formatCurrency, formatDate } from "../../lib/utils";
+import { listInvoices } from "../../lib/billing";
+import { getUsageWithLimits } from "../../lib/usage";
+import type { UsageWithLimits } from "../../lib/usage";
 
 export default function PartnerBilling() {
   const { profile } = useAuth();
   const [sub, setSub] = useState<(Subscription & { plan: Plan }) | null>(null);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [usageData, setUsageData] = useState<UsageWithLimits | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -23,10 +28,14 @@ export default function PartnerBilling() {
           supabase.from("subscriptions").select("*, plan:plans(*)").eq("organization_id", mem.organization_id).order("created_at", { ascending: false }).limit(1).maybeSingle(),
           supabase.from("plans").select("*").eq("is_active", true).order("sort_order"),
           supabase.from("payments").select("*").eq("organization_id", mem.organization_id).order("created_at", { ascending: false }).limit(5),
-        ]).then(([s, p, pays]) => {
+          listInvoices(mem.organization_id).catch(() => []),
+          getUsageWithLimits(mem.organization_id).catch(() => null),
+        ]).then(([s, p, pays, invs, usage]) => {
           setSub(s.data as any);
           setPlans((p.data || []) as Plan[]);
           setPayments((pays.data || []) as Payment[]);
+          setInvoices(invs as Invoice[]);
+          setUsageData(usage);
           setLoading(false);
         });
       });
@@ -75,6 +84,51 @@ export default function PartnerBilling() {
           <div className="flex items-center gap-2">
             <span className="px-2 py-1 rounded-full text-xs font-semibold bg-amber-500/15 text-amber-300">Payment Under Review</span>
             <p className="text-sm text-slate-400">Your payment is being reviewed by RootNova admin.</p>
+          </div>
+        </div>
+      )}
+
+      {usageData && usageData.usage && (
+        <div className="glass rounded-2xl p-6 mb-6">
+          <h3 className="text-sm font-medium text-slate-400 mb-4">Current Period Usage</h3>
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+            {(["reviews_generated", "ai_requests", "messages_sent", "reports_generated", "qr_scans", "customers_stored", "automation_executions"] as const).map((m) => {
+              const current = usageData.usage?.[m] ?? 0;
+              const limit = usageData.limits[m];
+              const pct = usageData.percentages[m] ?? 0;
+              return (
+                <div key={m} className="text-center p-3 rounded-xl bg-slate-800/50">
+                  <p className="text-xs text-slate-500 mb-1 capitalize">{m.replace(/_/g, " ")}</p>
+                  <p className="text-xl font-bold text-slate-200">{current}</p>
+                  {limit && limit > 0 && <p className="text-xs text-slate-500">/ {limit} ({pct}%)</p>}
+                </div>
+              );
+            })}
+          </div>
+          {usageData.alerts.length > 0 && (
+            <div className="mt-4 p-3 rounded-xl bg-warning-500/10 border border-warning-500/20">
+              <p className="text-sm text-warning-400">{usageData.alerts.length} usage alert(s) — consider upgrading your plan.</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {invoices.length > 0 && (
+        <div className="glass rounded-2xl p-6 mb-6">
+          <h3 className="text-sm font-medium text-slate-400 mb-4">Recent Invoices</h3>
+          <div className="space-y-2">
+            {invoices.slice(0, 5).map((inv) => (
+              <div key={inv.id} className="flex items-center justify-between py-2 border-b border-slate-700/30 last:border-0">
+                <div>
+                  <p className="text-sm font-mono text-slate-300">{inv.invoice_number}</p>
+                  <p className="text-xs text-slate-500">{formatDate(inv.period_start)} — {formatDate(inv.period_end)}</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-semibold text-slate-200">{formatCurrency(inv.total_amount)}</span>
+                  <span className={`text-xs font-semibold px-2 py-1 rounded-full ${inv.status === "paid" ? "bg-success-500/20 text-success-400" : inv.status === "overdue" ? "bg-error-500/20 text-error-400" : "bg-warning-500/20 text-warning-400"}`}>{inv.status.toUpperCase()}</span>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}

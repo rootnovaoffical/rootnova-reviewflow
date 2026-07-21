@@ -1245,3 +1245,159 @@ export interface ReportData {
     confidence: number;
   } | null;
 }
+
+// ---- Module 16: Production Operations, Billing & SaaS Launch ----
+
+export type InvoiceStatus = "draft" | "sent" | "paid" | "void" | "overdue";
+export type UsageMetricKey =
+  | "reviews_generated"
+  | "ai_requests"
+  | "messages_sent"
+  | "reports_generated"
+  | "qr_scans"
+  | "customers_stored"
+  | "automation_executions";
+export type HealthLevel = "low" | "medium" | "high";
+export type ChurnRisk = "low" | "medium" | "high" | "critical";
+export type UsageTrend = "declining" | "stable" | "growing";
+export type AlertType =
+  | "churn_risk"
+  | "low_usage"
+  | "payment_failure"
+  | "onboarding_stalled"
+  | "trial_expiring"
+  | "feature_request";
+export type AlertSeverity = "info" | "warning" | "critical";
+export type AlertStatus = "open" | "acknowledged" | "resolved";
+export type MonitoringEventType = "health_check" | "failure" | "recovery" | "degraded";
+export type IncidentStatus = "active" | "investigating" | "monitoring" | "resolved";
+export type IncidentSeverity = "minor" | "major" | "critical";
+export type DeploymentCheckStatus = "pass" | "fail" | "pending" | "warning";
+
+export interface Invoice {
+  id: string;
+  organization_id: string;
+  subscription_id: string | null;
+  invoice_number: string;
+  billing_cycle: "MONTHLY" | "ANNUAL";
+  period_start: string;
+  period_end: string;
+  line_items: Array<{ description: string; quantity: number; unit_price: number; amount: number }>;
+  subtotal: number;
+  tax_amount: number;
+  discount_amount: number;
+  total_amount: number;
+  status: InvoiceStatus;
+  payment_id: string | null;
+  paid_at: string | null;
+  due_date: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UsageRecord {
+  id: string;
+  organization_id: string;
+  period_start: string;
+  period_end: string;
+  reviews_generated: number;
+  ai_requests: number;
+  messages_sent: number;
+  reports_generated: number;
+  qr_scans: number;
+  customers_stored: number;
+  automation_executions: number;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PlanEntitlement {
+  id: string;
+  plan_id: string;
+  feature_key: string;
+  feature_label: string | null;
+  is_allowed: boolean;
+  limit_value: number | null;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CustomerHealthScore {
+  id: string;
+  organization_id: string;
+  health_score: number;
+  engagement_level: HealthLevel;
+  churn_risk: ChurnRisk;
+  usage_trend: UsageTrend;
+  factors: Record<string, unknown> | null;
+  last_calculated_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CustomerSuccessAlert {
+  id: string;
+  organization_id: string;
+  alert_type: AlertType;
+  severity: AlertSeverity;
+  title: string;
+  description: string | null;
+  status: AlertStatus;
+  resolution_notes: string | null;
+  resolved_at: string | null;
+  resolved_by: string | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MonitoringEvent {
+  id: string;
+  service_name: string;
+  event_type: MonitoringEventType;
+  severity: AlertSeverity;
+  message: string;
+  metadata: Record<string, unknown> | null;
+  is_resolved: boolean;
+  resolved_at: string | null;
+  created_at: string;
+}
+
+export interface Incident {
+  id: string;
+  title: string;
+  description: string | null;
+  severity: IncidentSeverity;
+  status: IncidentStatus;
+  affected_services: string[];
+  started_at: string;
+  resolved_at: string | null;
+  postmortem: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DeploymentCheck {
+  id: string;
+  check_category: string;
+  check_name: string;
+  status: DeploymentCheckStatus;
+  notes: string | null;
+  checked_at: string | null;
+  checked_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FeatureFlagOverride {
+  id: string;
+  flag_key: string;
+  organization_id: string | null;
+  user_id: string | null;
+  is_enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}

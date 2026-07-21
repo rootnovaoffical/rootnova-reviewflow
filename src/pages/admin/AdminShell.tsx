@@ -8,6 +8,11 @@ const adminNav: NavItem[] = [
   { label: "Plans", to: "/admin/plans", icon: "📦" },
   { label: "Branding", to: "/admin/branding", icon: "🎨" },
   { label: "Feature Flags", to: "/admin/feature-flags", icon: "🚩" },
+  { label: "Invoices", to: "/admin/invoices", icon: "🧾" },
+  { label: "Usage", to: "/admin/usage", icon: "📈" },
+  { label: "Customer Success", to: "/admin/customer-success", icon: "💚" },
+  { label: "Monitoring", to: "/admin/monitoring", icon: "🖥️" },
+  { label: "Deployment", to: "/admin/deployment", icon: "🚀" },
   { label: "Audit Logs", to: "/admin/audit", icon: "📜" },
   { label: "Admins", to: "/admin/admins", icon: "👤" },
 ];

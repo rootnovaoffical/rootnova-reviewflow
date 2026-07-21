@@ -7,7 +7,8 @@ import { uploadBusinessLogo } from "../../lib/storage";
 import { slugify } from "../../lib/utils";
 import { insertAuditLog } from "../../lib/auth";
 import SpatialBackground from "../../components/SpatialBackground";
-import type { Business } from "../../lib/types";
+import { createSubscription } from "../../lib/billing";
+import type { Business, Plan } from "../../lib/types";
 
 const CATEGORIES = [
   "Restaurant", "Cafe", "Salon", "Spa", "Clinic", "Dental",
@@ -15,7 +16,7 @@ const CATEGORIES = [
   "Legal Services", "Other",
 ];
 
-const STEPS = ["Identity", "Branding", "Google", "Questions", "Review"];
+const STEPS = ["Identity", "Branding", "Google", "Questions", "Plan", "Review"];
 
 export default function BusinessOnboarding() {
   const { profile } = useAuth();
@@ -48,9 +49,16 @@ export default function BusinessOnboarding() {
   const [questions, setQuestions] = useState<{ question_text: string; options: string }[]>([
     { question_text: "What did you enjoy most?", options: "Food\nService\nAtmosphere\nValue" },
   ]);
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [selectedPlanId, setSelectedPlanId] = useState<string>("");
+  const [billingCycle, setBillingCycle] = useState<"MONTHLY" | "ANNUAL">("MONTHLY");
 
   useEffect(() => {
     if (!profile) return;
+    supabase.from("plans").select("*").eq("is_active", true).order("sort_order", { ascending: true }).then(({ data }) => {
+      setPlans((data || []) as Plan[]);
+      if (data && data.length > 0) setSelectedPlanId((data as Plan[])[0].id);
+    });
     supabase.from("business_admins").select("business_id").eq("user_id", profile.id).maybeSingle()
       .then(({ data }) => {
         if (!data?.business_id) { setChecking(false); return; }
@@ -185,6 +193,18 @@ export default function BusinessOnboarding() {
     setSaving(true);
     await saveBusiness();
     await saveQuestions(existingBusiness.id);
+    if (selectedPlanId) {
+      const { data: orgMember } = await supabase.from("organization_members").select("organization_id").eq("user_id", profile.id).maybeSingle();
+      if (orgMember?.organization_id) {
+        const trialEnds = new Date();
+        trialEnds.setDate(trialEnds.getDate() + 14);
+        await createSubscription(orgMember.organization_id, selectedPlanId, {
+          billing_cycle: billingCycle,
+          status: "trial",
+          trial_ends_at: trialEnds.toISOString(),
+        }).catch(() => {});
+      }
+    }
     await supabase.from("businesses").update({ onboarding_completed: true }).eq("id", existingBusiness.id);
     await insertAuditLog({ actor_id: profile.id, actor_email: profile.email, action: "onboarding_completed", target_type: "business", target_id: existingBusiness.id });
     setSaving(false);
@@ -469,8 +489,40 @@ export default function BusinessOnboarding() {
               </div>
             )}
 
-            {/* Step 4: Review */}
+            {/* Step 4: Plan Selection */}
             {step === 4 && (
+              <div className="space-y-4">
+                <div className="glass rounded-xl p-4 border border-primary-500/20">
+                  <p className="text-sm text-slate-300">
+                    Choose a plan to activate your trial. You get 14 days free — no card required.
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => setBillingCycle("MONTHLY")} className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${billingCycle === "MONTHLY" ? "bg-primary-500/20 text-primary-300" : "text-slate-500 hover:text-slate-300"}`}>Monthly</button>
+                  <button onClick={() => setBillingCycle("ANNUAL")} className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${billingCycle === "ANNUAL" ? "bg-primary-500/20 text-primary-300" : "text-slate-500 hover:text-slate-300"}`}>Annual (Save 20%)</button>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {plans.map((p) => (
+                    <button
+                      key={p.id}
+                      onClick={() => setSelectedPlanId(p.id)}
+                      className={`text-left p-4 rounded-2xl border transition-all ${selectedPlanId === p.id ? "border-primary-500 bg-primary-500/10" : "border-white/10 hover:border-white/20"}`}
+                    >
+                      <p className="text-sm font-bold text-white">{p.name}</p>
+                      <p className="text-2xl font-bold text-slate-200 mt-1">
+                        {billingCycle === "MONTHLY" ? `₹${p.monthly_price}` : `₹${p.annual_price}`}
+                        <span className="text-xs text-slate-500 font-normal">/mo</span>
+                      </p>
+                      <p className="text-xs text-slate-500 mt-1">{p.max_businesses} businesses, {p.ai_usage_allowance} AI requests</p>
+                    </button>
+                  ))}
+                </div>
+                {plans.length === 0 && <p className="text-sm text-slate-500 text-center py-4">No plans available. You can subscribe later from Settings.</p>}
+              </div>
+            )}
+
+            {/* Step 5: Review */}
+            {step === 5 && (
               <div className="space-y-4">
                 <div className="glass rounded-2xl p-6">
                   <h3 className="text-lg font-bold text-white mb-4">Review Your Setup</h3>
@@ -481,6 +533,7 @@ export default function BusinessOnboarding() {
                     <div className="flex justify-between"><dt className="text-slate-500">Review Link</dt><dd className="text-primary-300 break-all">{reviewUrl || "—"}</dd></div>
                     <div className="flex justify-between"><dt className="text-slate-500">Google Review</dt><dd className="text-white">{googleDest ? "Configured" : "Not set"}</dd></div>
                     <div className="flex justify-between"><dt className="text-slate-500">Questions</dt><dd className="text-white">{questions.filter((q) => q.question_text.trim()).length} configured</dd></div>
+                    <div className="flex justify-between"><dt className="text-slate-500">Plan</dt><dd className="text-white">{plans.find((p) => p.id === selectedPlanId)?.name ?? "Skip for now"}</dd></div>
                     <div className="flex justify-between items-center"><dt className="text-slate-500">Colors</dt><dd className="flex gap-2"><div className="w-5 h-5 rounded" style={{ background: form.primary_color }} /><div className="w-5 h-5 rounded" style={{ background: form.secondary_color }} /></dd></div>
                   </dl>
                 </div>

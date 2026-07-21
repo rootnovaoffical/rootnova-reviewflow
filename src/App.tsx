@@ -22,6 +22,11 @@ import AdminPaymentDetail from "./pages/admin/PaymentDetail";
 import AdminPlans from "./pages/admin/Plans";
 import AdminBranding from "./pages/admin/Branding";
 import AdminFeatureFlags from "./pages/admin/FeatureFlags";
+import AdminInvoices from "./pages/admin/Invoices";
+import AdminUsage from "./pages/admin/Usage";
+import AdminCustomerSuccess from "./pages/admin/CustomerSuccess";
+import AdminMonitoring from "./pages/admin/Monitoring";
+import AdminDeploymentReadiness from "./pages/admin/DeploymentReadiness";
 import AdminAudit from "./pages/admin/Audit";
 import AdminAdmins from "./pages/admin/Admins";
 
@@ -135,6 +140,11 @@ export default function App() {
                 <Route path="/admin/plans" element={<ProtectedRoute roles={[...ADMIN_ROLES]}><AdminPlans /></ProtectedRoute>} />
                 <Route path="/admin/branding" element={<ProtectedRoute roles={[...ADMIN_ROLES]}><AdminBranding /></ProtectedRoute>} />
                 <Route path="/admin/feature-flags" element={<ProtectedRoute roles={[...ADMIN_ROLES]}><AdminFeatureFlags /></ProtectedRoute>} />
+                <Route path="/admin/invoices" element={<ProtectedRoute roles={[...ADMIN_ROLES]}><AdminInvoices /></ProtectedRoute>} />
+                <Route path="/admin/usage" element={<ProtectedRoute roles={[...ADMIN_ROLES]}><AdminUsage /></ProtectedRoute>} />
+                <Route path="/admin/customer-success" element={<ProtectedRoute roles={[...ADMIN_ROLES]}><AdminCustomerSuccess /></ProtectedRoute>} />
+                <Route path="/admin/monitoring" element={<ProtectedRoute roles={[...ADMIN_ROLES]}><AdminMonitoring /></ProtectedRoute>} />
+                <Route path="/admin/deployment" element={<ProtectedRoute roles={[...ADMIN_ROLES]}><AdminDeploymentReadiness /></ProtectedRoute>} />
                 <Route path="/admin/audit" element={<ProtectedRoute roles={[...ADMIN_ROLES]}><AdminAudit /></ProtectedRoute>} />
                 <Route path="/admin/admins" element={<ProtectedRoute roles={["ROOTNOVA_SUPER_ADMIN"]}><AdminAdmins /></ProtectedRoute>} />
 

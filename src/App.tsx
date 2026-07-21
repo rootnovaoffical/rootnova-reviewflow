@@ -67,6 +67,15 @@ import IntegrationMarketplace from "./pages/business/IntegrationMarketplace";
 import IntegrationDeveloper from "./pages/business/IntegrationDeveloper";
 import IntegrationWebhooks from "./pages/business/IntegrationWebhooks";
 
+import EnterpriseDashboard from "./pages/business/EnterpriseDashboard";
+import EnterpriseRegions from "./pages/business/EnterpriseRegions";
+import EnterpriseBranches from "./pages/business/EnterpriseBranches";
+import EnterpriseComparison from "./pages/business/EnterpriseComparison";
+import EnterprisePolicies from "./pages/business/EnterprisePolicies";
+import EnterpriseRoles from "./pages/business/EnterpriseRoles";
+import EnterpriseEvents from "./pages/business/EnterpriseEvents";
+import EnterpriseBranchManagers from "./pages/business/EnterpriseBranchManagers";
+
 const ADMIN_ROLES = ["ROOTNOVA_SUPER_ADMIN", "ROOTNOVA_ADMIN"] as const;
 const PARTNER_ROLES = ["PARTNER_OWNER", "PARTNER_ADMIN", "PARTNER_TEAM_MEMBER"] as const;
 const PARTNER_MANAGE_ROLES = ["PARTNER_OWNER", "PARTNER_ADMIN"] as const;
@@ -150,6 +159,15 @@ export default function App() {
                 <Route path="/business/integrations/marketplace" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><IntegrationMarketplace /></ProtectedRoute>} />
                 <Route path="/business/integrations/developer" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><IntegrationDeveloper /></ProtectedRoute>} />
                 <Route path="/business/integrations/webhooks" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><IntegrationWebhooks /></ProtectedRoute>} />
+
+                <Route path="/business/enterprise" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><EnterpriseDashboard /></ProtectedRoute>} />
+                <Route path="/business/enterprise/regions" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><EnterpriseRegions /></ProtectedRoute>} />
+                <Route path="/business/enterprise/branches" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><EnterpriseBranches /></ProtectedRoute>} />
+                <Route path="/business/enterprise/comparison" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><EnterpriseComparison /></ProtectedRoute>} />
+                <Route path="/business/enterprise/policies" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><EnterprisePolicies /></ProtectedRoute>} />
+                <Route path="/business/enterprise/roles" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><EnterpriseRoles /></ProtectedRoute>} />
+                <Route path="/business/enterprise/events" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><EnterpriseEvents /></ProtectedRoute>} />
+                <Route path="/business/enterprise/managers" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><EnterpriseBranchManagers /></ProtectedRoute>} />
 
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>

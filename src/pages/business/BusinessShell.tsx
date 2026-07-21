@@ -18,6 +18,7 @@ const businessNav: NavItem[] = [
   { label: "QR Codes", to: "/business/qr-codes", icon: "📱" },
   { label: "Integrations", to: "/business/integrations", icon: "🔌" },
   { label: "Analytics", to: "/business/analytics", icon: "📈" },
+  { label: "Enterprise", to: "/business/enterprise", icon: "🏛️" },
   { label: "Settings", to: "/business/settings", icon: "⚙️" },
 ];
 

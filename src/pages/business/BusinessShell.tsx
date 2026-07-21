@@ -8,6 +8,7 @@ const businessNav: NavItem[] = [
   { label: "Actions", to: "/business/actions", icon: "🎯" },
   { label: "Engagement", to: "/business/engagement", icon: "💬" },
   { label: "Communication", to: "/business/communication", icon: "📨" },
+  { label: "Workflows", to: "/business/workflows", icon: "⚡" },
   { label: "QR Codes", to: "/business/qr-codes", icon: "📱" },
   { label: "Analytics", to: "/business/analytics", icon: "📈" },
   { label: "Settings", to: "/business/settings", icon: "⚙️" },

@@ -571,3 +571,161 @@ export interface DeliveryLog {
   error_message: string | null;
   created_at: string;
 }
+
+// =========================================================
+// Module 8: Visual Automation Flow Builder
+// =========================================================
+
+export type WorkflowStatus = "draft" | "active" | "paused" | "archived";
+
+export type WorkflowTriggerType =
+  | "qr_scanned"
+  | "review_submitted"
+  | "negative_review"
+  | "positive_review"
+  | "customer_created"
+  | "segment_changed"
+  | "campaign_completed"
+  | "reward_earned"
+  | "message_delivered"
+  | "message_failed"
+  | "birthday"
+  | "festival"
+  | "manual"
+  | "scheduled"
+  | "webhook"
+  | "api_event";
+
+export type NodeCategory = "trigger" | "condition" | "action" | "delay" | "ai_decision";
+
+export type NodeType =
+  | "trigger"
+  | "action"
+  | "condition"
+  | "delay"
+  | "ai_decision"
+  | "notification"
+  | "campaign"
+  | "loyalty"
+  | "communication"
+  | "review"
+  | "action_center";
+
+export type ExecutionStatus = "running" | "completed" | "failed" | "paused" | "cancelled";
+
+export interface Workflow {
+  id: string;
+  business_id: string;
+  name: string;
+  description: string | null;
+  status: WorkflowStatus;
+  trigger_type: WorkflowTriggerType;
+  trigger_config: Record<string, unknown>;
+  canvas_data: Record<string, unknown>;
+  variables: string[];
+  version: number;
+  is_ai_generated: boolean;
+  ai_explanation: string | null;
+  execution_count: number;
+  success_count: number;
+  failure_count: number;
+  last_executed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WorkflowNode {
+  id: string;
+  workflow_id: string;
+  business_id: string;
+  node_key: string;
+  node_type: NodeType;
+  node_category: NodeCategory;
+  label: string;
+  config: Record<string, unknown>;
+  position_x: number;
+  position_y: number;
+  is_collapsed: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WorkflowEdge {
+  id: string;
+  workflow_id: string;
+  business_id: string;
+  source_node_key: string;
+  target_node_key: string;
+  edge_label: string | null;
+  edge_data: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface WorkflowExecution {
+  id: string;
+  business_id: string;
+  workflow_id: string;
+  workflow_version: number;
+  trigger_source: string;
+  trigger_data: Record<string, unknown>;
+  status: ExecutionStatus;
+  current_node_key: string | null;
+  started_at: string;
+  completed_at: string | null;
+  duration_ms: number | null;
+  retry_count: number;
+  error_message: string | null;
+  node_history: Record<string, unknown>[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface WorkflowLog {
+  id: string;
+  business_id: string;
+  execution_id: string;
+  workflow_id: string;
+  node_key: string;
+  node_type: string;
+  node_label: string;
+  log_level: string;
+  message: string;
+  log_data: Record<string, unknown>;
+  ai_reasoning: string | null;
+  provider_used: string | null;
+  latency_ms: number | null;
+  created_at: string;
+}
+
+export interface WorkflowTemplate {
+  id: string;
+  template_key: string;
+  name: string;
+  description: string;
+  category: string;
+  trigger_type: WorkflowTriggerType;
+  trigger_config: Record<string, unknown>;
+  nodes: Record<string, unknown>[];
+  edges: Record<string, unknown>[];
+  variables: string[];
+  is_ai_generated: boolean;
+  is_active: boolean;
+  use_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WorkflowVersion {
+  id: string;
+  workflow_id: string;
+  business_id: string;
+  version: number;
+  canvas_data: Record<string, unknown>;
+  nodes: Record<string, unknown>[];
+  edges: Record<string, unknown>[];
+  variables: string[];
+  change_note: string | null;
+  created_by: string | null;
+  created_at: string;
+}

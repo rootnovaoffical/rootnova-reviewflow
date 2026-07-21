@@ -50,6 +50,10 @@ import BusinessLoyalty from "./pages/business/Loyalty";
 import BusinessCommunicationHub from "./pages/business/CommunicationHub";
 import BusinessCommunicationTemplates from "./pages/business/CommunicationTemplates";
 import BusinessCommunicationAnalytics from "./pages/business/CommunicationAnalytics";
+import BusinessWorkflows from "./pages/business/Workflows";
+import BusinessWorkflowEditor from "./pages/business/WorkflowEditor";
+import BusinessWorkflowTemplates from "./pages/business/WorkflowTemplates";
+import BusinessWorkflowAnalytics from "./pages/business/WorkflowAnalytics";
 
 const ADMIN_ROLES = ["ROOTNOVA_SUPER_ADMIN", "ROOTNOVA_ADMIN"] as const;
 const PARTNER_ROLES = ["PARTNER_OWNER", "PARTNER_ADMIN", "PARTNER_TEAM_MEMBER"] as const;
@@ -117,6 +121,11 @@ export default function App() {
                 <Route path="/business/communication" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><BusinessCommunicationHub /></ProtectedRoute>} />
                 <Route path="/business/communication/templates" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><BusinessCommunicationTemplates /></ProtectedRoute>} />
                 <Route path="/business/communication/analytics" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><BusinessCommunicationAnalytics /></ProtectedRoute>} />
+                <Route path="/business/workflows" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><BusinessWorkflows /></ProtectedRoute>} />
+                <Route path="/business/workflows/templates" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><BusinessWorkflowTemplates /></ProtectedRoute>} />
+                <Route path="/business/workflows/analytics" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><BusinessWorkflowAnalytics /></ProtectedRoute>} />
+                <Route path="/business/workflows/:id" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><BusinessWorkflowEditor /></ProtectedRoute>} />
+                <Route path="/business/workflows/new" element={<ProtectedRoute roles={[...BUSINESS_ROLES]}><BusinessWorkflowEditor /></ProtectedRoute>} />
 
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>

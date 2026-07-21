@@ -1,15 +1,13 @@
-import DataManager, { ColumnDef } from "../components/DataManager";
+import DataManager from '../components/DataManager';
 
-const cols: ColumnDef[] = [
-  { key: "name", label: "Campaign Name", type: "text", editable: true, required: true },
-  { key: "channel", label: "Channel", type: "select", options: ["sms", "email", "whatsapp", "social", "push"], editable: true, required: true, defaultValue: "sms" },
-  { key: "status", label: "Status", type: "select", options: ["draft", "scheduled", "active", "completed", "paused"], editable: true, defaultValue: "draft" },
-  { key: "start_date", label: "Start Date", type: "date", editable: true },
-  { key: "end_date", label: "End Date", type: "date", editable: true },
-  { key: "created_at", label: "Created" },
-  { key: "updated_at", label: "Updated", hideInTable: true },
+const columns = [
+  { key: 'name', label: 'Campaign Name', type: 'text' as const, required: true, showInTable: true },
+  { key: 'channel', label: 'Channel', type: 'select' as const, options: ['email', 'sms', 'social', 'web', 'print'], showInTable: true },
+  { key: 'status', label: 'Status', type: 'select' as const, options: ['draft', 'active', 'paused', 'completed'], showInTable: true },
+  { key: 'start_date', label: 'Start Date', type: 'date' as const, showInTable: true },
+  { key: 'end_date', label: 'End Date', type: 'date' as const, showInTable: true },
 ];
 
 export default function CampaignsModule({ businessId }: { businessId: string }) {
-  return <DataManager table="campaigns" businessId={businessId} columns={cols} title="Campaigns" subtitle="Marketing campaigns and outreach" defaultValues={{ channel: "sms", status: "draft" }} />;
+  return <DataManager table="campaigns" businessId={businessId} columns={columns} defaultValues={{ status: 'draft', channel: 'email' }} />;
 }

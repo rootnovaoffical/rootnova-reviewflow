@@ -1,42 +1,33 @@
-import DataManager, { ColumnDef } from "../components/DataManager";
+import DataManager from '../components/DataManager';
 
-const apiKeyCols: ColumnDef[] = [
-  { key: "key_name", label: "Name", type: "text", editable: true, required: true },
-  { key: "key_prefix", label: "Prefix", type: "text", editable: true },
-  { key: "scopes", label: "Scopes", type: "array", editable: true },
-  { key: "rate_limit_per_hour", label: "Rate Limit/hr", type: "number", editable: true, defaultValue: 1000 },
-  { key: "is_active", label: "Active", type: "boolean", editable: true, defaultValue: true },
-  { key: "last_used_at", label: "Last Used", hideInTable: false },
-  { key: "expires_at", label: "Expires", type: "date", editable: true },
-  { key: "key_hash", label: "Key Hash", type: "text", hideInTable: true, editable: true },
-  { key: "created_at", label: "Created" },
+const apiKeyColumns = [
+  { key: 'name', label: 'Key Name', type: 'text' as const, required: true, showInTable: true },
+  { key: 'key_prefix', label: 'Prefix', type: 'text' as const, showInTable: true },
+  { key: 'scopes', label: 'Scopes', type: 'array' as const, showInTable: true },
+  { key: 'is_active', label: 'Active', type: 'boolean' as const, showInTable: true },
 ];
 
-const appCols: ColumnDef[] = [
-  { key: "name", label: "App Name", type: "text", editable: true, required: true },
-  { key: "description", label: "Description", type: "textarea", editable: true },
-  { key: "status", label: "Status", type: "select", options: ["development", "review", "active", "suspended", "disabled"], editable: true, defaultValue: "development" },
-  { key: "created_at", label: "Created" },
-  { key: "updated_at", label: "Updated", hideInTable: true },
+const appColumns = [
+  { key: 'name', label: 'App Name', type: 'text' as const, required: true, showInTable: true },
+  { key: 'description', label: 'Description', type: 'textarea' as const, showInTable: true },
+  { key: 'redirect_url', label: 'Redirect URL', type: 'text' as const, showInTable: true },
+  { key: 'is_active', label: 'Active', type: 'boolean' as const, showInTable: true },
 ];
 
-const webhookCols: ColumnDef[] = [
-  { key: "name", label: "Name", type: "text", editable: true, required: true },
-  { key: "url", label: "URL", type: "text", editable: true, required: true },
-  { key: "events", label: "Events", type: "array", editable: true },
-  { key: "is_active", label: "Active", type: "boolean", editable: true, defaultValue: true },
-  { key: "secret", label: "Secret", type: "text", hideInTable: true, editable: true },
-  { key: "created_at", label: "Created" },
+const webhookColumns = [
+  { key: 'url', label: 'URL', type: 'text' as const, required: true, showInTable: true },
+  { key: 'events', label: 'Events', type: 'array' as const, showInTable: true },
+  { key: 'is_active', label: 'Active', type: 'boolean' as const, showInTable: true },
 ];
 
 export function ApiKeysModule({ businessId }: { businessId: string }) {
-  return <DataManager table="api_keys" businessId={businessId} columns={apiKeyCols} title="API Keys" subtitle="Manage API keys for external access" defaultValues={{ rate_limit_per_hour: 1000, is_active: true, scopes: [] }} />;
+  return <DataManager table="api_keys" businessId={businessId} columns={apiKeyColumns} defaultValues={{ is_active: true }} />;
 }
 
 export function DeveloperAppsModule({ businessId }: { businessId: string }) {
-  return <DataManager table="developer_apps" businessId={businessId} columns={appCols} title="Developer Apps" subtitle="Registered developer applications" defaultValues={{ status: "development" }} />;
+  return <DataManager table="developer_apps" businessId={businessId} columns={appColumns} defaultValues={{ is_active: true }} />;
 }
 
 export function WebhooksModule({ businessId }: { businessId: string }) {
-  return <DataManager table="webhooks" businessId={businessId} columns={webhookCols} title="Webhooks" subtitle="Configure webhook endpoints" defaultValues={{ is_active: true, events: [] }} />;
+  return <DataManager table="webhooks" businessId={businessId} columns={webhookColumns} defaultValues={{ is_active: true }} />;
 }

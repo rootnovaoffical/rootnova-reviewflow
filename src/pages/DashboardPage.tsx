@@ -1,267 +1,384 @@
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState } from 'react';
+import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
+import { supabase } from '../lib/supabase';
+import SpatialBackground from '../components/SpatialBackground';
+import type { AdminRole } from '../lib/types';
 import {
-  BarChart3, MessageSquare, ListChecks, QrCode as QrCodeIcon, Zap, Workflow, FileCode,
-  Mail, Users, Brain, Target, Megaphone, FileBarChart, Plug, Code2, CreditCard,
-  Building2, Flag, ScrollText, Settings, LogOut, Sparkles, ExternalLink, Copy, ChevronDown, ChevronRight
-} from "lucide-react";
-import { useAuth } from "../context/AuthContext";
-import { useToast } from "../context/ToastContext";
-import { supabase } from "../lib/supabase";
-import SpatialBackground from "../components/SpatialBackground";
-import type { AdminRole } from "../lib/types";
+  LayoutDashboard, Star, HelpCircle, QrCode as QrCodeIcon, Zap, Workflow, FileStack,
+  MessageSquare, Users, Brain, TrendingUp, FileBarChart, Plug, Code2, CreditCard,
+  Building2, Globe, Settings, LogOut, ChevronDown, ChevronRight, Menu, X, Copy,
+  ExternalLink, Save
+} from 'lucide-react';
 
-import OverviewModule from "../modules/OverviewModule";
-import ReviewsModule from "../modules/ReviewsModule";
-import QuestionsModule from "../modules/QuestionsModule";
-import QrCodesModule from "../modules/QrCodesModule";
-import AutomationModule from "../modules/AutomationModule";
-import WorkflowsModule from "../modules/WorkflowsModule";
-import WorkflowTemplatesModule from "../modules/WorkflowTemplatesModule";
-import { MessagesModule, MessageTemplatesModule, ScheduledMessagesModule } from "../modules/MessagingModule";
-import { CustomersModule, LoyaltyModule } from "../modules/CustomersModule";
-import AiTasksModule from "../modules/AiTasksModule";
-import { AiRecommendationsModule, ActionItemsModule, AiBriefingsModule, AiSimulationsModule } from "../modules/AiInsightsModule";
-import CampaignsModule from "../modules/CampaignsModule";
-import GoalsModule from "../modules/GoalsModule";
-import { ReportTemplatesModule, ScheduledReportsModule } from "../modules/ReportsModule";
-import { InstalledIntegrationsModule, IntegrationProvidersModule } from "../modules/IntegrationsModule";
-import { ApiKeysModule, DeveloperAppsModule, WebhooksModule } from "../modules/DeveloperModule";
-import { PlansModule, SubscriptionsModule, PaymentsModule, InvoicesModule } from "../modules/BillingModule";
-import { OrganizationsModule, OrganizationMembersModule, EnterpriseBranchesModule, EnterpriseRegionsModule, OrganizationPoliciesModule } from "../modules/OrganizationsModule";
-import { FeatureFlagsModule, AuditLogsModule, UsageRecordsModule } from "../modules/PlatformModule";
+import OverviewModule from '../modules/OverviewModule';
+import ReviewsModule from '../modules/ReviewsModule';
+import QuestionsModule from '../modules/QuestionsModule';
+import QrCodesModule from '../modules/QrCodesModule';
+import AutomationModule from '../modules/AutomationModule';
+import WorkflowsModule from '../modules/WorkflowsModule';
+import WorkflowTemplatesModule from '../modules/WorkflowTemplatesModule';
+import { MessagesModule, MessageTemplatesModule, ScheduledMessagesModule } from '../modules/MessagingModule';
+import { CustomersModule, LoyaltyModule } from '../modules/CustomersModule';
+import AiTasksModule from '../modules/AiTasksModule';
+import { AiRecommendationsModule, ActionItemsModule, AiBriefingsModule, AiSimulationsModule } from '../modules/AiInsightsModule';
+import CampaignsModule from '../modules/CampaignsModule';
+import GoalsModule from '../modules/GoalsModule';
+import { ReportTemplatesModule, ScheduledReportsModule } from '../modules/ReportsModule';
+import { InstalledIntegrationsModule, IntegrationProvidersModule } from '../modules/IntegrationsModule';
+import { ApiKeysModule, DeveloperAppsModule, WebhooksModule } from '../modules/DeveloperModule';
+import { PlansModule, SubscriptionsModule, PaymentsModule, InvoicesModule } from '../modules/BillingModule';
+import { OrganizationsModule, OrganizationMembersModule, EnterpriseBranchesModule, EnterpriseRegionsModule, OrganizationPoliciesModule } from '../modules/OrganizationsModule';
+import { FeatureFlagsModule, AuditLogsModule, UsageRecordsModule } from '../modules/PlatformModule';
 
-interface NavGroup {
+interface ModuleDef {
+  id: string;
   label: string;
-  icon: React.ReactNode;
-  modules: { key: string; label: string; icon: React.ReactNode; roles: AdminRole[]; render: () => React.ReactNode }[];
+  icon: React.ComponentType<{ className?: string }>;
+  roles: AdminRole[];
+  render: (businessId: string, organizationId?: string) => React.ReactNode;
 }
 
+interface NavGroup {
+  id: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  modules: ModuleDef[];
+}
+
+const ALL_ROLES: AdminRole[] = ['super_admin', 'partner_admin', 'business_admin'];
+const SUPER_PARTNER: AdminRole[] = ['super_admin', 'partner_admin'];
+const SUPER_ONLY: AdminRole[] = ['super_admin'];
+
+const NAV_GROUPS: NavGroup[] = [
+  {
+    id: 'core', label: 'Core', icon: LayoutDashboard,
+    modules: [
+      { id: 'overview', label: 'Overview', icon: LayoutDashboard, roles: ALL_ROLES, render: (bid) => <OverviewModule businessId={bid} /> },
+      { id: 'reviews', label: 'Reviews', icon: Star, roles: ALL_ROLES, render: (bid) => <ReviewsModule businessId={bid} /> },
+      { id: 'questions', label: 'Questions', icon: HelpCircle, roles: ALL_ROLES, render: (bid) => <QuestionsModule businessId={bid} /> },
+      { id: 'qrcodes', label: 'QR Codes', icon: QrCodeIcon, roles: ALL_ROLES, render: (bid) => <QrCodesModule businessId={bid} /> },
+    ],
+  },
+  {
+    id: 'automation', label: 'Automation', icon: Zap,
+    modules: [
+      { id: 'automation_rules', label: 'Automation Rules', icon: Zap, roles: ALL_ROLES, render: (bid) => <AutomationModule businessId={bid} /> },
+      { id: 'workflows', label: 'Workflows', icon: Workflow, roles: ALL_ROLES, render: (bid) => <WorkflowsModule businessId={bid} /> },
+      { id: 'workflow_templates', label: 'Workflow Templates', icon: FileStack, roles: ALL_ROLES, render: (bid) => <WorkflowTemplatesModule businessId={bid} /> },
+    ],
+  },
+  {
+    id: 'messaging', label: 'Messaging', icon: MessageSquare,
+    modules: [
+      { id: 'messages', label: 'Messages', icon: MessageSquare, roles: ALL_ROLES, render: (bid) => <MessagesModule businessId={bid} /> },
+      { id: 'message_templates', label: 'Templates', icon: FileStack, roles: ALL_ROLES, render: (bid) => <MessageTemplatesModule businessId={bid} /> },
+      { id: 'scheduled_messages', label: 'Scheduled', icon: TrendingUp, roles: ALL_ROLES, render: (bid) => <ScheduledMessagesModule businessId={bid} /> },
+    ],
+  },
+  {
+    id: 'customers', label: 'Customers', icon: Users,
+    modules: [
+      { id: 'customers', label: 'Customers', icon: Users, roles: ALL_ROLES, render: (bid) => <CustomersModule businessId={bid} /> },
+      { id: 'loyalty', label: 'Loyalty Programs', icon: Star, roles: ALL_ROLES, render: (bid) => <LoyaltyModule businessId={bid} /> },
+    ],
+  },
+  {
+    id: 'ai', label: 'AI Engine', icon: Brain,
+    modules: [
+      { id: 'ai_tasks', label: 'AI Tasks', icon: Brain, roles: ALL_ROLES, render: (bid) => <AiTasksModule businessId={bid} /> },
+      { id: 'ai_recommendations', label: 'Recommendations', icon: TrendingUp, roles: ALL_ROLES, render: (bid) => <AiRecommendationsModule businessId={bid} /> },
+      { id: 'action_items', label: 'Action Items', icon: Star, roles: ALL_ROLES, render: (bid) => <ActionItemsModule businessId={bid} /> },
+      { id: 'ai_briefings', label: 'Briefings', icon: FileStack, roles: ALL_ROLES, render: (bid) => <AiBriefingsModule businessId={bid} /> },
+      { id: 'ai_simulations', label: 'Simulations', icon: Brain, roles: ALL_ROLES, render: (bid) => <AiSimulationsModule businessId={bid} /> },
+    ],
+  },
+  {
+    id: 'growth', label: 'Growth', icon: TrendingUp,
+    modules: [
+      { id: 'campaigns', label: 'Campaigns', icon: TrendingUp, roles: ALL_ROLES, render: (bid) => <CampaignsModule businessId={bid} /> },
+      { id: 'goals', label: 'Business Goals', icon: Star, roles: ALL_ROLES, render: (bid) => <GoalsModule businessId={bid} /> },
+    ],
+  },
+  {
+    id: 'reports', label: 'Reports', icon: FileBarChart,
+    modules: [
+      { id: 'report_templates', label: 'Report Templates', icon: FileStack, roles: ALL_ROLES, render: (bid) => <ReportTemplatesModule businessId={bid} /> },
+      { id: 'scheduled_reports', label: 'Scheduled Reports', icon: FileBarChart, roles: ALL_ROLES, render: (bid) => <ScheduledReportsModule businessId={bid} /> },
+    ],
+  },
+  {
+    id: 'integrations', label: 'Integrations', icon: Plug,
+    modules: [
+      { id: 'installed_integrations', label: 'Installed', icon: Plug, roles: ALL_ROLES, render: (bid) => <InstalledIntegrationsModule businessId={bid} /> },
+      { id: 'integration_providers', label: 'Providers', icon: Globe, roles: ALL_ROLES, render: (bid) => <IntegrationProvidersModule businessId={bid} /> },
+    ],
+  },
+  {
+    id: 'developer', label: 'Developer', icon: Code2,
+    modules: [
+      { id: 'api_keys', label: 'API Keys', icon: Code2, roles: ALL_ROLES, render: (bid) => <ApiKeysModule businessId={bid} /> },
+      { id: 'developer_apps', label: 'Developer Apps', icon: Code2, roles: ALL_ROLES, render: (bid) => <DeveloperAppsModule businessId={bid} /> },
+      { id: 'webhooks', label: 'Webhooks', icon: Plug, roles: ALL_ROLES, render: (bid) => <WebhooksModule businessId={bid} /> },
+    ],
+  },
+  {
+    id: 'billing', label: 'Billing', icon: CreditCard,
+    modules: [
+      { id: 'plans', label: 'Plans', icon: CreditCard, roles: SUPER_PARTNER, render: (bid) => <PlansModule businessId={bid} /> },
+      { id: 'subscriptions', label: 'Subscriptions', icon: CreditCard, roles: SUPER_PARTNER, render: (bid) => <SubscriptionsModule businessId={bid} /> },
+      { id: 'payments', label: 'Payments', icon: CreditCard, roles: SUPER_PARTNER, render: (bid) => <PaymentsModule businessId={bid} /> },
+      { id: 'invoices', label: 'Invoices', icon: FileStack, roles: SUPER_PARTNER, render: (bid) => <InvoicesModule businessId={bid} /> },
+    ],
+  },
+  {
+    id: 'organization', label: 'Organization', icon: Building2,
+    modules: [
+      { id: 'organizations', label: 'Organizations', icon: Building2, roles: SUPER_PARTNER, render: (_bid, oid) => <OrganizationsModule organizationId={oid || ''} /> },
+      { id: 'org_members', label: 'Members', icon: Users, roles: SUPER_PARTNER, render: (_bid, oid) => <OrganizationMembersModule organizationId={oid || ''} /> },
+      { id: 'branches', label: 'Branches', icon: Building2, roles: SUPER_PARTNER, render: (_bid, oid) => <EnterpriseBranchesModule organizationId={oid || ''} /> },
+      { id: 'regions', label: 'Regions', icon: Globe, roles: SUPER_PARTNER, render: (_bid, oid) => <EnterpriseRegionsModule organizationId={oid || ''} /> },
+      { id: 'org_policies', label: 'Policies', icon: FileStack, roles: SUPER_PARTNER, render: (_bid, oid) => <OrganizationPoliciesModule organizationId={oid || ''} /> },
+    ],
+  },
+  {
+    id: 'platform', label: 'Platform', icon: Globe,
+    modules: [
+      { id: 'feature_flags', label: 'Feature Flags', icon: Star, roles: SUPER_ONLY, render: (bid) => <FeatureFlagsModule businessId={bid} /> },
+      { id: 'audit_logs', label: 'Audit Logs', icon: FileStack, roles: SUPER_ONLY, render: (bid) => <AuditLogsModule businessId={bid} /> },
+      { id: 'usage_records', label: 'Usage Records', icon: TrendingUp, roles: SUPER_ONLY, render: (bid) => <UsageRecordsModule businessId={bid} /> },
+    ],
+  },
+];
+
 export default function DashboardPage() {
-  const { user, business, organization, role, loading, signOut } = useAuth();
+  const { user, business, organization, role, signOut } = useAuth();
   const { showToast } = useToast();
-  const navigate = useNavigate();
-  const [activeModule, setActiveModule] = useState("overview");
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(["core"]));
-  const [editingSettings, setEditingSettings] = useState(false);
-  const [settingsForm, setSettingsForm] = useState({ name: "", welcome_message: "", google_place_id: "", public_review_enabled: true, business_category: "", contact_email: "", contact_phone: "", location_city: "" });
+  const [activeModule, setActiveModule] = useState('overview');
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [settingsMode, setSettingsMode] = useState(false);
+  const [editName, setEditName] = useState(business?.name || '');
+  const [editIndustry, setEditIndustry] = useState(business?.industry || '');
+  const [editPhone, setEditPhone] = useState(business?.phone || '');
+  const [editWebsite, setEditWebsite] = useState(business?.website || '');
+  const [editGoogleUrl, setEditGoogleUrl] = useState(business?.google_review_url || '');
+  const [editDescription, setEditDescription] = useState(business?.description || '');
 
-  useEffect(() => {
-    if (!loading && !user) navigate("/");
-  }, [user, loading, navigate]);
+  function toggleGroup(id: string) {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
-  useEffect(() => {
-    if (business) setSettingsForm({ name: business.name, welcome_message: business.welcome_message, google_place_id: business.google_place_id || "", public_review_enabled: business.public_review_enabled, business_category: business.business_category || "", contact_email: business.contact_email || "", contact_phone: business.contact_phone || "", location_city: business.location_city || "" });
-  }, [business]);
+  function copyReviewLink() {
+    if (!business) return;
+    const url = `${window.location.origin}/#/review/${business.slug}`;
+    navigator.clipboard.writeText(url);
+    showToast('success', 'Review link copied!');
+  }
 
-  if (loading) return <><SpatialBackground /><div className="min-h-screen flex items-center justify-center"><div className="w-12 h-12 border-4 border-primary-500/30 border-t-primary-500 rounded-full animate-spin" /></div></>;
-  if (!user || !business) return <><SpatialBackground /><div className="min-h-screen flex items-center justify-center"><div className="glass-strong rounded-3xl p-10 text-center"><h1 className="text-2xl font-bold text-white mb-2">No Business Found</h1><p className="text-slate-400">Unable to load dashboard.</p></div></div></>;
-
-  const currentRole = role || "business_admin";
-  const allRoles: AdminRole[] = ["super_admin", "partner_admin", "business_admin"];
-
-  const navGroups: NavGroup[] = [
-    {
-      label: "Core", icon: <Sparkles className="w-4 h-4" />,
-      modules: [
-        { key: "overview", label: "Overview", icon: <BarChart3 className="w-4 h-4" />, roles: allRoles, render: () => <OverviewModule businessId={business.id} businessName={business.name} /> },
-        { key: "reviews", label: "Reviews", icon: <MessageSquare className="w-4 h-4" />, roles: allRoles, render: () => <ReviewsModule businessId={business.id} /> },
-        { key: "questions", label: "Questions", icon: <ListChecks className="w-4 h-4" />, roles: allRoles, render: () => <QuestionsModule businessId={business.id} /> },
-        { key: "qr", label: "QR Codes", icon: <QrCodeIcon className="w-4 h-4" />, roles: allRoles, render: () => <QrCodesModule businessId={business.id} /> },
-      ],
-    },
-    {
-      label: "Automation", icon: <Zap className="w-4 h-4" />,
-      modules: [
-        { key: "automation", label: "Automation Rules", icon: <Zap className="w-4 h-4" />, roles: allRoles, render: () => <AutomationModule businessId={business.id} /> },
-        { key: "workflows", label: "Workflows", icon: <Workflow className="w-4 h-4" />, roles: allRoles, render: () => <WorkflowsModule businessId={business.id} /> },
-        { key: "workflow_templates", label: "Workflow Templates", icon: <FileCode className="w-4 h-4" />, roles: allRoles, render: () => <WorkflowTemplatesModule /> },
-      ],
-    },
-    {
-      label: "Messaging", icon: <Mail className="w-4 h-4" />,
-      modules: [
-        { key: "messages", label: "Messages", icon: <Mail className="w-4 h-4" />, roles: allRoles, render: () => <MessagesModule businessId={business.id} /> },
-        { key: "message_templates", label: "Templates", icon: <FileCode className="w-4 h-4" />, roles: allRoles, render: () => <MessageTemplatesModule businessId={business.id} /> },
-        { key: "scheduled_messages", label: "Scheduled", icon: <Mail className="w-4 h-4" />, roles: allRoles, render: () => <ScheduledMessagesModule businessId={business.id} /> },
-      ],
-    },
-    {
-      label: "Customers", icon: <Users className="w-4 h-4" />,
-      modules: [
-        { key: "customers", label: "Customers", icon: <Users className="w-4 h-4" />, roles: allRoles, render: () => <CustomersModule businessId={business.id} /> },
-        { key: "loyalty", label: "Loyalty Programs", icon: <Users className="w-4 h-4" />, roles: allRoles, render: () => <LoyaltyModule businessId={business.id} /> },
-      ],
-    },
-    {
-      label: "AI Engine", icon: <Brain className="w-4 h-4" />,
-      modules: [
-        { key: "ai_tasks", label: "AI Tasks", icon: <Brain className="w-4 h-4" />, roles: allRoles, render: () => <AiTasksModule businessId={business.id} /> },
-        { key: "ai_recommendations", label: "Recommendations", icon: <Brain className="w-4 h-4" />, roles: allRoles, render: () => <AiRecommendationsModule businessId={business.id} /> },
-        { key: "action_items", label: "Action Items", icon: <Target className="w-4 h-4" />, roles: allRoles, render: () => <ActionItemsModule businessId={business.id} /> },
-        { key: "ai_briefings", label: "Briefings", icon: <Brain className="w-4 h-4" />, roles: allRoles, render: () => <AiBriefingsModule businessId={business.id} /> },
-        { key: "ai_simulations", label: "Simulations", icon: <Brain className="w-4 h-4" />, roles: allRoles, render: () => <AiSimulationsModule businessId={business.id} /> },
-      ],
-    },
-    {
-      label: "Growth", icon: <Megaphone className="w-4 h-4" />,
-      modules: [
-        { key: "campaigns", label: "Campaigns", icon: <Megaphone className="w-4 h-4" />, roles: allRoles, render: () => <CampaignsModule businessId={business.id} /> },
-        { key: "goals", label: "Business Goals", icon: <Target className="w-4 h-4" />, roles: allRoles, render: () => <GoalsModule businessId={business.id} /> },
-      ],
-    },
-    {
-      label: "Reports", icon: <FileBarChart className="w-4 h-4" />,
-      modules: [
-        { key: "report_templates", label: "Report Templates", icon: <FileBarChart className="w-4 h-4" />, roles: allRoles, render: () => <ReportTemplatesModule businessId={business.id} /> },
-        { key: "scheduled_reports", label: "Scheduled Reports", icon: <FileBarChart className="w-4 h-4" />, roles: allRoles, render: () => <ScheduledReportsModule businessId={business.id} /> },
-      ],
-    },
-    {
-      label: "Integrations", icon: <Plug className="w-4 h-4" />,
-      modules: [
-        { key: "installed_integrations", label: "Installed", icon: <Plug className="w-4 h-4" />, roles: allRoles, render: () => <InstalledIntegrationsModule businessId={business.id} /> },
-        { key: "integration_providers", label: "Providers", icon: <Plug className="w-4 h-4" />, roles: allRoles, render: () => <IntegrationProvidersModule /> },
-      ],
-    },
-    {
-      label: "Developer", icon: <Code2 className="w-4 h-4" />,
-      modules: [
-        { key: "api_keys", label: "API Keys", icon: <Code2 className="w-4 h-4" />, roles: allRoles, render: () => <ApiKeysModule businessId={business.id} /> },
-        { key: "developer_apps", label: "Developer Apps", icon: <Code2 className="w-4 h-4" />, roles: allRoles, render: () => <DeveloperAppsModule businessId={business.id} /> },
-        { key: "webhooks", label: "Webhooks", icon: <Code2 className="w-4 h-4" />, roles: allRoles, render: () => <WebhooksModule businessId={business.id} /> },
-      ],
-    },
-    {
-      label: "Billing", icon: <CreditCard className="w-4 h-4" />,
-      modules: [
-        { key: "plans", label: "Plans", icon: <CreditCard className="w-4 h-4" />, roles: ["super_admin", "partner_admin"], render: () => <PlansModule /> },
-        { key: "subscriptions", label: "Subscriptions", icon: <CreditCard className="w-4 h-4" />, roles: ["super_admin", "partner_admin"], render: () => <SubscriptionsModule organizationId={organization?.id || business.id} /> },
-        { key: "payments", label: "Payments", icon: <CreditCard className="w-4 h-4" />, roles: ["super_admin", "partner_admin"], render: () => <PaymentsModule organizationId={organization?.id || business.id} /> },
-        { key: "invoices", label: "Invoices", icon: <CreditCard className="w-4 h-4" />, roles: ["super_admin", "partner_admin"], render: () => <InvoicesModule organizationId={organization?.id || business.id} /> },
-      ],
-    },
-    {
-      label: "Organization", icon: <Building2 className="w-4 h-4" />,
-      modules: [
-        { key: "organizations", label: "Organizations", icon: <Building2 className="w-4 h-4" />, roles: ["super_admin"], render: () => <OrganizationsModule /> },
-        { key: "org_members", label: "Members", icon: <Users className="w-4 h-4" />, roles: ["super_admin", "partner_admin"], render: () => <OrganizationMembersModule organizationId={organization?.id || business.id} /> },
-        { key: "branches", label: "Branches", icon: <Building2 className="w-4 h-4" />, roles: ["super_admin", "partner_admin"], render: () => <EnterpriseBranchesModule organizationId={organization?.id || business.id} /> },
-        { key: "regions", label: "Regions", icon: <Building2 className="w-4 h-4" />, roles: ["super_admin", "partner_admin"], render: () => <EnterpriseRegionsModule organizationId={organization?.id || business.id} /> },
-        { key: "policies", label: "Policies", icon: <Building2 className="w-4 h-4" />, roles: ["super_admin", "partner_admin"], render: () => <OrganizationPoliciesModule organizationId={organization?.id || business.id} /> },
-      ],
-    },
-    {
-      label: "Platform", icon: <Flag className="w-4 h-4" />,
-      modules: [
-        { key: "feature_flags", label: "Feature Flags", icon: <Flag className="w-4 h-4" />, roles: ["super_admin"], render: () => <FeatureFlagsModule /> },
-        { key: "audit_logs", label: "Audit Logs", icon: <ScrollText className="w-4 h-4" />, roles: ["super_admin"], render: () => <AuditLogsModule /> },
-        { key: "usage_records", label: "Usage Records", icon: <BarChart3 className="w-4 h-4" />, roles: ["super_admin", "partner_admin"], render: () => <UsageRecordsModule organizationId={organization?.id || business.id} /> },
-      ],
-    },
-    {
-      label: "Settings", icon: <Settings className="w-4 h-4" />,
-      modules: [
-        { key: "settings", label: "Business Settings", icon: <Settings className="w-4 h-4" />, roles: allRoles, render: () => null },
-      ],
-    },
-  ];
-
-  const toggleGroup = (label: string) => setExpandedGroups(prev => { const n = new Set(prev); if (n.has(label)) n.delete(label); else n.add(label); return n; });
-  const copyReviewLink = () => { navigator.clipboard.writeText(`${window.location.origin}/#/review/${business.slug}`); showToast("Review link copied!", "success"); };
-
-  const handleSaveSettings = async () => {
+  async function saveSettings() {
+    if (!business) return;
     try {
-      const { error } = await supabase.from("businesses").update({ name: settingsForm.name, welcome_message: settingsForm.welcome_message, google_place_id: settingsForm.google_place_id || null, public_review_enabled: settingsForm.public_review_enabled, business_category: settingsForm.business_category || null, contact_email: settingsForm.contact_email || null, contact_phone: settingsForm.contact_phone || null, location_city: settingsForm.location_city || null }).eq("id", business.id);
+      const { error } = await supabase.from('businesses').update({
+        name: editName,
+        industry: editIndustry,
+        phone: editPhone,
+        website: editWebsite,
+        google_review_url: editGoogleUrl,
+        description: editDescription,
+      }).eq('id', business.id);
       if (error) throw error;
-      showToast("Settings saved!", "success"); setEditingSettings(false);
-    } catch { showToast("Failed to save settings", "error"); }
-  };
+      showToast('success', 'Settings saved');
+      setSettingsMode(false);
+    } catch (e) {
+      showToast('error', `Save failed: ${(e as Error).message}`);
+    }
+  }
 
-  const renderActiveModule = () => {
-    if (activeModule === "settings") {
-      return (
-        <div className="space-y-6 screen-enter">
-          <div><h1 className="text-xl font-bold text-white">Business Settings</h1><p className="text-sm text-slate-400">Configure your review flow and business profile</p></div>
-          <div className="glass-card rounded-2xl p-6 space-y-4">
-            {[
-              { label: "Business Name", key: "name", type: "text" },
-              { label: "Welcome Message", key: "welcome_message", type: "textarea" },
-              { label: "Google Place ID", key: "google_place_id", type: "text" },
-              { label: "Business Category", key: "business_category", type: "text" },
-              { label: "Contact Email", key: "contact_email", type: "text" },
-              { label: "Contact Phone", key: "contact_phone", type: "text" },
-              { label: "Location City", key: "location_city", type: "text" },
-            ].map(f => (
-              <div key={f.key}>
-                <label className="block text-sm font-medium text-slate-300 mb-2">{f.label}</label>
-                {f.type === "textarea" ? <textarea value={settingsForm[f.key as keyof typeof settingsForm] as string} onChange={(e) => setSettingsForm({ ...settingsForm, [f.key]: e.target.value })} disabled={!editingSettings} rows={2} className="w-full px-4 py-3 rounded-xl bg-slate-900/50 border border-white/10 text-white text-sm focus:outline-none focus:border-primary-500 disabled:opacity-60 resize-none" /> : <input type="text" value={settingsForm[f.key as keyof typeof settingsForm] as string} onChange={(e) => setSettingsForm({ ...settingsForm, [f.key]: e.target.value })} disabled={!editingSettings} className="w-full px-4 py-3 rounded-xl bg-slate-900/50 border border-white/10 text-white text-sm focus:outline-none focus:border-primary-500 disabled:opacity-60" />}
-              </div>
-            ))}
-            <div className="flex items-center gap-3"><label className="flex items-center gap-3 cursor-pointer"><input type="checkbox" checked={settingsForm.public_review_enabled} onChange={(e) => setSettingsForm({ ...settingsForm, public_review_enabled: e.target.checked })} disabled={!editingSettings} className="w-5 h-5 rounded accent-primary-500" /><span className="text-sm text-slate-300">Public review flow enabled</span></label></div>
-            <div className="flex gap-3 pt-2">
-              {editingSettings ? (<><button onClick={handleSaveSettings} className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-primary-600 to-primary-500 text-white text-sm font-medium hover:-translate-y-0.5 transition-all">Save</button><button onClick={() => { setEditingSettings(false); if (business) setSettingsForm({ name: business.name, welcome_message: business.welcome_message, google_place_id: business.google_place_id || "", public_review_enabled: business.public_review_enabled, business_category: business.business_category || "", contact_email: business.contact_email || "", contact_phone: business.contact_phone || "", location_city: business.location_city || "" }); }} className="px-6 py-2.5 rounded-xl glass text-slate-300 text-sm font-medium hover:bg-white/5">Cancel</button></>) : (<button onClick={() => setEditingSettings(true)} className="px-6 py-2.5 rounded-xl glass text-white text-sm font-medium hover:bg-white/5 transition-all">Edit Settings</button>)}
+  // Find active module
+  let activeModuleDef: ModuleDef | null = null;
+  for (const group of NAV_GROUPS) {
+    const found = group.modules.find((m) => m.id === activeModule);
+    if (found) { activeModuleDef = found; break; }
+  }
+
+  const roleLabel = role === 'super_admin' ? 'Super Admin' : role === 'partner_admin' ? 'Partner Admin' : 'Business Admin';
+
+  function renderSidebar() {
+    return (
+      <div className="flex flex-col h-full">
+        <div className="p-4 border-b border-white/10">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500/20 to-cyan-500/20 border border-blue-400/30 flex items-center justify-center">
+              <span className="text-blue-400 font-bold text-sm">R</span>
             </div>
-          </div>
-          <div className="glass-card rounded-2xl p-6">
-            <h3 className="text-lg font-bold text-white mb-3 flex items-center gap-2"><QrCodeIcon className="w-5 h-5 text-primary-400" /> Review Link</h3>
-            <div className="flex items-center gap-3"><code className="flex-1 px-4 py-3 rounded-xl bg-slate-900/50 border border-white/10 text-primary-300 text-sm truncate">{window.location.origin}/#/review/{business.slug}</code><button onClick={copyReviewLink} className="px-4 py-3 rounded-xl glass text-white hover:bg-white/10 transition-all"><Copy className="w-4 h-4" /></button></div>
-            <a href={`#/review/${business.slug}`} className="mt-3 inline-flex items-center gap-2 text-sm text-primary-400 hover:text-primary-300"><ExternalLink className="w-4 h-4" /> Open public review page</a>
+            <span className="text-white font-semibold">RootNova</span>
           </div>
         </div>
-      );
-    }
-    for (const group of navGroups) for (const mod of group.modules) if (mod.key === activeModule && mod.roles.includes(currentRole)) return mod.render();
-    return <div className="text-center py-20 text-slate-500">Module not available for your role.</div>;
-  };
 
-  const roleLabel = currentRole === "super_admin" ? "Super Admin" : currentRole === "partner_admin" ? "Partner Admin" : "Business Admin";
+        <nav className="flex-1 overflow-y-auto py-2">
+          {NAV_GROUPS.map((group) => {
+            const visibleModules = group.modules.filter((m) => m.roles.includes(role));
+            if (visibleModules.length === 0) return null;
+            const collapsed = collapsedGroups.has(group.id);
+
+            return (
+              <div key={group.id} className="mb-1">
+                <button
+                  onClick={() => toggleGroup(group.id)}
+                  className="w-full flex items-center gap-2 px-4 py-2 text-xs font-semibold text-zinc-500 uppercase tracking-wider hover:text-zinc-300 transition-colors"
+                >
+                  {collapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                  <group.icon className="w-3.5 h-3.5" />
+                  {group.label}
+                </button>
+                {!collapsed && (
+                  <div className="space-y-0.5">
+                    {visibleModules.map((m) => (
+                      <button
+                        key={m.id}
+                        onClick={() => { setActiveModule(m.id); setSettingsMode(false); setSidebarOpen(false); }}
+                        className={`w-full flex items-center gap-3 px-8 py-2 text-sm transition-colors ${
+                          activeModule === m.id && !settingsMode
+                            ? 'bg-blue-500/10 text-blue-300 border-l-2 border-blue-400'
+                            : 'text-zinc-400 hover:text-white hover:bg-white/5 border-l-2 border-transparent'
+                        }`}
+                      >
+                        <m.icon className="w-4 h-4" />
+                        {m.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </nav>
+
+        <div className="p-3 border-t border-white/10 space-y-1">
+          <button
+            onClick={() => setSettingsMode(true)}
+            className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+              settingsMode ? 'bg-blue-500/10 text-blue-300' : 'text-zinc-400 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            <Settings className="w-4 h-4" /> Settings
+          </button>
+          <button
+            onClick={signOut}
+            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-zinc-400 hover:text-red-400 hover:bg-white/5 transition-colors"
+          >
+            <LogOut className="w-4 h-4" /> Sign Out
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <>
+    <div className="relative min-h-screen flex">
       <SpatialBackground />
-      <div className="min-h-screen flex">
-        <aside className="w-64 hidden lg:flex flex-col glass-strong border-r border-white/10 min-h-screen p-3 sticky top-0 overflow-y-auto" style={{ maxHeight: "100vh" }}>
-          <div className="flex items-center gap-3 mb-6 px-2">
-            {business.logo_url ? <img src={business.logo_url} alt={business.name} className="w-9 h-9 rounded-lg object-cover" /> : <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center"><Sparkles className="w-4 h-4 text-white" /></div>}
-            <div className="min-w-0"><h2 className="text-sm font-bold text-white truncate">{business.name}</h2><p className="text-xs text-slate-500">{roleLabel}</p></div>
-          </div>
-          <nav className="space-y-1 flex-1">
-            {navGroups.map(group => {
-              const visibleMods = group.modules.filter(m => m.roles.includes(currentRole));
-              if (visibleMods.length === 0) return null;
-              const expanded = expandedGroups.has(group.label);
-              return (
-                <div key={group.label}>
-                  <button onClick={() => toggleGroup(group.label)} className="sidebar-link w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold uppercase tracking-wider text-slate-500">
-                    {group.icon} <span className="flex-1 text-left">{group.label}</span>
-                    {expanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-                  </button>
-                  {expanded && visibleMods.map(mod => (
-                    <button key={mod.key} onClick={() => setActiveModule(mod.key)} className={`sidebar-link w-full flex items-center gap-3 pl-6 pr-3 py-2 rounded-lg text-sm font-medium ${activeModule === mod.key ? "sidebar-link-active text-white" : "text-slate-400"}`}>{mod.icon} {mod.label}</button>
-                  ))}
-                </div>
-              );
-            })}
-          </nav>
-          <div className="pt-3 border-t border-white/5 space-y-1">
-            <button onClick={copyReviewLink} className="sidebar-link w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-slate-400 hover:text-white"><QrCodeIcon className="w-4 h-4" /> Copy Review Link</button>
-            <a href={`#/review/${business.slug}`} className="sidebar-link w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-slate-400 hover:text-white"><ExternalLink className="w-4 h-4" /> Public Page</a>
-            <button onClick={() => { signOut(); navigate("/"); }} className="sidebar-link w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-slate-400 hover:text-error-400"><LogOut className="w-4 h-4" /> Sign Out</button>
-          </div>
-        </aside>
 
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">
-          <div className="lg:hidden mb-4 flex items-center gap-3">
-            {business.logo_url && <img src={business.logo_url} alt={business.name} className="w-8 h-8 rounded-lg object-cover" />}
-            <select value={activeModule} onChange={(e) => setActiveModule(e.target.value)} className="flex-1 px-3 py-2 rounded-lg glass border border-white/10 text-white text-sm">
-              {navGroups.map(g => g.modules.filter(m => m.roles.includes(currentRole)).map(m => <option key={m.key} value={m.key}>{g.label} / {m.label}</option>))}
-            </select>
-            <button onClick={() => { signOut(); navigate("/"); }} className="p-2 rounded-lg glass text-slate-400"><LogOut className="w-4 h-4" /></button>
+      {/* Desktop sidebar */}
+      <aside className="relative z-10 w-64 shrink-0 bg-black/40 backdrop-blur-xl border-r border-white/10 hidden lg:block">
+        {renderSidebar()}
+      </aside>
+
+      {/* Mobile sidebar */}
+      {sidebarOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden" onClick={() => setSidebarOpen(false)}>
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <aside className="absolute left-0 top-0 bottom-0 w-64 bg-zinc-950 border-r border-white/10" onClick={(e) => e.stopPropagation()}>
+            {renderSidebar()}
+          </aside>
+        </div>
+      )}
+
+      {/* Main content */}
+      <div className="relative z-10 flex-1 flex flex-col min-w-0">
+        {/* Header */}
+        <header className="h-14 border-b border-white/10 bg-black/30 backdrop-blur-xl flex items-center justify-between px-4">
+          <div className="flex items-center gap-3">
+            <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-2 rounded-lg hover:bg-white/10 text-zinc-400">
+              <Menu className="w-5 h-5" />
+            </button>
+            <div>
+              <h1 className="text-sm font-semibold text-white">{settingsMode ? 'Settings' : activeModuleDef?.label || 'Dashboard'}</h1>
+              <p className="text-xs text-zinc-500">{business?.name} · {roleLabel}</p>
+            </div>
           </div>
-          {renderActiveModule()}
+          <div className="flex items-center gap-2">
+            <button onClick={copyReviewLink} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-zinc-300 hover:bg-white/10 transition-colors">
+              <Copy className="w-3.5 h-3.5" /> Copy Link
+            </button>
+            {business?.slug && (
+              <a href={`#/review/${business.slug}`} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-zinc-300 hover:bg-white/10 transition-colors">
+                <ExternalLink className="w-3.5 h-3.5" /> View Page
+              </a>
+            )}
+          </div>
+        </header>
+
+        {/* Content */}
+        <main className="flex-1 overflow-y-auto p-4 lg:p-6">
+          {settingsMode ? (
+            <div className="max-w-2xl space-y-5">
+              <div className="rounded-xl bg-white/[0.03] border border-white/10 p-6">
+                <h2 className="text-lg font-semibold text-white mb-4">Business Profile</h2>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-400 mb-1.5">Business Name</label>
+                    <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-blue-400/50" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-400 mb-1.5">Industry</label>
+                    <input type="text" value={editIndustry} onChange={(e) => setEditIndustry(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-blue-400/50" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-400 mb-1.5">Phone</label>
+                    <input type="text" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-blue-400/50" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-400 mb-1.5">Website</label>
+                    <input type="text" value={editWebsite} onChange={(e) => setEditWebsite(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-blue-400/50" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-400 mb-1.5">Google Review URL</label>
+                    <input type="text" value={editGoogleUrl} onChange={(e) => setEditGoogleUrl(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-blue-400/50" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-400 mb-1.5">Description</label>
+                    <textarea value={editDescription} onChange={(e) => setEditDescription(e.target.value)} rows={3} className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-blue-400/50" />
+                  </div>
+                </div>
+                <div className="flex justify-end mt-5">
+                  <button onClick={saveSettings} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-500/20 border border-blue-400/30 text-blue-200 hover:bg-blue-500/30 text-sm font-medium transition-colors">
+                    <Save className="w-4 h-4" /> Save Changes
+                  </button>
+                </div>
+              </div>
+
+              <div className="rounded-xl bg-white/[0.03] border border-white/10 p-6">
+                <h2 className="text-lg font-semibold text-white mb-4">Account</h2>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between"><span className="text-zinc-400">Email</span><span className="text-white">{user?.email}</span></div>
+                  <div className="flex justify-between"><span className="text-zinc-400">Role</span><span className="text-blue-300">{roleLabel}</span></div>
+                  {organization && <div className="flex justify-between"><span className="text-zinc-400">Organization</span><span className="text-white">{organization.name}</span></div>}
+                </div>
+              </div>
+            </div>
+          ) : activeModuleDef && business ? (
+            activeModuleDef.render(business.id, organization?.id)
+          ) : (
+            <div className="text-center py-20 text-zinc-500">Select a module from the sidebar.</div>
+          )}
         </main>
       </div>
-    </>
+    </div>
   );
 }

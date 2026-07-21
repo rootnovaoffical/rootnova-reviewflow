@@ -1,56 +1,47 @@
-import DataManager, { ColumnDef } from "../components/DataManager";
+import DataManager from '../components/DataManager';
 
-const orgCols: ColumnDef[] = [
-  { key: "name", label: "Name", type: "text", editable: true, required: true },
-  { key: "slug", label: "Slug", type: "text", editable: true },
-  { key: "status", label: "Status", type: "select", options: ["active", "suspended", "trial", "churned"], editable: true, defaultValue: "active" },
-  { key: "plan_id", label: "Plan", type: "text", hideInTable: true, editable: true },
-  { key: "created_at", label: "Created" },
-  { key: "updated_at", label: "Updated", hideInTable: true },
+const orgColumns = [
+  { key: 'name', label: 'Name', type: 'text' as const, required: true, showInTable: true },
+  { key: 'slug', label: 'Slug', type: 'text' as const, required: true, showInTable: true },
+  { key: 'description', label: 'Description', type: 'textarea' as const, showInTable: true },
 ];
 
-const memberCols: ColumnDef[] = [
-  { key: "role", label: "Role", type: "select", options: ["owner", "admin", "member", "viewer"], editable: true, required: true, defaultValue: "member" },
-  { key: "status", label: "Status", type: "select", options: ["active", "invited", "removed"], editable: true, defaultValue: "active" },
-  { key: "user_id", label: "User ID", type: "text", editable: true, required: true },
-  { key: "created_at", label: "Created" },
+const memberColumns = [
+  { key: 'user_id', label: 'User ID', type: 'text' as const, required: true, showInTable: true },
+  { key: 'role', label: 'Role', type: 'select' as const, options: ['owner', 'admin', 'manager', 'viewer'], showInTable: true },
 ];
 
-const branchCols: ColumnDef[] = [
-  { key: "name", label: "Branch Name", type: "text", editable: true, required: true },
-  { key: "location", label: "Location", type: "text", editable: true },
-  { key: "status", label: "Status", type: "select", options: ["active", "inactive"], editable: true, defaultValue: "active" },
-  { key: "created_at", label: "Created" },
+const branchColumns = [
+  { key: 'business_id', label: 'Business ID', type: 'text' as const, required: true, showInTable: true },
+  { key: 'name', label: 'Branch Name', type: 'text' as const, required: true, showInTable: true },
+  { key: 'region', label: 'Region', type: 'text' as const, showInTable: true },
 ];
 
-const regionCols: ColumnDef[] = [
-  { key: "name", label: "Region Name", type: "text", editable: true, required: true },
-  { key: "status", label: "Status", type: "select", options: ["active", "inactive"], editable: true, defaultValue: "active" },
-  { key: "created_at", label: "Created" },
+const regionColumns = [
+  { key: 'name', label: 'Region Name', type: 'text' as const, required: true, showInTable: true },
 ];
 
-const policyCols: ColumnDef[] = [
-  { key: "name", label: "Policy Name", type: "text", editable: true, required: true },
-  { key: "status", label: "Status", type: "select", options: ["active", "draft", "archived"], editable: true, defaultValue: "active" },
-  { key: "created_at", label: "Created" },
+const policyColumns = [
+  { key: 'name', label: 'Policy Name', type: 'text' as const, required: true, showInTable: true },
+  { key: 'description', label: 'Description', type: 'textarea' as const, showInTable: true },
 ];
 
-export function OrganizationsModule() {
-  return <DataManager table="organizations" columns={orgCols} title="Organizations" subtitle="Manage all organizations on the platform" defaultValues={{ status: "active" }} />;
+export function OrganizationsModule({ organizationId }: { organizationId: string }) {
+  return <DataManager table="organizations" organizationId={organizationId} columns={orgColumns} />;
 }
 
 export function OrganizationMembersModule({ organizationId }: { organizationId: string }) {
-  return <DataManager table="organization_members" organizationId={organizationId} columns={memberCols} title="Organization Members" subtitle="Team members and roles" defaultValues={{ role: "member", status: "active" }} />;
+  return <DataManager table="organization_members" organizationId={organizationId} columns={memberColumns} defaultValues={{ role: 'viewer' }} />;
 }
 
 export function EnterpriseBranchesModule({ organizationId }: { organizationId: string }) {
-  return <DataManager table="enterprise_branches" organizationId={organizationId} columns={branchCols} title="Enterprise Branches" subtitle="Branch locations" defaultValues={{ status: "active" }} />;
+  return <DataManager table="enterprise_branches" organizationId={organizationId} columns={branchColumns} />;
 }
 
 export function EnterpriseRegionsModule({ organizationId }: { organizationId: string }) {
-  return <DataManager table="enterprise_regions" organizationId={organizationId} columns={regionCols} title="Enterprise Regions" subtitle="Regional groupings" defaultValues={{ status: "active" }} />;
+  return <DataManager table="enterprise_regions" organizationId={organizationId} columns={regionColumns} />;
 }
 
 export function OrganizationPoliciesModule({ organizationId }: { organizationId: string }) {
-  return <DataManager table="organization_policies" organizationId={organizationId} columns={policyCols} title="Organization Policies" subtitle="Governance policies" defaultValues={{ status: "active" }} />;
+  return <DataManager table="organization_policies" organizationId={organizationId} columns={policyColumns} />;
 }

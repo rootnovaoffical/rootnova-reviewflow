@@ -1,209 +1,297 @@
-import { useState, useEffect, useCallback } from "react";
-import { Plus, Trash2, Edit3, X, Save, Search } from "lucide-react";
-import { supabase } from "../lib/supabase";
-import { useToast } from "../context/ToastContext";
+import { useState, useEffect, useCallback } from 'react';
+import { supabase } from '../lib/supabase';
+import { useToast } from '../context/ToastContext';
+import { Plus, Pencil, Trash2, X, Search, ChevronLeft, ChevronRight } from 'lucide-react';
+
+export type ColumnType = 'text' | 'number' | 'boolean' | 'select' | 'textarea' | 'date' | 'json' | 'array';
 
 export interface ColumnDef {
   key: string;
   label: string;
-  type?: "text" | "number" | "boolean" | "select" | "textarea" | "date" | "json" | "array";
+  type: ColumnType;
   options?: string[];
-  editable?: boolean;
   required?: boolean;
-  hideInTable?: boolean;
-  defaultValue?: unknown;
+  editable?: boolean;
+  showInTable?: boolean;
 }
 
-export interface DataManagerProps {
+interface DataManagerProps {
   table: string;
   businessId?: string;
   organizationId?: string;
   columns: ColumnDef[];
-  title: string;
-  subtitle?: string;
   filter?: Record<string, unknown>;
   defaultValues?: Record<string, unknown>;
-  searchable?: boolean;
   pageSize?: number;
 }
 
-export default function DataManager({ table, businessId, organizationId, columns, title, subtitle, filter, defaultValues, searchable = true, pageSize = 25 }: DataManagerProps) {
+export default function DataManager({
+  table,
+  businessId,
+  organizationId,
+  columns,
+  filter,
+  defaultValues,
+  pageSize = 25,
+}: DataManagerProps) {
   const { showToast } = useToast();
   const [rows, setRows] = useState<Record<string, unknown>[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [editing, setEditing] = useState<Record<string, unknown> | null>(null);
-  const [form, setForm] = useState<Record<string, unknown>>({});
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
+  const [showForm, setShowForm] = useState(false);
+  const [editingRow, setEditingRow] = useState<Record<string, unknown> | null>(null);
+  const [formData, setFormData] = useState<Record<string, unknown>>({});
 
-  const load = useCallback(async () => {
+  const editableColumns = columns.filter((c) => c.editable !== false);
+  const tableColumns = columns.filter((c) => c.showInTable !== false);
+
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      let q = supabase.from(table).select("*");
-      const conditions: Record<string, unknown> = { ...filter };
-      if (businessId) conditions.business_id = businessId;
-      if (organizationId) conditions.organization_id = organizationId;
-      for (const [k, v] of Object.entries(conditions)) q = q.eq(k, v);
-      q = q.order("created_at", { ascending: false }).limit(200);
-      const { data, error } = await q;
+      let query = supabase.from(table).select('*');
+      if (businessId) query = query.eq('business_id', businessId);
+      if (organizationId) query = query.eq('organization_id', organizationId);
+      if (filter) {
+        for (const [k, v] of Object.entries(filter)) {
+          query = query.eq(k, v as string);
+        }
+      }
+      query = query.order('created_at', { ascending: false }).limit(200);
+      const { data, error } = await query;
       if (error) throw error;
-      setRows((data || []) as Record<string, unknown>[]);
-    } catch (err) {
-      showToast(`Failed to load: ${(err as Error).message}`, "error");
-      setRows([]);
+      setRows(data || []);
+    } catch (e) {
+      showToast('error', `Failed to load: ${(e as Error).message}`);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [table, businessId, organizationId, filter, showToast]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
-  const editableCols = columns.filter(c => c.editable !== false);
-  const tableCols = columns.filter(c => !c.hideInTable);
+  const filteredRows = rows.filter((row) => {
+    if (!search) return true;
+    return tableColumns.some((col) => {
+      const val = row[col.key];
+      return val != null && String(val).toLowerCase().includes(search.toLowerCase());
+    });
+  });
 
-  let filtered = rows;
-  if (search && searchable) {
-    const s = search.toLowerCase();
-    filtered = rows.filter(r => tableCols.some(c => String(r[c.key] || "").toLowerCase().includes(s)));
+  const totalPages = Math.ceil(filteredRows.length / pageSize);
+  const pageRows = filteredRows.slice(page * pageSize, (page + 1) * pageSize);
+
+  function openCreate() {
+    setEditingRow(null);
+    setFormData({ ...defaultValues, ...(businessId ? { business_id: businessId } : {}), ...(organizationId ? { organization_id: organizationId } : {}) });
+    setShowForm(true);
   }
-  const paged = filtered.slice(page * pageSize, (page + 1) * pageSize);
-  const totalPages = Math.ceil(filtered.length / pageSize);
 
-  const startCreate = () => {
-    const f: Record<string, unknown> = {};
-    editableCols.forEach(c => { f[c.key] = c.defaultValue ?? (c.type === "boolean" ? false : c.type === "number" ? 0 : c.type === "array" ? [] : c.type === "json" ? {} : ""); });
-    if (defaultValues) Object.assign(f, defaultValues);
-    if (businessId) f.business_id = businessId;
-    if (organizationId) f.organization_id = organizationId;
-    setForm(f); setEditing(null); setShowForm(true);
-  };
+  function openEdit(row: Record<string, unknown>) {
+    setEditingRow(row);
+    setFormData({ ...row });
+    setShowForm(true);
+  }
 
-  const startEdit = (row: Record<string, unknown>) => {
-    const f: Record<string, unknown> = {};
-    editableCols.forEach(c => { f[c.key] = row[c.key] ?? c.defaultValue ?? ""; });
-    setForm(f); setEditing(row); setShowForm(true);
-  };
-
-  const handleSave = async () => {
-    for (const c of editableCols) {
-      if (c.required && !form[c.key]) { showToast(`${c.label} is required`, "error"); return; }
-    }
+  async function save() {
     try {
-      const payload: Record<string, unknown> = { ...form };
-      for (const c of editableCols) {
-        if (c.type === "array" && typeof payload[c.key] === "string") payload[c.key] = (payload[c.key] as string).split("\n").map((s: string) => s.trim()).filter(Boolean);
-        if (c.type === "json" && typeof payload[c.key] === "string") { try { payload[c.key] = JSON.parse(payload[c.key] as string); } catch { payload[c.key] = {}; } }
-        if (c.type === "number") payload[c.key] = Number(payload[c.key]) || 0;
+      const payload: Record<string, unknown> = {};
+      for (const col of editableColumns) {
+        let val = formData[col.key];
+        if (col.type === 'array' && typeof val === 'string') {
+          val = (val as string).split('\n').map((s) => s.trim()).filter(Boolean);
+        } else if (col.type === 'json' && typeof val === 'string') {
+          try { val = JSON.parse(val); } catch { /* keep string */ }
+        } else if (col.type === 'number' && val != null && val !== '') {
+          val = Number(val);
+        } else if (col.type === 'boolean') {
+          val = Boolean(val);
+        }
+        if (col.required && (val == null || val === '')) {
+          showToast('error', `${col.label} is required`);
+          return;
+        }
+        payload[col.key] = val;
       }
-      if (editing) {
-        const { error } = await supabase.from(table).update(payload).eq("id", editing.id);
+
+      if (editingRow) {
+        const { error } = await supabase.from(table).update(payload).eq('id', editingRow.id as string);
         if (error) throw error;
-        showToast("Updated successfully!", "success");
+        showToast('success', 'Updated successfully');
       } else {
         const { error } = await supabase.from(table).insert(payload);
         if (error) throw error;
-        showToast("Created successfully!", "success");
+        showToast('success', 'Created successfully');
       }
-      setShowForm(false); setEditing(null); load();
-    } catch (err) { showToast(`Save failed: ${(err as Error).message}`, "error"); }
-  };
+      setShowForm(false);
+      loadData();
+    } catch (e) {
+      showToast('error', `Save failed: ${(e as Error).message}`);
+    }
+  }
 
-  const handleDelete = async (id: string) => {
-    try { await supabase.from(table).delete().eq("id", id); showToast("Deleted", "success"); load(); }
-    catch (err) { showToast(`Delete failed: ${(err as Error).message}`, "error"); }
-  };
+  async function deleteRow(id: string) {
+    if (!confirm('Delete this record?')) return;
+    try {
+      const { error } = await supabase.from(table).delete().eq('id', id);
+      if (error) throw error;
+      showToast('success', 'Deleted');
+      loadData();
+    } catch (e) {
+      showToast('error', `Delete failed: ${(e as Error).message}`);
+    }
+  }
 
-  if (loading) return <div className="flex justify-center py-20"><div className="w-8 h-8 border-4 border-primary-500/30 border-t-primary-500 rounded-full animate-spin" /></div>;
+  function renderInput(col: ColumnDef) {
+    const val = formData[col.key] ?? '';
+    const baseClass = 'w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder-zinc-500 focus:outline-none focus:border-blue-400/50 transition-colors';
+
+    switch (col.type) {
+      case 'textarea':
+        return <textarea value={val as string} onChange={(e) => setFormData({ ...formData, [col.key]: e.target.value })} className={baseClass} rows={3} placeholder={col.label} />;
+      case 'boolean':
+        return (
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={Boolean(val)} onChange={(e) => setFormData({ ...formData, [col.key]: e.target.checked })} className="w-5 h-5 rounded accent-blue-500" />
+            <span className="text-sm text-zinc-300">{Boolean(val) ? 'Yes' : 'No'}</span>
+          </label>
+        );
+      case 'select':
+        return (
+          <select value={val as string} onChange={(e) => setFormData({ ...formData, [col.key]: e.target.value })} className={baseClass}>
+            <option value="">— Select —</option>
+            {(col.options || []).map((o) => <option key={o} value={o} className="bg-zinc-900">{o}</option>)}
+          </select>
+        );
+      case 'number':
+        return <input type="number" value={val as number | string} onChange={(e) => setFormData({ ...formData, [col.key]: e.target.value })} className={baseClass} placeholder={col.label} />;
+      case 'date':
+        return <input type="date" value={val as string ?? ''} onChange={(e) => setFormData({ ...formData, [col.key]: e.target.value })} className={baseClass} />;
+      case 'json':
+        return <textarea value={typeof val === 'string' ? val : JSON.stringify(val, null, 2)} onChange={(e) => setFormData({ ...formData, [col.key]: e.target.value })} className={baseClass} rows={4} placeholder='{}' />;
+      case 'array':
+        return <textarea value={Array.isArray(val) ? val.join('\n') : (val as string ?? '')} onChange={(e) => setFormData({ ...formData, [col.key]: e.target.value })} className={baseClass} rows={3} placeholder="One item per line" />;
+      default:
+        return <input type="text" value={val as string} onChange={(e) => setFormData({ ...formData, [col.key]: e.target.value })} className={baseClass} placeholder={col.label} />;
+    }
+  }
+
+  function renderCell(row: Record<string, unknown>, col: ColumnDef) {
+    const val = row[col.key];
+    if (val == null) return <span className="text-zinc-600">—</span>;
+    if (col.type === 'boolean') return val ? <span className="text-emerald-400">Yes</span> : <span className="text-zinc-500">No</span>;
+    if (col.type === 'array' && Array.isArray(val)) return <span className="text-xs">{val.length} items</span>;
+    if (col.type === 'json' && typeof val === 'object') return <span className="text-xs text-zinc-400">JSON</span>;
+    if (col.type === 'date' || col.key === 'created_at' || col.key === 'updated_at') {
+      return <span className="text-xs text-zinc-400">{new Date(val as string).toLocaleDateString()}</span>;
+    }
+    const str = String(val);
+    return <span className="text-sm text-zinc-300">{str.length > 60 ? str.slice(0, 60) + '…' : str}</span>;
+  }
 
   return (
-    <div className="space-y-4 screen-enter">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div><h1 className="text-xl font-bold text-white">{title}</h1>{subtitle && <p className="text-sm text-slate-400">{subtitle}</p>}</div>
-        <button onClick={startCreate} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-primary-600 to-primary-500 text-white text-sm font-medium hover:-translate-y-0.5 transition-all"><Plus className="w-4 h-4" /> Add New</button>
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="relative flex-1 max-w-xs">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setPage(0); }}
+            placeholder="Search…"
+            className="w-full pl-9 pr-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder-zinc-500 text-sm focus:outline-none focus:border-blue-400/50"
+          />
+        </div>
+        <button
+          onClick={openCreate}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-500/20 border border-blue-400/30 text-blue-200 hover:bg-blue-500/30 transition-colors text-sm font-medium"
+        >
+          <Plus className="w-4 h-4" /> Add New
+        </button>
       </div>
 
-      {searchable && (
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-          <input type="text" value={search} onChange={(e) => { setSearch(e.target.value); setPage(0); }} placeholder="Search..." className="w-full pl-10 pr-4 py-2.5 rounded-xl glass border border-white/10 text-white text-sm focus:outline-none focus:border-primary-500" />
-        </div>
+      {loading ? (
+        <div className="text-center py-12 text-zinc-500">Loading…</div>
+      ) : pageRows.length === 0 ? (
+        <div className="text-center py-12 text-zinc-500">No records found.</div>
+      ) : (
+        <>
+          <div className="overflow-x-auto rounded-xl border border-white/10 bg-white/[0.02]">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-white/10 bg-white/[0.03]">
+                  {tableColumns.map((col) => (
+                    <th key={col.key} className="text-left px-4 py-3 text-xs font-semibold text-zinc-400 uppercase tracking-wider">{col.label}</th>
+                  ))}
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-zinc-400 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pageRows.map((row, i) => (
+                  <tr key={row.id as string ?? i} className="border-b border-white/5 hover:bg-white/[0.03] transition-colors">
+                    {tableColumns.map((col) => (
+                      <td key={col.key} className="px-4 py-3">{renderCell(row, col)}</td>
+                    ))}
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex justify-end gap-2">
+                        <button onClick={() => openEdit(row)} className="p-1.5 rounded-lg hover:bg-white/10 text-zinc-400 hover:text-blue-400 transition-colors">
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                        <button onClick={() => deleteRow(row.id as string)} className="p-1.5 rounded-lg hover:bg-white/10 text-zinc-400 hover:text-red-400 transition-colors">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-zinc-500">Page {page + 1} of {totalPages}</span>
+              <div className="flex gap-2">
+                <button onClick={() => setPage(Math.max(0, page - 1))} disabled={page === 0} className="p-2 rounded-lg bg-white/5 border border-white/10 disabled:opacity-30 hover:bg-white/10 transition-colors">
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <button onClick={() => setPage(Math.min(totalPages - 1, page + 1))} disabled={page >= totalPages - 1} className="p-2 rounded-lg bg-white/5 border border-white/10 disabled:opacity-30 hover:bg-white/10 transition-colors">
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {showForm && (
-        <div className="glass-card rounded-2xl p-5 space-y-3">
-          <div className="flex items-center justify-between"><h3 className="text-base font-bold text-white">{editing ? "Edit" : "Create New"}</h3><button onClick={() => { setShowForm(false); setEditing(null); }} className="text-slate-400 hover:text-white"><X className="w-5 h-5" /></button></div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {editableCols.map(c => (
-              <div key={c.key} className={c.type === "textarea" ? "sm:col-span-2" : ""}>
-                <label className="block text-xs font-medium text-slate-400 mb-1">{c.label}{c.required && <span className="text-error-400"> *</span>}</label>
-                {c.type === "select" ? (
-                  <select value={String(form[c.key] || "")} onChange={(e) => setForm({ ...form, [c.key]: e.target.value })} className="w-full px-3 py-2 rounded-lg bg-slate-900/50 border border-white/10 text-white text-sm focus:outline-none focus:border-primary-500">
-                    <option value="">Select...</option>
-                    {c.options?.map(o => <option key={o} value={o}>{o}</option>)}
-                  </select>
-                ) : c.type === "textarea" ? (
-                  <textarea value={String(form[c.key] || "")} onChange={(e) => setForm({ ...form, [c.key]: e.target.value })} rows={3} className="w-full px-3 py-2 rounded-lg bg-slate-900/50 border border-white/10 text-white text-sm focus:outline-none focus:border-primary-500 resize-none" />
-                ) : c.type === "boolean" ? (
-                  <label className="flex items-center gap-2 mt-1"><input type="checkbox" checked={!!form[c.key]} onChange={(e) => setForm({ ...form, [c.key]: e.target.checked })} className="w-4 h-4 rounded accent-primary-500" /><span className="text-sm text-slate-300">Enabled</span></label>
-                ) : c.type === "array" ? (
-                  <textarea value={Array.isArray(form[c.key]) ? (form[c.key] as string[]).join("\n") : String(form[c.key] || "")} onChange={(e) => setForm({ ...form, [c.key]: e.target.value })} rows={3} placeholder="One per line" className="w-full px-3 py-2 rounded-lg bg-slate-900/50 border border-white/10 text-white text-sm focus:outline-none focus:border-primary-500 resize-none" />
-                ) : c.type === "json" ? (
-                  <textarea value={typeof form[c.key] === "object" ? JSON.stringify(form[c.key], null, 2) : String(form[c.key] || "{}")} onChange={(e) => setForm({ ...form, [c.key]: e.target.value })} rows={3} className="w-full px-3 py-2 rounded-lg bg-slate-900/50 border border-white/10 text-white text-sm focus:outline-none focus:border-primary-500 resize-none font-mono" />
-                ) : (
-                  <input type={c.type === "number" ? "number" : c.type === "date" ? "date" : "text"} value={String(form[c.key] || "")} onChange={(e) => setForm({ ...form, [c.key]: e.target.value })} className="w-full px-3 py-2 rounded-lg bg-slate-900/50 border border-white/10 text-white text-sm focus:outline-none focus:border-primary-500" />
-                )}
-              </div>
-            ))}
-          </div>
-          <button onClick={handleSave} className="flex items-center gap-2 px-5 py-2 rounded-xl bg-gradient-to-r from-primary-600 to-primary-500 text-white text-sm font-medium hover:-translate-y-0.5 transition-all"><Save className="w-4 h-4" /> Save</button>
-        </div>
-      )}
-
-      <div className="glass-card rounded-2xl overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-white/10">
-                {tableCols.map(c => <th key={c.key} className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-400">{c.label}</th>)}
-                <th className="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {paged.length === 0 ? (
-                <tr><td colSpan={tableCols.length + 1} className="text-center py-12 text-slate-500 text-sm">No records found.</td></tr>
-              ) : paged.map((row, i) => (
-                <tr key={String(row.id || i)} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                  {tableCols.map(c => (
-                    <td key={c.key} className="px-4 py-3 text-sm text-slate-300 max-w-xs truncate">
-                      {c.type === "boolean" ? <span className={`px-2 py-0.5 rounded-full text-xs ${row[c.key] ? "bg-success-500/15 text-success-400" : "bg-slate-700 text-slate-400"}`}>{row[c.key] ? "Yes" : "No"}</span>
-                      : c.type === "date" || c.key === "created_at" || c.key === "updated_at" ? <span className="text-xs text-slate-500">{row[c.key] ? new Date(String(row[c.key])).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "-"}</span>
-                      : c.type === "array" ? <span className="text-xs">{Array.isArray(row[c.key]) ? `${(row[c.key] as unknown[]).length} items` : "-"}</span>
-                      : c.type === "json" ? <span className="text-xs text-slate-500">{typeof row[c.key] === "object" && row[c.key] ? "JSON" : "-"}</span>
-                      : String(row[c.key] ?? "-")}
-                    </td>
-                  ))}
-                  <td className="px-4 py-3 text-right">
-                    <div className="flex justify-end gap-1">
-                      <button onClick={() => startEdit(row)} className="p-1.5 rounded-lg glass text-slate-300 hover:text-white hover:bg-white/10 transition-all"><Edit3 className="w-3.5 h-3.5" /></button>
-                      <button onClick={() => handleDelete(String(row.id))} className="p-1.5 rounded-lg glass text-error-400 hover:bg-error-500/10 transition-all"><Trash2 className="w-3.5 h-3.5" /></button>
-                    </div>
-                  </td>
-                </tr>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowForm(false)}>
+          <div className="w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-2xl bg-zinc-900/95 border border-white/10 p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-white">{editingRow ? 'Edit Record' : 'New Record'}</h3>
+              <button onClick={() => setShowForm(false)} className="p-1.5 rounded-lg hover:bg-white/10 text-zinc-400">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              {editableColumns.map((col) => (
+                <div key={col.key}>
+                  <label className="block text-xs font-medium text-zinc-400 mb-1.5">
+                    {col.label}{col.required && <span className="text-red-400"> *</span>}
+                  </label>
+                  {renderInput(col)}
+                </div>
               ))}
-            </tbody>
-          </table>
-        </div>
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-white/10">
-            <span className="text-xs text-slate-500">{filtered.length} records</span>
-            <div className="flex gap-1">
-              <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} className="px-3 py-1 rounded-lg glass text-sm text-slate-300 disabled:opacity-30">Prev</button>
-              <span className="px-3 py-1 text-sm text-slate-400">{page + 1} / {totalPages}</span>
-              <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1} className="px-3 py-1 rounded-lg glass text-sm text-slate-300 disabled:opacity-30">Next</button>
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
+              <button onClick={() => setShowForm(false)} className="px-4 py-2 rounded-lg bg-white/5 border border-white/10 text-zinc-300 hover:bg-white/10 text-sm">Cancel</button>
+              <button onClick={save} className="px-4 py-2 rounded-lg bg-blue-500/20 border border-blue-400/30 text-blue-200 hover:bg-blue-500/30 text-sm font-medium">Save</button>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -93,7 +93,7 @@ function PlanModal({ plan, onClose, onSave }: { plan: Plan | null; onClose: () =
           ))}
         </div>
         <div className="flex gap-3 mt-6">
-          <button onClick={() => onSave({ ...form, id: plan?.id } as Partial<Plan>)} className="flex-1 py-2 bg-primary-600 hover:bg-primary-500 text-white text-sm font-medium rounded-lg transition-colors">Save</button>
+          <button onClick={() => onSave({ ...form, id: plan?.id })} className="flex-1 py-2 bg-primary-600 hover:bg-primary-500 text-white text-sm font-medium rounded-lg transition-colors">Save</button>
           <button onClick={onClose} className="flex-1 py-2 glass text-white text-sm font-medium rounded-lg hover:bg-white/10 transition-colors">Cancel</button>
         </div>
       </div>

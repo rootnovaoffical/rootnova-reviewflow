@@ -21,7 +21,7 @@ export default function PartnerSettings() {
 
   useEffect(() => {
     if (!profile) return;
-    setProfileForm({ full_name: profile.full_name || "" });
+    setProfileForm({ full_name: profile.full_name });
     supabase.from("organization_members").select("organization_id").eq("user_id", profile.id).single()
       .then(({ data: mem }) => {
         if (mem?.organization_id) {

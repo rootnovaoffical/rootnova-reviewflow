@@ -21,7 +21,7 @@ export default function AdminBranding() {
   useEffect(() => { load(); }, []);
 
   const saveUpi = async () => {
-    await upsertPlatformAsset("rootnova_upi_config", "UPI Payment Configuration", "CONFIG", "", "", { upi_id: upiId });
+    await upsertPlatformAsset("upi_id", "UPI ID", "TEXT", null, null, { upi_id: upiId });
     if (profile) await insertAuditLog({ actor_id: profile.id, actor_email: profile.email, action: "branding_upi_updated", target_type: "platform_asset" });
     showToast("UPI ID saved", "success");
     refresh(); load();

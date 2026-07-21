@@ -68,7 +68,7 @@ export default function PartnerTeam() {
                 <p className="text-xs text-slate-400">{m.profile?.email}</p>
                 <div className="flex items-center gap-2 mt-2">
                   <select value={m.role} onChange={(e) => changeRole(m, e.target.value)} className="text-xs bg-slate-900/50 border border-white/10 rounded-lg text-white px-2 py-1" disabled={m.user_id === profile?.id}>
-                    <option value="PARTNER_OWNER">Owner</option><option value="PARTNER_ADMIN">Admin</option><option value="PARTNER_TEAM_MEMBER">Team Member</option>
+                    <option value="OWNER">Owner</option><option value="ADMIN">Admin</option><option value="TEAM_MEMBER">Team Member</option>
                   </select>
                   <span className={`px-2 py-1 rounded-full text-xs ${m.status === "ACTIVE" ? "bg-success-500/20 text-success-400" : "bg-slate-500/20 text-slate-400"}`}>{m.status}</span>
                 </div>

@@ -9,6 +9,7 @@ export interface Business {
   google_place_id: string | null;
   google_maps_url: string | null;
   google_review_url: string | null;
+  google_review_url_derived: string | null;
   public_review_enabled: boolean;
   status: string;
   organization_id: string | null;
@@ -54,6 +55,37 @@ export interface Question {
   is_required: boolean;
   is_active: boolean;
   sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface QrCode {
+  id: string;
+  business_id: string;
+  name: string;
+  qr_type: string;
+  destination_url: string;
+  status: string;
+  scan_count: number;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AutomationRule {
+  id: string;
+  business_id: string;
+  name: string;
+  trigger_type: string;
+  trigger_config: Record<string, unknown>;
+  action_type: string;
+  action_config: Record<string, unknown>;
+  delay_hours: number;
+  status: string;
+  trigger_count: number;
+  last_triggered_at: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Profile {
@@ -62,4 +94,5 @@ export interface Profile {
   email: string;
   role: string;
   account_status: string;
+  avatar_url: string | null;
 }

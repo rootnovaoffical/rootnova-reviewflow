@@ -3,23 +3,12 @@ import { useParams } from "react-router-dom";
 import { Sparkles, ArrowRight, Check, RefreshCw, Copy, ExternalLink, ChevronRight } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { useToast } from "../context/ToastContext";
-import type { Business } from "../lib/types";
+import type { Business, Question } from "../lib/types";
 import SpatialBackground from "../components/SpatialBackground";
 import EmojiRating3D, { RATING_OPTIONS } from "../components/StarRating3D";
 import { Confetti, FloatingEmojis, AuroraGlow, SelectionParticles } from "../components/Effects";
 
 type Stage = "loading" | "welcome" | "rating" | "questions" | "generating" | "result" | "google" | "disabled" | "error";
-
-interface MCQQuestion { id: string; question_text: string; options: string[]; multi: boolean; }
-
-const DEFAULT_QUESTIONS: MCQQuestion[] = [
-  { id: "discovery", question_text: "How did you hear about us?", options: ["Instagram", "Google", "Friend or family", "Walk-in", "Returning customer"], multi: false },
-  { id: "highlights", question_text: "What did you enjoy most about your experience?", options: ["Food", "Staff", "Ambience", "Drinks", "Overall Experience"], multi: true },
-  { id: "quality", question_text: "What stood out to you the most?", options: ["Quality", "Service", "Ambience", "Food & Drinks", "Overall Experience"], multi: true },
-];
-
-const POSITIVE_FOLLOWUP: MCQQuestion = { id: "positive_followup", question_text: "What would make your next visit even better?", options: ["More variety", "Faster service", "Better seating", "More offers", "It was already perfect!"], multi: true };
-const NEGATIVE_FOLLOWUP: MCQQuestion = { id: "negative_followup", question_text: "How can we improve your experience?", options: ["Faster service", "Better quality", "Cleaner space", "More attentive staff", "Better communication"], multi: true };
 
 function withTimeout<T>(p: PromiseLike<T>, ms = 3000): Promise<T> { return Promise.race([Promise.resolve(p), new Promise<T>((_, rej) => setTimeout(() => rej(new Error("timeout")), ms))]); }
 function safeInsert(table: string, row: Record<string, unknown>) { withTimeout(supabase.from(table).insert(row).then(), 1000).catch(() => {}); }
@@ -40,7 +29,7 @@ export default function PublicReviewPage() {
   const [particleColor, setParticleColor] = useState("#6366f1");
   const [transitioning, setTransitioning] = useState(false);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [questions, setQuestions] = useState<MCQQuestion[]>([]);
+  const [dbQuestions, setDbQuestions] = useState<Question[]>([]);
   const transitionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -55,12 +44,14 @@ export default function PublicReviewPage() {
         if (!(data as Business).public_review_enabled) { setStage("disabled"); return; }
         setStage("welcome");
         safeInsert("analytics_events", { business_id: (data as Business).id, event_type: "page_view", metadata: { slug: slug || "default" } });
+        const { data: qs } = await supabase.from("questions").select("*").eq("business_id", (data as Business).id).eq("is_active", true).order("sort_order");
+        setDbQuestions((qs || []) as Question[]);
       } catch { setStage("error"); }
     };
     load();
   }, [slug]);
 
-  const buildQuestions = useCallback((r: number) => { const base = [...DEFAULT_QUESTIONS]; base.push(r >= 4 ? POSITIVE_FOLLOWUP : NEGATIVE_FOLLOWUP); return base.slice(0, 5); }, []);
+  const activeQuestions = dbQuestions.length > 0 ? dbQuestions.filter(q => q.flow_type === "ALWAYS" || (rating >= 4 && q.flow_type === "POSITIVE") || (rating <= 3 && q.flow_type === "NEGATIVE")) : [];
   const smoothTransition = useCallback((next: Stage) => { if (transitioning) return; setTransitioning(true); if (transitionTimer.current) clearTimeout(transitionTimer.current); transitionTimer.current = setTimeout(() => { setStage(next); setTransitioning(false); }, 300); }, [transitioning]);
 
   const handleStart = () => { if (!business) return; smoothTransition("rating"); safeInsert("analytics_events", { business_id: business.id, event_type: "review_start", metadata: {} }); };
@@ -78,15 +69,15 @@ export default function PublicReviewPage() {
       setSessionId(data.id);
       safeInsert("analytics_events", { business_id: business.id, session_id: data.id, event_type: "rating_submitted", metadata: { rating } });
     } catch { setSessionId(`local-${Date.now()}`); }
-    setQuestions(buildQuestions(rating)); setCurrentQuestionIndex(0); setSelectedChips({}); smoothTransition("questions");
+    setCurrentQuestionIndex(0); setSelectedChips({}); smoothTransition("questions");
   };
 
-  const handleChipToggle = (qid: string, opt: string, multi: boolean) => {
-    setSelectedChips((prev) => { const cur = prev[qid] || []; if (multi) return { ...prev, [qid]: cur.includes(opt) ? cur.filter((i) => i !== opt) : [...cur, opt] }; return { ...prev, [qid]: cur.includes(opt) ? [] : [opt] }; });
+  const handleChipToggle = (qid: string, opt: string) => {
+    setSelectedChips((prev) => { const cur = prev[qid] || []; return { ...prev, [qid]: cur.includes(opt) ? cur.filter((i) => i !== opt) : [...cur, opt] }; });
   };
 
-  const isLast = currentQuestionIndex >= questions.length - 1;
-  const currentQ = questions[currentQuestionIndex];
+  const isLast = currentQuestionIndex >= activeQuestions.length - 1;
+  const currentQ = activeQuestions[currentQuestionIndex];
   const canProceed = currentQ ? (selectedChips[currentQ.id] || []).length > 0 : false;
 
   const handleNext = () => { if (!canProceed || transitioning) return; if (isLast) handleGenerate(); else setCurrentQuestionIndex((i) => i + 1); };
@@ -95,7 +86,7 @@ export default function PublicReviewPage() {
     if (!business || !sessionId) return;
     const ans = Object.entries(selectedChips).flatMap(([qid, opts]) => opts.map((o) => ({ question_id: qid, answer: o })));
     if (!sessionId.startsWith("local-")) { try { await withTimeout(supabase.from("review_sessions").update({ answers: ans }).eq("id", sessionId).then(), 4000); } catch {} }
-    safeInsert("analytics_events", { business_id: business.id, session_id: sessionId, event_type: "questions_submitted", metadata: { count: ans.length } });
+    safeInsert("analytics_events", { business_id: business.id, session_id: activeQuestions.length });
     smoothTransition("generating"); setTimeout(() => generateReview(sessionId, rating, ans, 0), 600);
   };
 
@@ -148,12 +139,12 @@ export default function PublicReviewPage() {
           {stage === "questions" && currentQ && (
             <div className="glass-card rounded-3xl p-8 sm:p-10 screen-enter">
               <div className="mb-6">
-                <div className="flex items-center justify-between mb-2"><span className="text-xs font-semibold uppercase tracking-wider text-primary-300">Quick Questions {currentQuestionIndex + 1} of {questions.length}</span><span className="text-xs text-slate-500">{Math.round((currentQuestionIndex / questions.length) * 100)}%</span></div>
-                <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden"><div className="h-full bg-gradient-to-r from-primary-500 to-accent-500 rounded-full transition-all duration-500" style={{ width: `${((currentQuestionIndex + 1) / questions.length) * 100}%` }} /></div>
+                <div className="flex items-center justify-between mb-2"><span className="text-xs font-semibold uppercase tracking-wider text-primary-300">Quick Questions {currentQuestionIndex + 1} of {activeQuestions.length}</span><span className="text-xs text-slate-500">{Math.round((currentQuestionIndex / activeQuestions.length) * 100)}%</span></div>
+                <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden"><div className="h-full bg-gradient-to-r from-primary-500 to-accent-500 rounded-full transition-all duration-500" style={{ width: `${((currentQuestionIndex + 1) / activeQuestions.length) * 100}%` }} /></div>
               </div>
               <h2 className="text-xl font-bold text-white mb-4">{currentQ.question_text}</h2>
               <div className="flex flex-wrap gap-2 mb-6">
-                {currentQ.options.map((opt) => { const checked = (selectedChips[currentQ.id] || []).includes(opt); return <button key={opt} type="button" onClick={() => handleChipToggle(currentQ.id, opt, currentQ.multi)} className={`chip px-4 py-2.5 rounded-xl text-sm font-medium border flex items-center gap-1.5 ${checked ? "chip-selected bg-gradient-to-r from-primary-600 to-accent-500 text-white border-primary-400/60 shadow-[0_0_15px_rgba(99,102,241,0.4)]" : "glass border-white/10 text-slate-300 hover:text-white hover:border-white/20"}`}>{checked && <Check className="w-4 h-4 text-emerald-300" />}<span>{opt}</span></button>; })}
+                {currentQ.options.map((opt) => { const checked = (selectedChips[currentQ.id] || []).includes(opt); return <button key={opt} type="button" onClick={() => handleChipToggle(currentQ.id, opt)} className={`chip px-4 py-2.5 rounded-xl text-sm font-medium border flex items-center gap-1.5 ${checked ? "chip-selected bg-gradient-to-r from-primary-600 to-accent-500 text-white border-primary-400/60 shadow-[0_0_15px_rgba(99,102,241,0.4)]" : "glass border-white/10 text-slate-300 hover:text-white hover:border-white/20"}`}>{checked && <Check className="w-4 h-4 text-emerald-300" />}<span>{opt}</span></button>; })}
               </div>
               <button onClick={handleNext} disabled={!canProceed || transitioning} className={`w-full py-4 rounded-2xl font-bold text-base transition-all duration-300 flex items-center justify-center gap-2 ${canProceed ? "bg-gradient-to-r from-primary-600 via-primary-500 to-accent-500 text-white shadow-lg shadow-primary-500/40 hover:-translate-y-0.5 active:scale-95" : "glass text-slate-500 border border-white/5 cursor-not-allowed"}`}><span>{isLast ? "Generate AI Review" : "Next Question"}</span>{isLast ? <Sparkles className="w-5 h-5 text-amber-300 animate-pulse" /> : <ChevronRight className="w-5 h-5" />}</button>
             </div>

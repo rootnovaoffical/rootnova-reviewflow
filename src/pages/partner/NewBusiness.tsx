@@ -42,15 +42,13 @@ export default function PartnerNewBusiness() {
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-1.5">Welcome Message</label>
-            <textarea value={form.welcome_message} onChange={(e) => setForm((f) => ({ ...f, welcome_message: e.target.value }))} placeholder="We'd love to hear about your experience!" rows={2} className="w-full px-4 py-3 bg-slate-900/50 border border-white/10 rounded-lg text-white focus:outline-none focus:border-primary-500" />
+            <textarea value={form.welcome_message} onChange={(e) => setForm((f) => ({ ...f, welcome_message: e.target.value }))} className="w-full px-4 py-3 bg-slate-900/50 border border-white/10 rounded-lg text-white focus:outline-none focus:border-primary-500" rows={3} />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1.5">Google Review URL (optional)</label>
-            <input value={form.google_review_url} onChange={(e) => setForm((f) => ({ ...f, google_review_url: e.target.value }))} placeholder="https://maps.google.com/..." className="w-full px-4 py-3 bg-slate-900/50 border border-white/10 rounded-lg text-white focus:outline-none focus:border-primary-500" />
+            <label className="block text-sm font-medium text-slate-300 mb-1.5">Google Review URL</label>
+            <input value={form.google_review_url} onChange={(e) => setForm((f) => ({ ...f, google_review_url: e.target.value }))} placeholder="https://google.com/maps/..." className="w-full px-4 py-3 bg-slate-900/50 border border-white/10 rounded-lg text-white focus:outline-none focus:border-primary-500" />
           </div>
-          <button type="submit" disabled={loading} className="w-full py-3 bg-primary-600 hover:bg-primary-500 text-white font-medium rounded-lg transition-colors disabled:opacity-50">
-            {loading ? "Creating..." : "Create Business"}
-          </button>
+          <button type="submit" disabled={loading} className="px-6 py-3 bg-primary-600 hover:bg-primary-500 disabled:opacity-50 text-white font-semibold rounded-lg transition-all">{loading ? "Creating..." : "Create Business"}</button>
         </form>
       </div>
     </Layout>
